@@ -1533,7 +1533,9 @@ class BlenderMCPServer:
                     return {"succeed": False, "error": str(e)}
                 
                 break
-        
+        else:
+            return {"succeed": False, "error": "Generation failed. Please submit a new generation task and try again."}
+
         try:
             obj = self._clean_imported_glb(
                 filepath=temp_file.name,
