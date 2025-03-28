@@ -1534,7 +1534,7 @@ class BlenderMCPServer:
                 
                 break
         else:
-            return {"succeed": False, "error": "Generation failed. Please submit a new generation task and try again."}
+            return {"succeed": False, "error": "Generation failed. Please first make sure that all jobs of the task are done and then try again later."}
 
         try:
             obj = self._clean_imported_glb(
