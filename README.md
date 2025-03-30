@@ -92,7 +92,7 @@ Go to Claude > Settings > Developer > Edit Config > claude_desktop_config.json t
 For Mac users, go to Settings > MCP and paste the following 
 
 - To use as a global server, use "add new global MCP server" button and paste
-- To use as a project specific server, create `.cursor/mcp.json` in the root of the project and past
+- To use as a project specific server, create `.cursor/mcp.json` in the root of the project and paste
 
 
 ```json
