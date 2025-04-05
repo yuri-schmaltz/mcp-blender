@@ -344,7 +344,6 @@ class BlenderMCPServer:
             
             captured_output = capture_buffer.getvalue()
             return {"executed": True, "result": captured_output}
-            return {"executed": True}
         except Exception as e:
             raise Exception(f"Code execution error: {str(e)}")
     
