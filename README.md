@@ -99,9 +99,8 @@ For Mac users, go to Settings > MCP and paste the following
 {
     "mcpServers": {
         "blender": {
-            "command": "command",
+            "command": "uvx",
             "args": [
-                "uvx",
                 "blender-mcp"
             ]
         }
