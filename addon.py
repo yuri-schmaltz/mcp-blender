@@ -1415,7 +1415,7 @@ class BlenderMCPServer:
             except requests.exceptions.Timeout:
                 return {
                     "enabled": False, 
-                    "message": f"Timeout connecting to Sketchfab API. Check your internet connection."
+                    "message": "Timeout connecting to Sketchfab API. Check your internet connection."
                 }
             except Exception as e:
                 return {

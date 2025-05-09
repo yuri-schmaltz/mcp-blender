@@ -279,7 +279,6 @@ def execute_blender_code(ctx: Context, code: str) -> str:
     try:
         # Get the global connection
         blender = get_blender_connection()
-        
         result = blender.send_command("execute_code", {"code": code})
         return f"Code executed successfully: {result.get('result', '')}"
     except Exception as e:
@@ -436,7 +435,6 @@ def set_texture(
     try:
         # Get the global connection
         blender = get_blender_connection()
-        
         result = blender.send_command("set_texture", {
             "object_name": object_name,
             "texture_id": texture_id
@@ -489,7 +487,8 @@ def get_polyhaven_status(ctx: Context) -> str:
         result = blender.send_command("get_polyhaven_status")
         enabled = result.get("enabled", False)
         message = result.get("message", "")
-        
+        if enabled:
+            message += "PolyHaven is good at Textures, and has a wider variety of textures than Sketchfab."
         return message
     except Exception as e:
         logger.error(f"Error checking PolyHaven status: {str(e)}")
@@ -526,7 +525,8 @@ def get_sketchfab_status(ctx: Context) -> str:
         result = blender.send_command("get_sketchfab_status")
         enabled = result.get("enabled", False)
         message = result.get("message", "")
-        
+        if enabled:
+            message += "Sketchfab is good at Realistic models, and has a wider variety of models than PolyHaven."        
         return message
     except Exception as e:
         logger.error(f"Error checking Sketchfab status: {str(e)}")
@@ -555,7 +555,6 @@ def search_sketchfab_models(
         
         blender = get_blender_connection()
         logger.info(f"Searching Sketchfab models with query: {query}, categories: {categories}, count: {count}, downloadable: {downloadable}")
-        
         result = blender.send_command("search_sketchfab_models", {
             "query": query,
             "categories": categories,
