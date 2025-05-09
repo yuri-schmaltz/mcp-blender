@@ -844,6 +844,7 @@ def asset_creation_strategy() -> str:
             - For materials/textures: Use download_polyhaven_asset() with asset_type="textures"
             - For environment lighting: Use download_polyhaven_asset() with asset_type="hdris"
         2. Sketchfab
+            Sketchfab is good at Realistic models, and has a wider variety of models than PolyHaven.
             Use get_sketchfab_status() to verify its status
             If Sketchfab is enabled:
             - For objects/models: First search using search_sketchfab_models() with your query

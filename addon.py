@@ -14,7 +14,7 @@ import shutil
 import zipfile
 from bpy.props import StringProperty, IntProperty, BoolProperty, EnumProperty
 import io
-from contextlib import redirect_stdout
+from contextlib import redirect_stdout, suppress
 
 bl_info = {
     "name": "Blender MCP",
@@ -716,10 +716,8 @@ class BlenderMCPServer:
                         return {"error": f"Failed to import model: {str(e)}"}
                     finally:
                         # Clean up temporary directory
-                        try:
+                        with suppress(Exception):
                             shutil.rmtree(temp_dir)
-                        except:
-                            print(f"Failed to clean up temporary directory: {temp_dir}")
                 else:
                     return {"error": f"Requested format or resolution not available for this model"}
                 
@@ -1398,7 +1396,8 @@ class BlenderMCPServer:
                 
                 response = requests.get(
                     "https://api.sketchfab.com/v3/me",
-                    headers=headers
+                    headers=headers,
+                    timeout=30  # Add timeout of 30 seconds
                 )
                 
                 if response.status_code == 200:
@@ -1413,6 +1412,11 @@ class BlenderMCPServer:
                         "enabled": False, 
                         "message": f"Sketchfab API key seems invalid. Status code: {response.status_code}"
                     }
+            except requests.exceptions.Timeout:
+                return {
+                    "enabled": False, 
+                    "message": f"Timeout connecting to Sketchfab API. Check your internet connection."
+                }
             except Exception as e:
                 return {
                     "enabled": False, 
@@ -1470,11 +1474,12 @@ class BlenderMCPServer:
             response = requests.get(
                 "https://api.sketchfab.com/v3/search",
                 headers=headers,
-                params=params
+                params=params,
+                timeout=30  # Add timeout of 30 seconds
             )
             
             if response.status_code == 401:
-                return {"error": f"Authentication failed (401). Check your API key."}
+                return {"error": "Authentication failed (401). Check your API key."}
                 
             if response.status_code != 200:
                 return {"error": f"API request failed with status code {response.status_code}"}
@@ -1491,7 +1496,9 @@ class BlenderMCPServer:
                 return {"error": f"Unexpected response format from Sketchfab API: {response_data}"}
                 
             return response_data
-                
+        
+        except requests.exceptions.Timeout:
+            return {"error": "Request timed out. Check your internet connection."}
         except json.JSONDecodeError as e:
             return {"error": f"Invalid JSON response from Sketchfab API: {str(e)}"}
         except Exception as e:
@@ -1511,17 +1518,17 @@ class BlenderMCPServer:
                 "Authorization": f"Token {api_key}"
             }
             
-            
             # Request download URL using the exact endpoint from the documentation
             download_endpoint = f"https://api.sketchfab.com/v3/models/{uid}/download"
             
             response = requests.get(
                 download_endpoint,
-                headers=headers
+                headers=headers,
+                timeout=30  # Add timeout of 30 seconds
             )
             
             if response.status_code == 401:
-                return {"error": f"Authentication failed (401). Check your API key."}
+                return {"error": "Authentication failed (401). Check your API key."}
                 
             if response.status_code != 200:
                 return {"error": f"Download request failed with status code {response.status_code}"}
@@ -1532,7 +1539,6 @@ class BlenderMCPServer:
             if data is None:
                 return {"error": "Received empty response from Sketchfab API for download request"}
                 
-                
             # Extract download URL with safety checks
             gltf_data = data.get("gltf")
             if not gltf_data:
@@ -1542,29 +1548,55 @@ class BlenderMCPServer:
             if not download_url:
                 return {"error": "No download URL available for this model. Make sure the model is downloadable and you have access."}
                 
-                
-            # Download the model
-            model_response = requests.get(download_url)
+            # Download the model (already has timeout)
+            model_response = requests.get(download_url, timeout=60)  # 60 second timeout
             
             if model_response.status_code != 200:
                 return {"error": f"Model download failed with status code {model_response.status_code}"}
                 
             # Save to temporary file
             temp_dir = tempfile.mkdtemp()
-            file_path = os.path.join(temp_dir, f"{uid}.zip")
+            zip_file_path = os.path.join(temp_dir, f"{uid}.zip")
             
-            
-            with open(file_path, "wb") as f:
+            with open(zip_file_path, "wb") as f:
                 f.write(model_response.content)
                 
-            # Extract the zip file
-            with zipfile.ZipFile(file_path, 'r') as zip_ref:
+            # Extract the zip file with enhanced security
+            with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
+                # More secure zip slip prevention
+                for file_info in zip_ref.infolist():
+                    # Get the path of the file
+                    file_path = file_info.filename
+                    
+                    # Convert directory separators to the current OS style
+                    # This handles both / and \ in zip entries
+                    target_path = os.path.join(temp_dir, os.path.normpath(file_path))
+                    
+                    # Get absolute paths for comparison
+                    abs_temp_dir = os.path.abspath(temp_dir)
+                    abs_target_path = os.path.abspath(target_path)
+                    
+                    # Ensure the normalized path doesn't escape the target directory
+                    if not abs_target_path.startswith(abs_temp_dir):
+                        with suppress(Exception):
+                            shutil.rmtree(temp_dir)
+                        return {"error": "Security issue: Zip contains files with path traversal attempt"}
+                    
+                    # Additional explicit check for directory traversal
+                    if ".." in file_path:
+                        with suppress(Exception):
+                            shutil.rmtree(temp_dir)
+                        return {"error": "Security issue: Zip contains files with directory traversal sequence"}
+                
+                # If all files passed security checks, extract them
                 zip_ref.extractall(temp_dir)
                 
             # Find the main glTF file
             gltf_files = [f for f in os.listdir(temp_dir) if f.endswith('.gltf') or f.endswith('.glb')]
             
             if not gltf_files:
+                with suppress(Exception):
+                    shutil.rmtree(temp_dir)
                 return {"error": "No glTF file found in the downloaded model"}
                 
             main_file = os.path.join(temp_dir, gltf_files[0])
@@ -1576,17 +1608,17 @@ class BlenderMCPServer:
             imported_objects = [obj.name for obj in bpy.context.selected_objects]
             
             # Clean up temporary files
-            try:
+            with suppress(Exception):
                 shutil.rmtree(temp_dir)
-            except Exception as e:
-                pass
             
             return {
                 "success": True,
-                "message": f"Model imported successfully",
+                "message": "Model imported successfully",
                 "imported_objects": imported_objects
             }
-            
+        
+        except requests.exceptions.Timeout:
+            return {"error": "Request timed out. Check your internet connection and try again with a simpler model."}
         except json.JSONDecodeError as e:
             return {"error": f"Invalid JSON response from Sketchfab API: {str(e)}"}
         except Exception as e:
