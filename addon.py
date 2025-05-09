@@ -11,6 +11,7 @@ import tempfile
 import traceback
 import os
 import shutil
+import zipfile
 from bpy.props import StringProperty, IntProperty, BoolProperty, EnumProperty
 import io
 from contextlib import redirect_stdout
@@ -200,6 +201,7 @@ class BlenderMCPServer:
             "execute_code": self.execute_code,
             "get_polyhaven_status": self.get_polyhaven_status,
             "get_hyper3d_status": self.get_hyper3d_status,
+            "get_sketchfab_status": self.get_sketchfab_status,
         }
         
         # Add Polyhaven handlers only if enabled
@@ -220,6 +222,14 @@ class BlenderMCPServer:
                 "import_generated_asset": self.import_generated_asset,
             }
             handlers.update(polyhaven_handlers)
+            
+        # Add Sketchfab handlers only if enabled
+        if bpy.context.scene.blendermcp_use_sketchfab:
+            sketchfab_handlers = {
+                "search_sketchfab_models": self.search_sketchfab_models,
+                "download_sketchfab_model": self.download_sketchfab_model,
+            }
+            handlers.update(sketchfab_handlers)
 
         handler = handlers.get(cmd_type)
         if handler:
@@ -1373,6 +1383,248 @@ class BlenderMCPServer:
             return {"succeed": False, "error": str(e)}
     #endregion
 
+    #region Sketchfab API
+    def get_sketchfab_status(self):
+        """Get the current status of Sketchfab integration"""
+        enabled = bpy.context.scene.blendermcp_use_sketchfab
+        api_key = bpy.context.scene.blendermcp_sketchfab_api_key
+        
+        # Test the API key if present
+        if api_key:
+            try:
+                headers = {
+                    "Authorization": f"Token {api_key}"
+                }
+                
+                response = requests.get(
+                    "https://api.sketchfab.com/v3/me",
+                    headers=headers
+                )
+                
+                if response.status_code == 200:
+                    user_data = response.json()
+                    username = user_data.get("username", "Unknown user")
+                    return {
+                        "enabled": True, 
+                        "message": f"Sketchfab integration is enabled and ready to use. Logged in as: {username}"
+                    }
+                else:
+                    print(f"API key test failed with status code {response.status_code}: {response.text}")
+                    return {
+                        "enabled": False, 
+                        "message": f"Sketchfab API key seems invalid. Status code: {response.status_code}"
+                    }
+            except Exception as e:
+                print(f"Error testing Sketchfab API key: {str(e)}")
+                return {
+                    "enabled": False, 
+                    "message": f"Error testing Sketchfab API key: {str(e)}"
+                }
+                
+        if enabled and api_key:
+            return {"enabled": True, "message": "Sketchfab integration is enabled and ready to use."}
+        elif enabled and not api_key:
+            return {
+                "enabled": False, 
+                "message": """Sketchfab integration is currently enabled, but API key is not given. To enable it:
+                            1. In the 3D Viewport, find the BlenderMCP panel in the sidebar (press N if hidden)
+                            2. Keep the 'Use Sketchfab' checkbox checked
+                            3. Enter your Sketchfab API Key
+                            4. Restart the connection to Claude"""
+            }
+        else:
+            return {
+                "enabled": False, 
+                "message": """Sketchfab integration is currently disabled. To enable it:
+                            1. In the 3D Viewport, find the BlenderMCP panel in the sidebar (press N if hidden)
+                            2. Check the 'Use assets from Sketchfab' checkbox
+                            3. Enter your Sketchfab API Key
+                            4. Restart the connection to Claude"""
+            }
+    
+    def search_sketchfab_models(self, query, categories=None, count=20, downloadable=True):
+        """Search for models on Sketchfab based on query and optional filters"""
+        try:
+            api_key = bpy.context.scene.blendermcp_sketchfab_api_key
+            if not api_key:
+                return {"error": "Sketchfab API key is not configured"}
+                
+            print(f"Searching Sketchfab with query: {query}, categories: {categories}, count: {count}, downloadable: {downloadable}")
+            
+            # Build search parameters with exact fields from Sketchfab API docs
+            params = {
+                "type": "models",
+                "q": query,
+                "count": count,
+                "downloadable": downloadable,
+                "archives_flavours": False
+            }
+            
+            if categories:
+                params["categories"] = categories
+                
+            # Make API request to Sketchfab search endpoint
+            # The proper format according to Sketchfab API docs for API key auth
+            headers = {
+                "Authorization": f"Token {api_key}"
+            }
+            
+            print(f"Making request to Sketchfab API search endpoint with params: {params}")
+            
+            # Use the search endpoint as specified in the API documentation
+            response = requests.get(
+                "https://api.sketchfab.com/v3/search",
+                headers=headers,
+                params=params
+            )
+            
+            if response.status_code == 401:
+                print(f"Authentication failed with status code 401. Check your API key.")
+                return {"error": f"Authentication failed (401). Check your API key."}
+                
+            if response.status_code != 200:
+                print(f"API request failed with status code {response.status_code}: {response.text}")
+                return {"error": f"API request failed with status code {response.status_code}: {response.text}"}
+                
+            response_data = response.json()
+            print(f"API response received with status code {response.status_code}")
+            
+            # Safety check on the response structure
+            if response_data is None:
+                return {"error": "Received empty response from Sketchfab API"}
+                
+            # Handle 'results' potentially missing from response
+            results = response_data.get("results", [])
+            if not isinstance(results, list):
+                return {"error": f"Unexpected response format from Sketchfab API: {response_data}"}
+                
+            return response_data
+                
+        except json.JSONDecodeError as e:
+            print(f"JSON decoding error: {str(e)}. Response text: {response.text if 'response' in locals() else 'No response'}")
+            return {"error": f"Invalid JSON response from Sketchfab API: {str(e)}"}
+        except Exception as e:
+            print(f"Error in search_sketchfab_models: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return {"error": str(e)}
+
+    def download_sketchfab_model(self, uid):
+        """Download a model from Sketchfab by its UID"""
+        try:
+            api_key = bpy.context.scene.blendermcp_sketchfab_api_key
+            if not api_key:
+                return {"error": "Sketchfab API key is not configured"}
+                
+            print(f"Attempting to download Sketchfab model with UID: {uid}")
+                
+            # Use proper authorization header for API key auth
+            headers = {
+                "Authorization": f"Token {api_key}"
+            }
+            
+            print(f"Making download request to Sketchfab API with UID: {uid}")
+            
+            # Request download URL using the exact endpoint from the documentation
+            download_endpoint = f"https://api.sketchfab.com/v3/models/{uid}/download"
+            print(f"Download endpoint: {download_endpoint}")
+            
+            response = requests.get(
+                download_endpoint,
+                headers=headers
+            )
+            
+            if response.status_code == 401:
+                print(f"Authentication failed with status code 401. Check your API key.")
+                return {"error": f"Authentication failed (401). Check your API key."}
+                
+            if response.status_code != 200:
+                print(f"Download request failed with status code {response.status_code}: {response.text}")
+                return {"error": f"Download request failed with status code {response.status_code}: {response.text}"}
+                
+            data = response.json()
+            
+            # Safety check for None data
+            if data is None:
+                return {"error": "Received empty response from Sketchfab API for download request"}
+                
+            print(f"Download response data: {data}")
+                
+            # Extract download URL with safety checks
+            gltf_data = data.get("gltf")
+            if not gltf_data:
+                print(f"No gltf data in response: {data}")
+                return {"error": "No gltf download URL available for this model. Response: " + str(data)}
+                
+            download_url = gltf_data.get("url")
+            if not download_url:
+                print(f"No URL in gltf data: {gltf_data}")
+                return {"error": "No download URL available for this model. Make sure the model is downloadable and you have access."}
+                
+            print(f"Download URL obtained: {download_url}")
+                
+            # Download the model
+            model_response = requests.get(download_url)
+            
+            if model_response.status_code != 200:
+                print(f"Model download failed with status code {model_response.status_code}")
+                return {"error": f"Model download failed with status code {model_response.status_code}"}
+                
+            # Save to temporary file
+            temp_dir = tempfile.mkdtemp()
+            file_path = os.path.join(temp_dir, f"{uid}.zip")
+            
+            print(f"Saving downloaded model to temporary file: {file_path}")
+            
+            with open(file_path, "wb") as f:
+                f.write(model_response.content)
+                
+            # Extract the zip file
+            print(f"Extracting zip file to: {temp_dir}")
+            with zipfile.ZipFile(file_path, 'r') as zip_ref:
+                zip_ref.extractall(temp_dir)
+                
+            # Find the main glTF file
+            gltf_files = [f for f in os.listdir(temp_dir) if f.endswith('.gltf') or f.endswith('.glb')]
+            
+            if not gltf_files:
+                print(f"No glTF file found in the downloaded model. Directory contents: {os.listdir(temp_dir)}")
+                return {"error": "No glTF file found in the downloaded model"}
+                
+            main_file = os.path.join(temp_dir, gltf_files[0])
+            print(f"Found main glTF file: {main_file}")
+            
+            # Import the model
+            print(f"Importing model using Blender's glTF importer")
+            bpy.ops.import_scene.gltf(filepath=main_file)
+            
+            # Get the names of imported objects
+            imported_objects = [obj.name for obj in bpy.context.selected_objects]
+            print(f"Imported objects: {', '.join(imported_objects)}")
+            
+            # Clean up temporary files
+            try:
+                shutil.rmtree(temp_dir)
+                print(f"Temporary directory cleaned up: {temp_dir}")
+            except Exception as e:
+                print(f"Failed to clean up temporary directory: {temp_dir}. Error: {str(e)}")
+            
+            return {
+                "success": True,
+                "message": f"Model imported successfully",
+                "imported_objects": imported_objects
+            }
+            
+        except json.JSONDecodeError as e:
+            print(f"JSON decoding error: {str(e)}. Response text: {response.text if 'response' in locals() else 'No response'}")
+            return {"error": f"Invalid JSON response from Sketchfab API: {str(e)}"}
+        except Exception as e:
+            print(f"Error in download_sketchfab_model: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return {"error": f"Failed to download model: {str(e)}"}
+    #endregion
+
 # Blender UI Panel
 class BLENDERMCP_PT_Panel(bpy.types.Panel):
     bl_label = "Blender MCP"
@@ -1393,6 +1645,10 @@ class BLENDERMCP_PT_Panel(bpy.types.Panel):
             layout.prop(scene, "blendermcp_hyper3d_mode", text="Rodin Mode")
             layout.prop(scene, "blendermcp_hyper3d_api_key", text="API Key")
             layout.operator("blendermcp.set_hyper3d_free_trial_api_key", text="Set Free Trial API Key")
+        
+        layout.prop(scene, "blendermcp_use_sketchfab", text="Use assets from Sketchfab")
+        if scene.blendermcp_use_sketchfab:
+            layout.prop(scene, "blendermcp_sketchfab_api_key", text="API Key")
         
         if not scene.blendermcp_server_running:
             layout.operator("blendermcp.start_server", text="Connect to MCP server")
@@ -1492,6 +1748,19 @@ def register():
         default=""
     )
     
+    bpy.types.Scene.blendermcp_use_sketchfab = bpy.props.BoolProperty(
+        name="Use Sketchfab",
+        description="Enable Sketchfab asset integration",
+        default=False
+    )
+
+    bpy.types.Scene.blendermcp_sketchfab_api_key = bpy.props.StringProperty(
+        name="Sketchfab API Key",
+        subtype="PASSWORD",
+        description="API Key provided by Sketchfab",
+        default=""
+    )
+    
     bpy.utils.register_class(BLENDERMCP_PT_Panel)
     bpy.utils.register_class(BLENDERMCP_OT_SetFreeTrialHyper3DAPIKey)
     bpy.utils.register_class(BLENDERMCP_OT_StartServer)
@@ -1516,6 +1785,8 @@ def unregister():
     del bpy.types.Scene.blendermcp_use_hyper3d
     del bpy.types.Scene.blendermcp_hyper3d_mode
     del bpy.types.Scene.blendermcp_hyper3d_api_key
+    del bpy.types.Scene.blendermcp_use_sketchfab
+    del bpy.types.Scene.blendermcp_sketchfab_api_key
 
     print("BlenderMCP addon unregistered")
 
