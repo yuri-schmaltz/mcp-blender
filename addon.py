@@ -1409,13 +1409,11 @@ class BlenderMCPServer:
                         "message": f"Sketchfab integration is enabled and ready to use. Logged in as: {username}"
                     }
                 else:
-                    print(f"API key test failed with status code {response.status_code}: {response.text}")
                     return {
                         "enabled": False, 
                         "message": f"Sketchfab API key seems invalid. Status code: {response.status_code}"
                     }
             except Exception as e:
-                print(f"Error testing Sketchfab API key: {str(e)}")
                 return {
                     "enabled": False, 
                     "message": f"Error testing Sketchfab API key: {str(e)}"
@@ -1449,8 +1447,6 @@ class BlenderMCPServer:
             if not api_key:
                 return {"error": "Sketchfab API key is not configured"}
                 
-            print(f"Searching Sketchfab with query: {query}, categories: {categories}, count: {count}, downloadable: {downloadable}")
-            
             # Build search parameters with exact fields from Sketchfab API docs
             params = {
                 "type": "models",
@@ -1469,7 +1465,6 @@ class BlenderMCPServer:
                 "Authorization": f"Token {api_key}"
             }
             
-            print(f"Making request to Sketchfab API search endpoint with params: {params}")
             
             # Use the search endpoint as specified in the API documentation
             response = requests.get(
@@ -1479,15 +1474,12 @@ class BlenderMCPServer:
             )
             
             if response.status_code == 401:
-                print(f"Authentication failed with status code 401. Check your API key.")
                 return {"error": f"Authentication failed (401). Check your API key."}
                 
             if response.status_code != 200:
-                print(f"API request failed with status code {response.status_code}: {response.text}")
-                return {"error": f"API request failed with status code {response.status_code}: {response.text}"}
+                return {"error": f"API request failed with status code {response.status_code}"}
                 
             response_data = response.json()
-            print(f"API response received with status code {response.status_code}")
             
             # Safety check on the response structure
             if response_data is None:
@@ -1501,10 +1493,8 @@ class BlenderMCPServer:
             return response_data
                 
         except json.JSONDecodeError as e:
-            print(f"JSON decoding error: {str(e)}. Response text: {response.text if 'response' in locals() else 'No response'}")
             return {"error": f"Invalid JSON response from Sketchfab API: {str(e)}"}
         except Exception as e:
-            print(f"Error in search_sketchfab_models: {str(e)}")
             import traceback
             traceback.print_exc()
             return {"error": str(e)}
@@ -1516,18 +1506,14 @@ class BlenderMCPServer:
             if not api_key:
                 return {"error": "Sketchfab API key is not configured"}
                 
-            print(f"Attempting to download Sketchfab model with UID: {uid}")
-                
             # Use proper authorization header for API key auth
             headers = {
                 "Authorization": f"Token {api_key}"
             }
             
-            print(f"Making download request to Sketchfab API with UID: {uid}")
             
             # Request download URL using the exact endpoint from the documentation
             download_endpoint = f"https://api.sketchfab.com/v3/models/{uid}/download"
-            print(f"Download endpoint: {download_endpoint}")
             
             response = requests.get(
                 download_endpoint,
@@ -1535,12 +1521,10 @@ class BlenderMCPServer:
             )
             
             if response.status_code == 401:
-                print(f"Authentication failed with status code 401. Check your API key.")
                 return {"error": f"Authentication failed (401). Check your API key."}
                 
             if response.status_code != 200:
-                print(f"Download request failed with status code {response.status_code}: {response.text}")
-                return {"error": f"Download request failed with status code {response.status_code}: {response.text}"}
+                return {"error": f"Download request failed with status code {response.status_code}"}
                 
             data = response.json()
             
@@ -1548,39 +1532,32 @@ class BlenderMCPServer:
             if data is None:
                 return {"error": "Received empty response from Sketchfab API for download request"}
                 
-            print(f"Download response data: {data}")
                 
             # Extract download URL with safety checks
             gltf_data = data.get("gltf")
             if not gltf_data:
-                print(f"No gltf data in response: {data}")
                 return {"error": "No gltf download URL available for this model. Response: " + str(data)}
                 
             download_url = gltf_data.get("url")
             if not download_url:
-                print(f"No URL in gltf data: {gltf_data}")
                 return {"error": "No download URL available for this model. Make sure the model is downloadable and you have access."}
                 
-            print(f"Download URL obtained: {download_url}")
                 
             # Download the model
             model_response = requests.get(download_url)
             
             if model_response.status_code != 200:
-                print(f"Model download failed with status code {model_response.status_code}")
                 return {"error": f"Model download failed with status code {model_response.status_code}"}
                 
             # Save to temporary file
             temp_dir = tempfile.mkdtemp()
             file_path = os.path.join(temp_dir, f"{uid}.zip")
             
-            print(f"Saving downloaded model to temporary file: {file_path}")
             
             with open(file_path, "wb") as f:
                 f.write(model_response.content)
                 
             # Extract the zip file
-            print(f"Extracting zip file to: {temp_dir}")
             with zipfile.ZipFile(file_path, 'r') as zip_ref:
                 zip_ref.extractall(temp_dir)
                 
@@ -1588,26 +1565,21 @@ class BlenderMCPServer:
             gltf_files = [f for f in os.listdir(temp_dir) if f.endswith('.gltf') or f.endswith('.glb')]
             
             if not gltf_files:
-                print(f"No glTF file found in the downloaded model. Directory contents: {os.listdir(temp_dir)}")
                 return {"error": "No glTF file found in the downloaded model"}
                 
             main_file = os.path.join(temp_dir, gltf_files[0])
-            print(f"Found main glTF file: {main_file}")
             
             # Import the model
-            print(f"Importing model using Blender's glTF importer")
             bpy.ops.import_scene.gltf(filepath=main_file)
             
             # Get the names of imported objects
             imported_objects = [obj.name for obj in bpy.context.selected_objects]
-            print(f"Imported objects: {', '.join(imported_objects)}")
             
             # Clean up temporary files
             try:
                 shutil.rmtree(temp_dir)
-                print(f"Temporary directory cleaned up: {temp_dir}")
             except Exception as e:
-                print(f"Failed to clean up temporary directory: {temp_dir}. Error: {str(e)}")
+                pass
             
             return {
                 "success": True,
@@ -1616,10 +1588,8 @@ class BlenderMCPServer:
             }
             
         except json.JSONDecodeError as e:
-            print(f"JSON decoding error: {str(e)}. Response text: {response.text if 'response' in locals() else 'No response'}")
             return {"error": f"Invalid JSON response from Sketchfab API: {str(e)}"}
         except Exception as e:
-            print(f"Error in download_sketchfab_model: {str(e)}")
             import traceback
             traceback.print_exc()
             return {"error": f"Failed to download model: {str(e)}"}
