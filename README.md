@@ -1,3 +1,17 @@
+
+
+# BlenderMCP - Blender Model Context Protocol Integration
+
+BlenderMCP connects Blender to Claude AI through the Model Context Protocol (MCP), allowing Claude to directly interact with and control Blender. This integration enables prompt assisted 3D modeling, scene creation, and manipulation.
+
+[Full tutorial](https://www.youtube.com/watch?v=lCyQ717DuzQ)
+
+### Join the Community
+
+Give feedback, get inspired, and build on top of the MCP: [Discord](https://discord.gg/z5apgR8TFU)
+
+### Supporters
+
 <div align="center" markdown="1">
    <sup>Special thanks to:</sup>
    <br>
@@ -12,19 +26,7 @@
 </div>
 <hr>
 
-# BlenderMCP - Blender Model Context Protocol Integration
-
-BlenderMCP connects Blender to Claude AI through the Model Context Protocol (MCP), allowing Claude to directly interact with and control Blender. This integration enables prompt assisted 3D modeling, scene creation, and manipulation.
-
-[Full tutorial](https://www.youtube.com/watch?v=lCyQ717DuzQ)
-
-### Join the Community
-
-Give feedback, get inspired, and build on top of the MCP: [Discord](https://discord.gg/z5apgR8TFU)
-
-### Supporters
-
-**Top supporters:**
+**Other supporters:**
 
 [CodeRabbit](https://www.coderabbit.ai/)
 
@@ -106,6 +108,8 @@ Go to Claude > Settings > Developer > Edit Config > claude_desktop_config.json t
 ```
 
 ### Cursor integration
+
+[![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/install-mcp?name=blender&config=eyJjb21tYW5kIjoidXZ4IGJsZW5kZXItbWNwIn0%3D)
 
 For Mac users, go to Settings > MCP and paste the following 
 
