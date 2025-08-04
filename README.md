@@ -155,7 +155,9 @@ For Windows users, go to Settings > MCP > Add Server, add a new server with the 
 
 ### Visual Studio Code Integration
 
-<a href="vscode:mcp/install?%7B%22name%22%3A%22blender-mcp%22%2C%22type%22%3A%22stdio%22%2C%22command%22%3A%22uvx%22%2C%22args%22%3A%5B%22blender-mcp%22%5D%7D"><img src="https://img.shields.io/badge/VS_Code-Install_Blender--MCP_for_vscode-0098FF?style=flat-square&logo=visualstudiocode&logoColor=ffffff" alt="Install in VS Code"></a>
+_Prerequisites_: Make sure you have [Visual Studio Code](https://code.visualstudio.com/) installed before proceeding.
+
+[![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_blender--mcp_server-0098FF?style=flat-square&logo=visualstudiocode&logoColor=ffffff)](vscode:mcp/install?%7B%22name%22%3A%22blender-mcp%22%2C%22type%22%3A%22stdio%22%2C%22command%22%3A%22uvx%22%2C%22args%22%3A%5B%22blender-mcp%22%5D%7D)
 
 ### Installing the Blender Addon
 
