@@ -2,7 +2,7 @@
 
 # BlenderMCP - Blender Model Context Protocol Integration
 
-BlenderMCP connects Blender to Claude AI through the Model Context Protocol (MCP), allowing Claude to directly interact with and control Blender. This integration enables prompt assisted 3D modeling, scene creation, and manipulation.
+BlenderMCP connects Blender to local large language models (LLMs) through the Model Context Protocol (MCP), enabling assistants running on your own hardware to automate Blender workflows. This integration provides prompt-assisted 3D modelling, scene creation, and manipulation guided by AI without relying on cloud services.
 
 **We have no official website. Any website you see online is unofficial and has no affiliation with this project. Use them at your own risk.**
 
@@ -48,15 +48,15 @@ Give feedback, get inspired, and build on top of the MCP: [Discord](https://disc
 - Support to generate 3D models using Hyper3D Rodin
 - For newcomers, you can go straight to Installation. For existing users, see the points below
 - Download the latest addon.py file and replace the older one, then add it to Blender
-- Delete the MCP server from Claude and add it back again, and you should be good to go!
+- Delete and re-add the MCP server in your preferred MCP-compatible client and you should be good to go!
 
 ## Features
 
-- **Two-way communication**: Connect Claude AI to Blender through a socket-based server
+- **Two-way communication**: Connect local LLM assistants to Blender through a socket-based server
 - **Object manipulation**: Create, modify, and delete 3D objects in Blender
 - **Material control**: Apply and modify materials and colors
 - **Scene inspection**: Get detailed information about the current Blender scene
-- **Code execution**: Run arbitrary Python code in Blender from Claude
+- **Code execution**: Run arbitrary Python code in Blender from your assistant
 
 ## Components
 
@@ -104,24 +104,53 @@ export BLENDER_HOST='host.docker.internal'
 export BLENDER_PORT=9876
 ```
 
-### Claude for Desktop Integration
+### LM Studio integration
 
-[Watch the setup instruction video](https://www.youtube.com/watch?v=neoK_WMq92g) (Assuming you have already installed uv)
+LM Studio (v0.3.0 or newer) ships with native MCP client support, allowing any locally hosted model to call Blender tools directly.
 
-Go to Claude > Settings > Developer > Edit Config > claude_desktop_config.json to include the following:
+1. Install [LM Studio](https://lmstudio.ai/) and download the model you want to run locally.
+2. Open **Settings → Developer → Model Context Protocol (MCP)**.
+3. Click **Add MCP server** and configure it with:
+   - **Command:** `uvx`
+   - **Arguments:** `blender-mcp`
+4. Save the configuration and start a chat with your model. A new **Blender MCP** tool tray will appear once the server is running.
+
+If you prefer to edit the JSON configuration manually, create or update the LM Studio MCP config file (located at `~/Library/Application Support/LM Studio/mcpServers.json` on macOS, `%APPDATA%/LM Studio/mcpServers.json` on Windows, or `~/.config/LM Studio/mcpServers.json` on Linux) with:
 
 ```json
 {
     "mcpServers": {
         "blender": {
             "command": "uvx",
-            "args": [
-                "blender-mcp"
-            ]
+            "args": ["blender-mcp"],
+            "env": {}
         }
     }
 }
 ```
+
+Restart LM Studio after saving to load the server definition.
+
+### Ollama integration
+
+Ollama provides the model runtime, while an MCP-aware client such as [Continue](https://continue.dev/) or [Open WebUI](https://github.com/open-webui/open-webui) orchestrates the conversation. A typical setup looks like this:
+
+1. Install [Ollama](https://ollama.com/) and run `ollama pull llama3` (or any other model you prefer).
+2. Install the Continue extension for VS Code or the Continue desktop client and choose **Ollama** as the provider for your assistant.
+3. In Continue’s settings (`continue.json`), register the Blender MCP server:
+
+   ```jsonc
+   {
+     "mcpServers": {
+       "blender": {
+         "command": "uvx",
+         "args": ["blender-mcp"]
+       }
+     }
+   }
+   ```
+
+4. Start the Continue session, ensure Ollama is running, and request the assistant to use the Blender MCP tools. You can reuse the same configuration with any MCP-compatible client that proxies queries to Ollama.
 
 ### Cursor integration
 
@@ -165,7 +194,7 @@ For Windows users, go to Settings > MCP > Add Server, add a new server with the 
 
 [Cursor setup video](https://www.youtube.com/watch?v=wgWsJshecac)
 
-**⚠️ Only run one instance of the MCP server (either on Cursor or Claude Desktop), not both**
+**⚠️ Only run one instance of the MCP server at a time within your chosen MCP client**
 
 ### Visual Studio Code Integration
 
@@ -190,12 +219,12 @@ _Prerequisites_: Make sure you have [Visual Studio Code](https://code.visualstud
 1. In Blender, go to the 3D View sidebar (press N if not visible)
 2. Find the "BlenderMCP" tab
 3. Turn on the Poly Haven checkbox if you want assets from their API (optional)
-4. Click "Connect to Claude"
-5. Make sure the MCP server is running in your terminal
+4. Click "Connect to LLM client"
+5. Ensure your MCP client has started the `blender-mcp` server (you can also launch it manually with `uvx blender-mcp` if needed)
 
-### Using with Claude
+### Using with local LLM clients
 
-Once the config file has been set on Claude, and the addon is running on Blender, you will see a hammer icon with tools for the Blender MCP.
+Once your MCP client (LM Studio, Continue, Cursor, etc.) is configured and the addon is running inside Blender, the assistant will expose a hammer icon with the Blender MCP tools.
 
 ![BlenderMCP in the sidebar](assets/hammer-icon.png)
 
@@ -211,7 +240,7 @@ Once the config file has been set on Claude, and the addon is running on Blender
 
 ### Example Commands
 
-Here are some examples of what you can ask Claude to do:
+Here are some examples of what you can ask your local assistant to do:
 
 - "Create a low poly scene in a dungeon, with a dragon guarding a pot of gold" [Demo](https://www.youtube.com/watch?v=DqgKuLYUv00)
 - "Create a beach vibe using HDRIs, textures, and models like rocks and vegetation from Poly Haven" [Demo](https://www.youtube.com/watch?v=I29rn92gkC4)
@@ -229,10 +258,10 @@ Hyper3D's free trial key allows you to generate a limited number of models per d
 
 ## Troubleshooting
 
-- **Connection issues**: Make sure the Blender addon server is running, and the MCP server is configured on Claude, DO NOT run the uvx command in the terminal. Sometimes, the first command won't go through but after that it starts working.
+- **Connection issues**: Make sure the Blender addon server is running, and the MCP server is configured in your chosen client. Do **not** run the `uvx` command in a terminal if the client already manages the process. Sometimes the first command won't go through but after that it starts working.
 - **Timeout errors**: Try simplifying your requests or breaking them into smaller steps
-- **Poly Haven integration**: Claude is sometimes erratic with its behaviour
-- **Have you tried turning it off and on again?**: If you're still having connection errors, try restarting both Claude and the Blender server
+- **Poly Haven integration**: Some assistants are occasionally erratic—remind them to toggle the Poly Haven checkbox or call the status tool again.
+- **Have you tried turning it off and on again?**: If you're still having connection errors, try restarting both the MCP client and the Blender server
 
 
 ## Technical Details
