@@ -13,9 +13,13 @@ from pathlib import Path
 import base64
 from urllib.parse import urlparse
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, 
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+def tool_error(message: str, *, code: str = "runtime_error", data: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {"error": {"code": code, "message": message}}
+    if data:
+        payload["error"]["data"] = data
+    return payload
+
 logger = logging.getLogger("BlenderMCPServer")
 
 # Default configuration
@@ -247,12 +251,12 @@ def get_scene_info(ctx: Context) -> str:
     try:
         blender = get_blender_connection()
         result = blender.send_command("get_scene_info")
-        
+
         # Just return the JSON representation of what Blender sent us
         return json.dumps(result, indent=2)
     except Exception as e:
         logger.error(f"Error getting scene info from Blender: {str(e)}")
-        return f"Error getting scene info: {str(e)}"
+        return tool_error("Error getting scene info", data={"detail": str(e)})
 
 @mcp.tool()
 def get_object_info(ctx: Context, object_name: str) -> str:
@@ -265,12 +269,12 @@ def get_object_info(ctx: Context, object_name: str) -> str:
     try:
         blender = get_blender_connection()
         result = blender.send_command("get_object_info", {"name": object_name})
-        
+
         # Just return the JSON representation of what Blender sent us
         return json.dumps(result, indent=2)
     except Exception as e:
         logger.error(f"Error getting object info from Blender: {str(e)}")
-        return f"Error getting object info: {str(e)}"
+        return tool_error("Error getting object info", data={"detail": str(e), "object_name": object_name})
 
 @mcp.tool()
 def get_viewport_screenshot(ctx: Context, max_size: int = 800) -> Image:
@@ -330,7 +334,7 @@ def execute_blender_code(ctx: Context, code: str) -> str:
         return f"Code executed successfully: {result.get('result', '')}"
     except Exception as e:
         logger.error(f"Error executing code: {str(e)}")
-        return f"Error executing code: {str(e)}"
+        return tool_error("Error executing code", data={"detail": str(e)})
 
 @mcp.tool()
 def get_polyhaven_categories(ctx: Context, asset_type: str = "hdris") -> str:
@@ -345,9 +349,9 @@ def get_polyhaven_categories(ctx: Context, asset_type: str = "hdris") -> str:
         if not _polyhaven_enabled:
             return "PolyHaven integration is disabled. Select it in the sidebar in BlenderMCP, then run it again."
         result = blender.send_command("get_polyhaven_categories", {"asset_type": asset_type})
-        
+
         if "error" in result:
-            return f"Error: {result['error']}"
+            return tool_error("PolyHaven category lookup failed", data={"detail": result["error"]})
         
         # Format the categories in a more readable way
         categories = result["categories"]
@@ -358,11 +362,11 @@ def get_polyhaven_categories(ctx: Context, asset_type: str = "hdris") -> str:
         
         for category, count in sorted_categories:
             formatted_output += f"- {category}: {count} assets\n"
-        
+
         return formatted_output
     except Exception as e:
         logger.error(f"Error getting Polyhaven categories: {str(e)}")
-        return f"Error getting Polyhaven categories: {str(e)}"
+        return tool_error("Error getting PolyHaven categories", data={"detail": str(e)})
 
 @mcp.tool()
 def search_polyhaven_assets(
@@ -385,9 +389,9 @@ def search_polyhaven_assets(
             "asset_type": asset_type,
             "categories": categories
         })
-        
+
         if "error" in result:
-            return f"Error: {result['error']}"
+            return tool_error("PolyHaven search failed", data={"detail": result["error"]})
         
         # Format the assets in a more readable way
         assets = result["assets"]
@@ -407,11 +411,11 @@ def search_polyhaven_assets(
             formatted_output += f"  Type: {['HDRI', 'Texture', 'Model'][asset_data.get('type', 0)]}\n"
             formatted_output += f"  Categories: {', '.join(asset_data.get('categories', []))}\n"
             formatted_output += f"  Downloads: {asset_data.get('download_count', 'Unknown')}\n\n"
-        
+
         return formatted_output
     except Exception as e:
         logger.error(f"Error searching Polyhaven assets: {str(e)}")
-        return f"Error searching Polyhaven assets: {str(e)}"
+        return tool_error("Error searching PolyHaven assets", data={"detail": str(e)})
 
 @mcp.tool()
 def download_polyhaven_asset(
@@ -440,9 +444,9 @@ def download_polyhaven_asset(
             "resolution": resolution,
             "file_format": file_format
         })
-        
+
         if "error" in result:
-            return f"Error: {result['error']}"
+            return tool_error("PolyHaven download failed", data={"detail": result["error"], "asset_id": asset_id})
         
         if result.get("success"):
             message = result.get("message", "Asset downloaded and imported successfully")
@@ -459,10 +463,17 @@ def download_polyhaven_asset(
             else:
                 return message
         else:
-            return f"Failed to download asset: {result.get('message', 'Unknown error')}"
+            return tool_error(
+                "Failed to download asset",
+                data={
+                    "detail": result.get("message", "Unknown error"),
+                    "asset_id": asset_id,
+                    "asset_type": asset_type,
+                },
+            )
     except Exception as e:
         logger.error(f"Error downloading Polyhaven asset: {str(e)}")
-        return f"Error downloading Polyhaven asset: {str(e)}"
+        return tool_error("Error downloading PolyHaven asset", data={"detail": str(e), "asset_id": asset_id})
 
 @mcp.tool()
 def set_texture(
@@ -486,9 +497,12 @@ def set_texture(
             "object_name": object_name,
             "texture_id": texture_id
         })
-        
+
         if "error" in result:
-            return f"Error: {result['error']}"
+            return tool_error(
+                "Failed to apply texture",
+                data={"detail": result["error"], "object_name": object_name, "texture_id": texture_id},
+            )
         
         if result.get("success"):
             material_name = result.get("material", "")
@@ -515,13 +529,20 @@ def set_texture(
                             output += f"    {conn}\n"
             else:
                 output += "No texture nodes found in the material.\n"
-            
+
             return output
         else:
-            return f"Failed to apply texture: {result.get('message', 'Unknown error')}"
+            return tool_error(
+                "Failed to apply texture",
+                data={
+                    "detail": result.get("message", "Unknown error"),
+                    "object_name": object_name,
+                    "texture_id": texture_id,
+                },
+            )
     except Exception as e:
         logger.error(f"Error applying texture: {str(e)}")
-        return f"Error applying texture: {str(e)}"
+        return tool_error("Error applying texture", data={"detail": str(e), "texture_id": texture_id})
 
 @mcp.tool()
 def get_polyhaven_status(ctx: Context) -> str:
@@ -539,7 +560,7 @@ def get_polyhaven_status(ctx: Context) -> str:
         return message
     except Exception as e:
         logger.error(f"Error checking PolyHaven status: {str(e)}")
-        return f"Error checking PolyHaven status: {str(e)}"
+        return tool_error("Error checking PolyHaven status", data={"detail": str(e)})
 
 @mcp.tool()
 def get_hyper3d_status(ctx: Context) -> str:
@@ -559,7 +580,7 @@ def get_hyper3d_status(ctx: Context) -> str:
         return message
     except Exception as e:
         logger.error(f"Error checking Hyper3D status: {str(e)}")
-        return f"Error checking Hyper3D status: {str(e)}"
+        return tool_error("Error checking Hyper3D status", data={"detail": str(e)})
 
 @mcp.tool()
 def get_sketchfab_status(ctx: Context) -> str:
@@ -573,11 +594,11 @@ def get_sketchfab_status(ctx: Context) -> str:
         enabled = result.get("enabled", False)
         message = result.get("message", "")
         if enabled:
-            message += "Sketchfab is good at Realistic models, and has a wider variety of models than PolyHaven."        
+            message += "Sketchfab is good at Realistic models, and has a wider variety of models than PolyHaven."
         return message
     except Exception as e:
         logger.error(f"Error checking Sketchfab status: {str(e)}")
-        return f"Error checking Sketchfab status: {str(e)}"
+        return tool_error("Error checking Sketchfab status", data={"detail": str(e)})
 
 @mcp.tool()
 def search_sketchfab_models(
@@ -608,15 +629,15 @@ def search_sketchfab_models(
             "count": count,
             "downloadable": downloadable
         })
-        
+
         if "error" in result:
             logger.error(f"Error from Sketchfab search: {result['error']}")
-            return f"Error: {result['error']}"
+            return tool_error("Sketchfab search failed", data={"detail": result["error"], "query": query})
         
         # Safely get results with fallbacks for None
         if result is None:
             logger.error("Received None result from Sketchfab search")
-            return "Error: Received no response from Sketchfab search"
+            return tool_error("Sketchfab search returned no data", data={"query": query})
             
         # Format the results
         models = result.get("results", []) or []
@@ -654,7 +675,7 @@ def search_sketchfab_models(
         logger.error(f"Error searching Sketchfab models: {str(e)}")
         import traceback
         logger.error(traceback.format_exc())
-        return f"Error searching Sketchfab models: {str(e)}"
+        return tool_error("Error searching Sketchfab models", data={"detail": str(e), "query": query})
 
 @mcp.tool()
 def download_sketchfab_model(
@@ -678,26 +699,29 @@ def download_sketchfab_model(
         result = blender.send_command("download_sketchfab_model", {
             "uid": uid
         })
-        
+
         if result is None:
             logger.error("Received None result from Sketchfab download")
-            return "Error: Received no response from Sketchfab download request"
-            
+            return tool_error("Sketchfab download returned no data", data={"uid": uid})
+
         if "error" in result:
             logger.error(f"Error from Sketchfab download: {result['error']}")
-            return f"Error: {result['error']}"
+            return tool_error("Sketchfab download failed", data={"detail": result["error"], "uid": uid})
         
         if result.get("success"):
             imported_objects = result.get("imported_objects", [])
             object_names = ", ".join(imported_objects) if imported_objects else "none"
             return f"Successfully imported model. Created objects: {object_names}"
         else:
-            return f"Failed to download model: {result.get('message', 'Unknown error')}"
+            return tool_error(
+                "Failed to download model",
+                data={"detail": result.get("message", "Unknown error"), "uid": uid},
+            )
     except Exception as e:
         logger.error(f"Error downloading Sketchfab model: {str(e)}")
         import traceback
         logger.error(traceback.format_exc())
-        return f"Error downloading Sketchfab model: {str(e)}"
+        return tool_error("Error downloading Sketchfab model", data={"detail": str(e), "uid": uid})
 
 def _process_bbox(original_bbox: list[float] | list[int] | None) -> list[int] | None:
     if original_bbox is None:
@@ -742,7 +766,7 @@ def generate_hyper3d_model_via_text(
             return json.dumps(result)
     except Exception as e:
         logger.error(f"Error generating Hyper3D task: {str(e)}")
-        return f"Error generating Hyper3D task: {str(e)}"
+        return tool_error("Error generating Hyper3D task", data={"detail": str(e)})
 
 @mcp.tool()
 def generate_hyper3d_model_via_images(
@@ -765,12 +789,12 @@ def generate_hyper3d_model_via_images(
     Returns a message indicating success or failure.
     """
     if input_image_paths is not None and input_image_urls is not None:
-        return f"Error: Conflict parameters given!"
+        return tool_error("Invalid parameters", data={"detail": "Provide either paths or URLs, not both."})
     if input_image_paths is None and input_image_urls is None:
-        return f"Error: No image given!"
+        return tool_error("Invalid parameters", data={"detail": "No images supplied."})
     if input_image_paths is not None:
         if not all(os.path.exists(i) for i in input_image_paths):
-            return "Error: not all image paths are valid!"
+            return tool_error("Invalid parameters", data={"detail": "Not all image paths are valid."})
         images = []
         for path in input_image_paths:
             with open(path, "rb") as f:
@@ -779,7 +803,7 @@ def generate_hyper3d_model_via_images(
                 )
     elif input_image_urls is not None:
         if not all(urlparse(i) for i in input_image_paths):
-            return "Error: not all image URLs are valid!"
+            return tool_error("Invalid parameters", data={"detail": "Not all image URLs are valid."})
         images = input_image_urls.copy()
     try:
         blender = get_blender_connection()
@@ -798,7 +822,7 @@ def generate_hyper3d_model_via_images(
             return json.dumps(result)
     except Exception as e:
         logger.error(f"Error generating Hyper3D task: {str(e)}")
-        return f"Error generating Hyper3D task: {str(e)}"
+        return tool_error("Error generating Hyper3D task", data={"detail": str(e)})
 
 @mcp.tool()
 def poll_rodin_job_status(
@@ -841,7 +865,7 @@ def poll_rodin_job_status(
         return result
     except Exception as e:
         logger.error(f"Error generating Hyper3D task: {str(e)}")
-        return f"Error generating Hyper3D task: {str(e)}"
+        return tool_error("Error polling Hyper3D task", data={"detail": str(e)})
 
 @mcp.tool()
 def import_generated_asset(
@@ -874,7 +898,7 @@ def import_generated_asset(
         return result
     except Exception as e:
         logger.error(f"Error generating Hyper3D task: {str(e)}")
-        return f"Error generating Hyper3D task: {str(e)}"
+        return tool_error("Error importing generated asset", data={"detail": str(e), "name": name})
 
 @mcp.prompt()
 def asset_creation_strategy() -> str:
