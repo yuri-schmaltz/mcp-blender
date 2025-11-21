@@ -6,6 +6,8 @@ BlenderMCP connects Blender to local large language models (LLMs) through the Mo
 
 **We have no official website. Any website you see online is unofficial and has no affiliation with this project. Use them at your own risk.**
 
+[Quick links](#architecture--data-flow) · [Installation](#installation) · [Usage](#usage) · [Troubleshooting](#troubleshooting) · [Contributing](#contributing)
+
 [Full tutorial](https://www.youtube.com/watch?v=lCyQ717DuzQ)
 
 ### Join the Community
@@ -65,6 +67,40 @@ The system consists of two main components:
 1. **Blender Addon (`addon.py`)**: A Blender addon that creates a socket server within Blender to receive and execute commands
 2. **MCP Server (`src/blender_mcp/server.py`)**: A Python server that implements the Model Context Protocol and connects to the Blender addon
 
+## Architecture & Data Flow
+
+```mermaid
+flowchart LR
+    subgraph MCP Client
+        A[MCP-aware client<br/>(LM Studio, Cursor, Continue)]
+    end
+    subgraph MCP Server
+        B[FastMCP server<br/>(`src/blender_mcp/server.py`)]
+    end
+    subgraph Blender
+        C[Addon socket server<br/>(`addon.py`)]
+        D[bpy / scene graph]
+    end
+
+    A -- MCP request/response --> B
+    B -- JSON over TCP --> C
+    C -- bpy API --> D
+    D -- results / viewport changes --> A
+```
+
+**Interaction summary**
+
+- MCP-compatible clients invoke tools exposed by the FastMCP server. The server relays tool calls as JSON commands over TCP to the Blender addon, which executes them on the main Blender thread.
+- Blender scene changes (object creation, material edits, imports) are driven by the addon’s handlers and returned as structured responses to the MCP client.
+
+**Configuration points**
+
+- **Socket target**: `BLENDER_HOST` and `BLENDER_PORT` environment variables (defaults `localhost:9876`) configure where the MCP server sends commands. The same values must be used when starting the addon inside Blender.
+- **Addon panel**: The Blender sidebar exposes toggles such as Poly Haven asset fetching and connection controls (see `addon.py` UI operators). Enabling Poly Haven changes which tools the assistant can call.
+- **Client launch**: MCP clients should launch the server via `uvx blender-mcp` (see LM Studio/Continue/Cursor sections below). One server instance should be active at a time to avoid port conflicts.
+
+For a quick mental model, start at the MCP client, follow the arrows in the diagram, and open the linked source files to see how each hop works.
+
 ## Installation
 
 
@@ -97,6 +133,17 @@ The following environment variables can be used to configure the Blender connect
 
 - `BLENDER_HOST`: Host address for Blender socket server (default: "localhost")
 - `BLENDER_PORT`: Port number for Blender socket server (default: 9876)
+
+### Logging configuration
+
+Blender MCP now configures logging from its entrypoint, allowing you to control verbosity and destinations when launching the server from an MCP client:
+
+- `BLENDER_MCP_LOG_LEVEL`: Logging level (e.g., `DEBUG`, `INFO`, `WARNING`).
+- `BLENDER_MCP_LOG_FORMAT`: Standard logging format string (defaults to timestamp/name/level/message).
+- `BLENDER_MCP_LOG_HANDLER`: `console` (stderr) or `file`.
+- `BLENDER_MCP_LOG_FILE`: File path when using the `file` handler (default: `blender_mcp.log`).
+
+Tool calls now return structured error payloads (`{"error": {"code": "runtime_error", "message": "...", "data": {...}}}`) while detailed diagnostics continue to be written to the configured logs.
 
 Example:
 ```bash
