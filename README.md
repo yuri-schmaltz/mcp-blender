@@ -269,6 +269,40 @@ _Prerequisites_: Make sure you have [Visual Studio Code](https://code.visualstud
 4. Click "Connect to LLM client"
 5. Ensure your MCP client has started the `blender-mcp` server (you can also launch it manually with `uvx blender-mcp` if needed)
 
+### Complete usage walkthrough
+
+Use the steps below the first time you bring everything online or when you are troubleshooting a broken setup. The goal is to ensure Blender, the MCP server, and your chosen client are all pointing at each other correctly.
+
+1. **Prep Blender and the addon**
+   - Install and enable `addon.py` (see [Installing the Blender Addon](#installing-the-blender-addon)).
+   - Open the **BlenderMCP** tab in the sidebar and keep the panel visible so you can read connection status updates.
+2. **Verify host/port alignment**
+   - In the Blender panel, check the host and port fields. They default to `localhost` and `9876`.
+   - If you need Blender to accept connections from another machine or container, set matching values via the environment variables `BLENDER_HOST` and `BLENDER_PORT` before starting the MCP server (see [Environment Variables](#environment-variables)).
+3. **Start the MCP server**
+   - Let your MCP-aware client (LM Studio, Continue, Cursor, VS Code, etc.) launch the server automatically **or** start it yourself in a terminal with:
+     ```bash
+     uvx blender-mcp
+     ```
+   - Keep the terminal window open; the server logs will report connection attempts and tool calls.
+4. **Connect from Blender**
+   - In Blender, click **Connect to LLM client**. The status message in the panel should change to connected after a few seconds.
+   - If it fails, confirm no other `blender-mcp` server instance is already running and that firewalls allow TCP on the chosen port.
+5. **Test round-trip communication**
+   - In your MCP client, ask the assistant to “list all objects in the scene.”
+   - Blender should respond with object data in the chat, confirming the end-to-end path: MCP client → MCP server → Blender addon → back to client.
+6. **Stay within one running server**
+   - Only one MCP server instance should be active per machine. If you switch clients, stop the previous server first to avoid port conflicts.
+
+### Practical tips for day-to-day use
+
+- **Keep Blender open**: The addon processes commands on Blender’s main thread, so the Blender window must remain open while you work.
+- **Save often**: Tool calls can perform destructive actions (e.g., mass delete). Save versions or enable auto-save to protect work in progress.
+- **Prefer small, explicit requests**: Break complex prompts into steps like “create room layout” → “add lighting” → “apply materials” to get predictable results.
+- **Inspect tool calls**: Most MCP clients show a tool-call log. Use it to understand what the assistant is sending to Blender and to copy/adjust commands.
+- **Refresh Poly Haven and Hyper3D states**: Toggle the relevant checkboxes in the Blender panel if the assistant forgets to fetch assets or exceeds a quota.
+- **Run from scripts**: You can invoke `uvx blender-mcp` from your own automation (shell scripts, Makefiles, CI) as long as Blender is running with the addon enabled.
+
 ### Using with local LLM clients
 
 Once your MCP client (LM Studio, Continue, Cursor, etc.) is configured and the addon is running inside Blender, the assistant will expose a hammer icon with the Blender MCP tools.
