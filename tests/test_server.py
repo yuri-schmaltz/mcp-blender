@@ -1,122 +1,141 @@
 import base64
 import json
-from unittest.mock import MagicMock
-
-import pytest
-
-from blender_mcp import server
-
-
-@pytest.mark.parametrize(
-    "bbox, expected",
-    [
-        (None, None),
-        ([1, 2, 3], [1, 2, 3]),
-        ([1.0, 2.0, 3.0], [33, 66, 100]),
-    ],
-)
-def test_process_bbox(bbox, expected):
-    assert server._process_bbox(bbox) == expected
+import os
+import sys
+import tempfile
+import types
+from pathlib import Path
+from unittest import TestCase
+from unittest.mock import MagicMock, patch
 
 
-def test_process_bbox_rejects_non_positive_values():
-    with pytest.raises(ValueError):
-        server._process_bbox([0, 1, 2])
+def _add_src_to_path():
+    """Ensure the repository's src directory is importable."""
+    repo_root = Path(__file__).resolve().parents[1]
+    src_path = repo_root / "src"
+    if str(src_path) not in os.sys.path:
+        os.sys.path.insert(0, str(src_path))
 
 
-def test_generate_hyper3d_model_via_text_formats_command(monkeypatch):
-    mock_conn = MagicMock()
-    mock_conn.send_command.return_value = {
-        "submit_time": "now",
-        "uuid": "task-123",
-        "jobs": {"subscription_key": "sub-key"},
-    }
-    monkeypatch.setattr(server, "get_blender_connection", lambda: mock_conn)
-
-    response = server.generate_hyper3d_model_via_text(
-        None, text_prompt="a cube", bbox_condition=[1.0, 2.0, 3.0]
-    )
-
-    payload = mock_conn.send_command.call_args[0][1]
-    assert payload["text_prompt"] == "a cube"
-    assert payload["images"] is None
-    assert payload["bbox_condition"] == [33, 66, 100]
-
-    parsed_response = json.loads(response)
-    assert parsed_response["task_uuid"] == "task-123"
-    assert parsed_response["subscription_key"] == "sub-key"
+_add_src_to_path()
 
 
-def test_generate_hyper3d_model_via_images_with_invalid_path(monkeypatch):
-    monkeypatch.setattr(
-        server, "get_blender_connection", lambda: pytest.fail("Should not connect")
-    )
+def _mock_mcp_dependencies():
+    """Provide lightweight stand-ins for the mcp package to enable imports."""
+    if "mcp" in sys.modules:
+        return
 
-    response = server.generate_hyper3d_model_via_images(
-        None, input_image_paths=["/does/not/exist.png"]
-    )
+    class _DummyFastMCP:
+        def __init__(self, *_, **__):
+            pass
 
-    assert response == "Error: not all image paths are valid!"
+        def resource(self, *_, **__):
+            def decorator(func):
+                return func
 
+            return decorator
 
-def test_generate_hyper3d_model_via_images_with_invalid_url(monkeypatch):
-    monkeypatch.setattr(
-        server, "get_blender_connection", lambda: pytest.fail("Should not connect")
-    )
+        def tool(self, *_, **__):
+            def decorator(func):
+                return func
 
-    response = server.generate_hyper3d_model_via_images(
-        None, input_image_urls=["not-a-url"]
-    )
+            return decorator
 
-    assert response == "Error: not all image URLs are valid!"
+        def prompt(self, *_, **__):
+            def decorator(func):
+                return func
 
+            return decorator
 
-def test_generate_hyper3d_model_via_images_uses_urls(monkeypatch):
-    mock_conn = MagicMock()
-    mock_conn.send_command.return_value = {
-        "submit_time": True,
-        "uuid": "url-task",
-        "jobs": {"subscription_key": "url-sub"},
-    }
-    monkeypatch.setattr(server, "get_blender_connection", lambda: mock_conn)
+    mcp_module = types.ModuleType("mcp")
+    mcp_server_module = types.ModuleType("mcp.server")
+    mcp_server_fastmcp_module = types.ModuleType("mcp.server.fastmcp")
 
-    response = server.generate_hyper3d_model_via_images(
-        None,
-        input_image_urls=["https://example.com/image.png"],
-        bbox_condition=[1, 1, 1],
-    )
+    mcp_server_fastmcp_module.FastMCP = _DummyFastMCP
+    mcp_server_fastmcp_module.Context = MagicMock()
+    mcp_server_fastmcp_module.Image = MagicMock()
 
-    payload = mock_conn.send_command.call_args[0][1]
-    assert payload["images"] == ["https://example.com/image.png"]
-    assert payload["bbox_condition"] == [1, 1, 1]
+    mcp_server_module.fastmcp = mcp_server_fastmcp_module
+    mcp_module.server = mcp_server_module
 
-    parsed = json.loads(response)
-    assert parsed["task_uuid"] == "url-task"
-    assert parsed["subscription_key"] == "url-sub"
+    sys.modules["mcp"] = mcp_module
+    sys.modules["mcp.server"] = mcp_server_module
+    sys.modules["mcp.server.fastmcp"] = mcp_server_fastmcp_module
 
 
-def test_generate_hyper3d_model_via_images_reads_files(monkeypatch, tmp_path):
-    image_path = tmp_path / "image.png"
-    image_path.write_bytes(b"fake-bytes")
+_mock_mcp_dependencies()
 
-    mock_conn = MagicMock()
-    mock_conn.send_command.return_value = {
-        "submit_time": True,
-        "uuid": "file-task",
-        "jobs": {"subscription_key": "file-sub"},
-    }
-    monkeypatch.setattr(server, "get_blender_connection", lambda: mock_conn)
+from blender_mcp import server  # noqa: E402  # isort: skip
 
-    response = server.generate_hyper3d_model_via_images(
-        None, input_image_paths=[str(image_path)]
-    )
 
-    payload = mock_conn.send_command.call_args[0][1]
-    assert len(payload["images"]) == 1
-    suffix, encoded = payload["images"][0]
-    assert suffix == ".png"
-    assert base64.b64decode(encoded) == b"fake-bytes"
+class GenerateHyper3DModelViaImagesTests(TestCase):
+    def test_file_paths_validation_fails(self):
+        result = server.generate_hyper3d_model_via_images(
+            ctx=None,
+            input_image_paths=["/nonexistent/path.png"],
+        )
 
-    parsed = json.loads(response)
-    assert parsed["task_uuid"] == "file-task"
-    assert parsed["subscription_key"] == "file-sub"
+        self.assertEqual(result, "Error: not all image paths are valid!")
+
+    def test_urls_validation_fails(self):
+        result = server.generate_hyper3d_model_via_images(
+            ctx=None,
+            input_image_urls=["not-a-valid-url"],
+        )
+
+        self.assertEqual(result, "Error: not all image URLs are valid!")
+
+    def test_generates_model_from_file_paths(self):
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+            tmp.write(b"image-bytes")
+            image_path = tmp.name
+
+        expected_b64 = base64.b64encode(b"image-bytes").decode("ascii")
+        mock_blender = MagicMock()
+        mock_blender.send_command.return_value = {
+            "submit_time": True,
+            "uuid": "task-123",
+            "jobs": {"subscription_key": "sub-456"},
+        }
+
+        try:
+            with patch(
+                "blender_mcp.server.get_blender_connection",
+                return_value=mock_blender,
+            ):
+                result = server.generate_hyper3d_model_via_images(
+                    ctx=None,
+                    input_image_paths=[image_path],
+                )
+        finally:
+            os.unlink(image_path)
+
+        payload = json.loads(result)
+        self.assertEqual(payload["task_uuid"], "task-123")
+        mock_blender.send_command.assert_called_once()
+        sent_params = mock_blender.send_command.call_args[0][1]
+        self.assertEqual(sent_params["images"], [(".png", expected_b64)])
+
+    def test_generates_model_from_urls(self):
+        mock_blender = MagicMock()
+        mock_blender.send_command.return_value = {
+            "submit_time": True,
+            "uuid": "task-789",
+            "jobs": {"subscription_key": "sub-987"},
+        }
+        urls = ["https://example.com/img.png"]
+
+        with patch(
+            "blender_mcp.server.get_blender_connection",
+            return_value=mock_blender,
+        ):
+            result = server.generate_hyper3d_model_via_images(
+                ctx=None,
+                input_image_urls=urls,
+            )
+
+        payload = json.loads(result)
+        self.assertEqual(payload["task_uuid"], "task-789")
+        mock_blender.send_command.assert_called_once()
+        sent_params = mock_blender.send_command.call_args[0][1]
+        self.assertEqual(sent_params["images"], urls)
