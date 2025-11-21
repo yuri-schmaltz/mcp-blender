@@ -850,8 +850,12 @@ def generate_hyper3d_model_via_images(
                     "Ensure the file exists, is readable, and use an absolute path."
                 )
     elif input_image_urls is not None:
-        if not all(urlparse(i).scheme and urlparse(i).netloc for i in input_image_urls):
-            return "Error: not all image URLs are valid! Use fully-qualified URLs (https://...)."
+        def _is_valid_url(url: str) -> bool:
+            parsed = urlparse(url)
+            return parsed.scheme in ("http", "https") and bool(parsed.netloc)
+
+        if not all(_is_valid_url(i) for i in input_image_urls):
+            return "Error: not all image URLs are valid!"
         images = input_image_urls.copy()
     try:
         blender = get_blender_connection()
