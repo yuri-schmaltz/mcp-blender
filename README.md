@@ -98,6 +98,17 @@ The following environment variables can be used to configure the Blender connect
 - `BLENDER_HOST`: Host address for Blender socket server (default: "localhost")
 - `BLENDER_PORT`: Port number for Blender socket server (default: 9876)
 
+### Logging configuration
+
+Blender MCP now configures logging from its entrypoint, allowing you to control verbosity and destinations when launching the server from an MCP client:
+
+- `BLENDER_MCP_LOG_LEVEL`: Logging level (e.g., `DEBUG`, `INFO`, `WARNING`).
+- `BLENDER_MCP_LOG_FORMAT`: Standard logging format string (defaults to timestamp/name/level/message).
+- `BLENDER_MCP_LOG_HANDLER`: `console` (stderr) or `file`.
+- `BLENDER_MCP_LOG_FILE`: File path when using the `file` handler (default: `blender_mcp.log`).
+
+Tool calls now return structured error payloads (`{"error": {"code": "runtime_error", "message": "...", "data": {...}}}`) while detailed diagnostics continue to be written to the configured logs.
+
 Example:
 ```bash
 export BLENDER_HOST='host.docker.internal'
