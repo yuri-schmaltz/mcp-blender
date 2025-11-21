@@ -5,6 +5,7 @@ import json
 import asyncio
 import logging
 import tempfile
+import time
 from dataclasses import dataclass
 from contextlib import asynccontextmanager
 from typing import AsyncIterator, Dict, Any, List
@@ -241,6 +242,80 @@ def get_blender_connection():
     return _blender_connection
 
 
+def _prepare_temp_file_path(prefix: str = "blender_screenshot", suffix: str = ".png") -> Path:
+    """Return a writable temporary file path, raising helpful errors if unavailable."""
+    temp_dir = Path(tempfile.gettempdir())
+    if not temp_dir.exists():
+        raise FileNotFoundError(
+            f"Temporary directory {temp_dir} does not exist. Set TMPDIR to a valid, writable directory and retry."
+        )
+    if not os.access(temp_dir, os.W_OK):
+        raise PermissionError(
+            f"Cannot write to temporary directory {temp_dir}. Check permissions or point TMPDIR to a writable location."
+        )
+
+    return temp_dir / f"{prefix}_{os.getpid()}{suffix}"
+
+
+def _cleanup_file(path: Path) -> None:
+    """Remove a file while suppressing filesystem errors."""
+    try:
+        if path.exists():
+            path.unlink()
+            logger.debug(f"Removed temporary file {path}")
+    except Exception as cleanup_error:
+        logger.warning(f"Failed to remove temporary file {path}: {cleanup_error}")
+
+
+def _read_file_with_retry(path: Path, attempts: int = 3, delay: float = 0.2) -> bytes:
+    """Read file contents, retrying briefly if the producer is still writing."""
+    last_error: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            if not path.exists():
+                raise FileNotFoundError(
+                    f"Screenshot file was not created at {path}. Ensure the MCP server can write to the temp directory."
+                )
+            return path.read_bytes()
+        except FileNotFoundError as e:
+            last_error = e
+            if attempt < attempts:
+                time.sleep(delay)
+        except OSError as e:
+            last_error = e
+            if attempt < attempts:
+                time.sleep(delay)
+        else:
+            break
+
+    assert last_error is not None
+    raise last_error
+
+
+def _encode_image_from_path(path_str: str) -> tuple[str, str]:
+    """Load and base64-encode an image from disk with clear error messaging."""
+    path = Path(path_str)
+    if not path.is_absolute():
+        raise ValueError(
+            f"Image path '{path}' must be absolute to avoid importing from unintended locations."
+        )
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Image path '{path}' does not exist. Verify the file path before retrying."
+        )
+    if not path.is_file():
+        raise ValueError(f"Image path '{path}' is not a file. Point to a readable image file instead.")
+
+    try:
+        image_bytes = path.read_bytes()
+    except OSError as e:
+        raise OSError(
+            f"Unable to read image at '{path}': {e}. Check file permissions or move the image to a readable directory."
+        ) from e
+
+    return path.suffix, base64.b64encode(image_bytes).decode("ascii")
+
+
 @mcp.tool()
 def get_scene_info(ctx: Context) -> str:
     """Get detailed information about the current Blender scene"""
@@ -282,37 +357,33 @@ def get_viewport_screenshot(ctx: Context, max_size: int = 800) -> Image:
     
     Returns the screenshot as an Image.
     """
+    temp_path = _prepare_temp_file_path()
     try:
         blender = get_blender_connection()
-        
-        # Create temp file path
-        temp_dir = tempfile.gettempdir()
-        temp_path = os.path.join(temp_dir, f"blender_screenshot_{os.getpid()}.png")
-        
+
         result = blender.send_command("get_viewport_screenshot", {
             "max_size": max_size,
-            "filepath": temp_path,
+            "filepath": str(temp_path),
             "format": "png"
         })
-        
+
         if "error" in result:
             raise Exception(result["error"])
-        
-        if not os.path.exists(temp_path):
-            raise Exception("Screenshot file was not created")
-        
-        # Read the file
-        with open(temp_path, 'rb') as f:
-            image_bytes = f.read()
-        
-        # Delete the temp file
-        os.remove(temp_path)
-        
+
+        image_bytes = _read_file_with_retry(temp_path)
+
         return Image(data=image_bytes, format="png")
-        
+
     except Exception as e:
         logger.error(f"Error capturing screenshot: {str(e)}")
-        raise Exception(f"Screenshot failed: {str(e)}")
+        guidance = (
+            "Screenshot failed: "
+            f"{str(e)}. Check that Blender can write to {temp_path.parent} "
+            "or set TMPDIR to a writable directory, then try again."
+        )
+        raise Exception(guidance)
+    finally:
+        _cleanup_file(temp_path)
 
 
 @mcp.tool()
@@ -765,17 +836,18 @@ def generate_hyper3d_model_via_images(
     Returns a message indicating success or failure.
     """
     if input_image_paths is not None and input_image_urls is not None:
-        return f"Error: Conflict parameters given!"
+        return "Error: Provide either local image paths or URLs, not both."
     if input_image_paths is None and input_image_urls is None:
-        return f"Error: No image given!"
+        return "Error: No image given!"
     if input_image_paths is not None:
-        if not all(os.path.exists(i) for i in input_image_paths):
-            return "Error: not all image paths are valid!"
         images = []
         for path in input_image_paths:
-            with open(path, "rb") as f:
-                images.append(
-                    (Path(path).suffix, base64.b64encode(f.read()).decode("ascii"))
+            try:
+                images.append(_encode_image_from_path(path))
+            except Exception as e:
+                return (
+                    f"Error reading image '{path}': {e}. "
+                    "Ensure the file exists, is readable, and use an absolute path."
                 )
     elif input_image_urls is not None:
         def _is_valid_url(url: str) -> bool:
