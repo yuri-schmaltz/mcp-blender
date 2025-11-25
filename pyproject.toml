@@ -25,9 +25,13 @@ test = [
     "pytest",
     "pytest-mock",
 ]
+gui = [
+    "PySide6>=6.6",
+]
 
 [project.scripts]
 blender-mcp = "blender_mcp.cli:main"
+blender-mcp-gui = "blender_mcp.gui:launch_gui"
 
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
