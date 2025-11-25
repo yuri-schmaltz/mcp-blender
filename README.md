@@ -167,6 +167,8 @@ uv run blender-mcp-gui
 
 A janela lista e permite editar todas as variáveis de ambiente usadas pelo servidor (host/porta do Blender e opções de logging), aplicando as mudanças imediatamente e reconfigurando o log sem precisar editar arquivos manualmente.
 
+> Dica para Windows/PowerShell: instale o `uv` antes de rodar os comandos acima com `py -m pip install uv` (ou `python -m pip install uv`). Isso coloca o executável `uv.exe` no seu diretório de scripts do Python (geralmente `%APPDATA%\Python\Scripts` ou `%USERPROFILE%\.local\bin`); se o PowerShell não encontrar `uv`, adicione esse caminho à variável de ambiente `PATH`.
+
 ### LM Studio integration
 
 LM Studio (v0.3.0 or newer) ships with native MCP client support, allowing any locally hosted model to call Blender tools directly.
