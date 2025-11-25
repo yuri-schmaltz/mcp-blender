@@ -75,7 +75,7 @@ class GenerateHyper3DModelViaImagesTests(TestCase):
             input_image_paths=["/nonexistent/path.png"],
         )
 
-        self.assertEqual(result, "Error: not all image paths are valid!")
+        self.assertIn("Error reading image '/nonexistent/path.png'", result)
 
     def test_urls_validation_fails(self):
         result = server.generate_hyper3d_model_via_images(
