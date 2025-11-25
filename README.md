@@ -151,6 +151,22 @@ export BLENDER_HOST='host.docker.internal'
 export BLENDER_PORT=9876
 ```
 
+### Interface gráfica (PySide6)
+
+Instale o extra `gui` para habilitar a interface:
+
+```bash
+uv pip install '.[gui]'
+```
+
+Depois, execute:
+
+```bash
+uv run blender-mcp-gui
+```
+
+A janela lista e permite editar todas as variáveis de ambiente usadas pelo servidor (host/porta do Blender e opções de logging), aplicando as mudanças imediatamente e reconfigurando o log sem precisar editar arquivos manualmente.
+
 ### LM Studio integration
 
 LM Studio (v0.3.0 or newer) ships with native MCP client support, allowing any locally hosted model to call Blender tools directly.
