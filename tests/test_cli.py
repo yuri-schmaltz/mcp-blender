@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from blender_mcp import cli
 from blender_mcp import server
 
 
@@ -17,6 +18,7 @@ def test_cli_entrypoint_runs_without_blender(monkeypatch):
     monkeypatch.setattr(
         server, "get_blender_connection", lambda: pytest.fail("Should not connect")
     )
+    monkeypatch.setattr(cli, "configure_logging", lambda **_: None)
 
     spec = importlib.util.spec_from_file_location(
         "blender_mcp_cli", Path(__file__).resolve().parent.parent / "main.py"
@@ -25,6 +27,44 @@ def test_cli_entrypoint_runs_without_blender(monkeypatch):
     assert spec and spec.loader
     spec.loader.exec_module(cli_entry)
 
-    cli_entry.main()
+    cli_entry.main([])
 
     assert calls == ["run"]
+
+
+def test_cli_arguments_override_env(monkeypatch):
+    monkeypatch.setenv("BLENDER_HOST", "env-host")
+    monkeypatch.setenv("BLENDER_PORT", "9999")
+    monkeypatch.setenv("BLENDER_MCP_LOG_LEVEL", "WARNING")
+    monkeypatch.setenv("BLENDER_MCP_LOG_FORMAT", "%(message)s")
+    monkeypatch.setenv("BLENDER_MCP_LOG_HANDLER", "console")
+
+    logging_calls = []
+
+    def fake_configure_logging(*, level=None, log_format=None, handler_type=None):
+        logging_calls.append((level, log_format, handler_type))
+
+    monkeypatch.setattr(cli, "configure_logging", fake_configure_logging)
+
+    server_calls = []
+    monkeypatch.setattr(
+        server, "main", lambda *, host=None, port=None: server_calls.append((host, port))
+    )
+
+    cli.main(
+        [
+            "--host",
+            "cli-host",
+            "--port",
+            "1234",
+            "--log-level",
+            "debug",
+            "--log-format",
+            "%(levelname)s:%(message)s",
+            "--log-handler",
+            "file",
+        ]
+    )
+
+    assert logging_calls == [("debug", "%(levelname)s:%(message)s", "file")]
+    assert server_calls == [("cli-host", 1234)]
