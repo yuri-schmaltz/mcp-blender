@@ -5,10 +5,10 @@ description = "Blender integration through the Model Context Protocol"
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [
-    {name = "Siddharth Ahuja", email = "sid@modelcontextprotocol.io"}
+    {name = "BlenderMCP Team", email = "maintainers@modelcontextprotocol.io"}
 ]
 maintainers = [
-    {name = "Model Context Protocol Maintainers", email = "maintainers@modelcontextprotocol.io"}
+    {name = "BlenderMCP Team", email = "maintainers@modelcontextprotocol.io"}
 ]
 license = {text = "MIT"}
 classifiers = [

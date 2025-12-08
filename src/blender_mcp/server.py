@@ -1044,8 +1044,11 @@ def asset_creation_strategy() -> str:
 
 # Main execution
 
+from .logging_config import configure_logging
+    
 def main():
     """Run the MCP server"""
+    configure_logging()
     mcp.run()
 
 if __name__ == "__main__":
