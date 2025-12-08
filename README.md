@@ -358,7 +358,8 @@ Hyper3D's free trial key allows you to generate a limited number of models per d
 ## Troubleshooting
 
 - **Connection issues**: Make sure the Blender addon server is running, and the MCP server is configured in your chosen client. Do **not** run the `uvx` command in a terminal if the client already manages the process. Sometimes the first command won't go through but after that it starts working.
-- **Timeout errors**: Try simplifying your requests or breaking them into smaller steps
+- **Timeout errors**: Try simplifying your requests or breaking them into smaller steps. The MCP server retries socket operations by default; if you see `Blender did not respond after N attempts`, check that the addon is running and increase `BLENDER_SOCKET_TIMEOUT`, `BLENDER_CONNECT_ATTEMPTS`, or `BLENDER_COMMAND_ATTEMPTS` to match your Blender add-on settings.
+- **Incomplete/partial response**: Errors such as `Received incomplete response from Blender` or `Timeout waiting for Blender response` mean the TCP connection was interrupted. The server will reconnect on the next command. If it repeats, restart the Blender add-on and consider raising `BLENDER_RETRY_BACKOFF` so the socket has time to recover.
 - **Poly Haven integration**: Some assistants are occasionally erratic—remind them to toggle the Poly Haven checkbox or call the status tool again.
 - **Have you tried turning it off and on again?**: If you're still having connection errors, try restarting both the MCP client and the Blender server
 
