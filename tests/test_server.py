@@ -1,12 +1,15 @@
 import base64
 import json
 import os
+import socket
 import sys
 import tempfile
 import types
 from pathlib import Path
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 
 def _add_src_to_path():
@@ -66,6 +69,69 @@ def _mock_mcp_dependencies():
 _mock_mcp_dependencies()
 
 from blender_mcp import server  # noqa: E402  # isort: skip
+
+
+class _StubSocket:
+    def __init__(
+        self,
+        *,
+        recv_chunks=None,
+        recv_side_effects=None,
+        send_side_effect=None,
+        connect_side_effect=None,
+    ):
+        self.recv_chunks = list(recv_chunks or [])
+        self.recv_side_effects = list(recv_side_effects or [])
+        self.send_side_effect = send_side_effect
+        self.connect_side_effect = connect_side_effect
+        self.sent_payloads = []
+        self.closed = False
+        self.connect_calls = 0
+        self.timeout = None
+
+    def settimeout(self, timeout):
+        self.timeout = timeout
+
+    def connect(self, address):
+        self.connect_calls += 1
+        self.address = address
+        if self.connect_side_effect:
+            raise self.connect_side_effect
+
+    def sendall(self, data):
+        if self.send_side_effect:
+            raise self.send_side_effect
+        self.sent_payloads.append(data)
+
+    def recv(self, _):
+        if self.recv_side_effects:
+            effect = self.recv_side_effects.pop(0)
+            if isinstance(effect, Exception):
+                raise effect
+            return effect
+        if self.recv_chunks:
+            return self.recv_chunks.pop(0)
+        return b""
+
+    def close(self):
+        self.closed = True
+
+
+@pytest.fixture
+def stub_socket(monkeypatch):
+    queued_sockets: list[_StubSocket] = []
+
+    def queue_socket(stub: _StubSocket) -> _StubSocket:
+        queued_sockets.append(stub)
+        return stub
+
+    def fake_socket(*_, **__):
+        if not queued_sockets:
+            raise AssertionError("No stub sockets queued")
+        return queued_sockets.pop(0)
+
+    monkeypatch.setattr(server.socket, "socket", fake_socket)
+    return queue_socket
 
 
 class GenerateHyper3DModelViaImagesTests(TestCase):
@@ -139,3 +205,61 @@ class GenerateHyper3DModelViaImagesTests(TestCase):
         mock_blender.send_command.assert_called_once()
         sent_params = mock_blender.send_command.call_args[0][1]
         self.assertEqual(sent_params["images"], urls)
+
+
+def _stub_connection(**kwargs) -> server.BlenderConnection:
+    return server.BlenderConnection(
+        host="localhost",
+        port=9999,
+        timeout=0.01,
+        connect_attempts=1,
+        command_attempts=kwargs.get("command_attempts", 2),
+        backoff_seconds=0,
+    )
+
+
+def test_send_command_recovers_from_partial_response(stub_socket):
+    first = stub_socket(
+        _StubSocket(
+            recv_chunks=[b'{"status": "ok"'],
+        )
+    )
+    second = stub_socket(
+        _StubSocket(
+            recv_chunks=[b'{"status": "ok", "result": {"value": 1}}'],
+        )
+    )
+
+    conn = _stub_connection()
+    result = conn.send_command("ping", {"sequence": 1})
+
+    assert result == {"value": 1}
+    assert first.closed
+    assert second.connect_calls == 1
+
+
+def test_send_command_retries_after_timeout_and_reconnects(stub_socket):
+    failing = stub_socket(
+        _StubSocket(
+            recv_side_effects=[socket.timeout()],
+        )
+    )
+    recovering = stub_socket(
+        _StubSocket(
+            recv_chunks=[b'{"status": "ok", "result": {"pong": true}}'],
+        )
+    )
+
+    conn = _stub_connection(command_attempts=1)
+
+    with pytest.raises(Exception) as excinfo:
+        conn.send_command("ping", {"sequence": 1})
+
+    assert "Blender did not respond after" in str(excinfo.value)
+    assert failing.closed
+    assert conn.sock is None
+
+    result = conn.send_command("ping", {"sequence": 2})
+
+    assert result == {"pong": True}
+    assert recovering.connect_calls == 1
