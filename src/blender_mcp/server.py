@@ -1050,18 +1050,11 @@ def asset_creation_strategy() -> str:
 
 # Main execution
 
-def set_blender_connection_config(host: str | None = None, port: int | None = None) -> None:
-    """Override the Blender connection parameters for subsequent connections."""
-
-    global _blender_host_override, _blender_port_override
-
-    _blender_host_override = host
-    _blender_port_override = port
-
-
-def main(*, host: str | None = None, port: int | None = None):
+from .logging_config import configure_logging
+    
+def main():
     """Run the MCP server"""
-    set_blender_connection_config(host=host, port=port)
+    configure_logging()
     mcp.run()
 
 if __name__ == "__main__":
