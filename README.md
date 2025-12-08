@@ -134,6 +134,12 @@ The following environment variables can be used to configure the Blender connect
 - `BLENDER_HOST`: Host address for Blender socket server (default: "localhost")
 - `BLENDER_PORT`: Port number for Blender socket server (default: 9876)
 
+You can override these at launch time using CLI flags instead of environment variables:
+
+```bash
+uvx blender-mcp --host host.docker.internal --port 9876
+```
+
 ### Logging configuration
 
 Blender MCP now configures logging from its entrypoint, allowing you to control verbosity and destinations when launching the server from an MCP client:
@@ -149,6 +155,7 @@ Example:
 ```bash
 export BLENDER_HOST='host.docker.internal'
 export BLENDER_PORT=9876
+uvx blender-mcp --log-level debug --log-format "%(levelname)s:%(message)s"
 ```
 
 ### Interface gráfica (PySide6)

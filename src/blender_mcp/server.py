@@ -26,6 +26,8 @@ logger = logging.getLogger("BlenderMCPServer")
 # Default configuration
 DEFAULT_HOST = "localhost"
 DEFAULT_PORT = 9876
+_blender_host_override: str | None = None
+_blender_port_override: int | None = None
 
 @dataclass
 class BlenderConnection:
@@ -234,8 +236,12 @@ def get_blender_connection():
     
     # Create a new connection if needed
     if _blender_connection is None:
-        host = os.getenv("BLENDER_HOST", DEFAULT_HOST)
-        port = int(os.getenv("BLENDER_PORT", DEFAULT_PORT))
+        host = _blender_host_override or os.getenv("BLENDER_HOST", DEFAULT_HOST)
+        port = (
+            _blender_port_override
+            if _blender_port_override is not None
+            else int(os.getenv("BLENDER_PORT", DEFAULT_PORT))
+        )
         _blender_connection = BlenderConnection(host=host, port=port)
         if not _blender_connection.connect():
             logger.error("Failed to connect to Blender")
@@ -1044,8 +1050,18 @@ def asset_creation_strategy() -> str:
 
 # Main execution
 
-def main():
+def set_blender_connection_config(host: str | None = None, port: int | None = None) -> None:
+    """Override the Blender connection parameters for subsequent connections."""
+
+    global _blender_host_override, _blender_port_override
+
+    _blender_host_override = host
+    _blender_port_override = port
+
+
+def main(*, host: str | None = None, port: int | None = None):
     """Run the MCP server"""
+    set_blender_connection_config(host=host, port=port)
     mcp.run()
 
 if __name__ == "__main__":

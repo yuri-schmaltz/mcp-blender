@@ -10,6 +10,8 @@ from typing import Optional
 DEFAULT_LOG_LEVEL = "INFO"
 DEFAULT_LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 DEFAULT_HANDLER = "console"
+# Alias to keep CLI defaults descriptive without changing legacy name
+DEFAULT_LOG_HANDLER = DEFAULT_HANDLER
 
 
 def _create_handler(handler_type: str, log_format: str, log_level: int) -> logging.Handler:
