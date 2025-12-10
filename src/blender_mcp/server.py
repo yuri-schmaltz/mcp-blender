@@ -593,6 +593,25 @@ def download_polyhaven_asset(
     
     Returns a message indicating success or failure.
     """
+    # Validate inputs
+    from blender_mcp.shared.validators import validate_asset_id, validate_resolution, ValidationError
+    
+    try:
+        asset_id = validate_asset_id(asset_id)
+    except ValidationError as e:
+        return tool_error("Invalid asset ID", data={"detail": str(e), "asset_id": asset_id})
+    
+    if asset_type not in ["hdris", "textures", "models"]:
+        return tool_error(
+            "Invalid asset type",
+            data={"detail": f"Must be one of: hdris, textures, models", "asset_type": asset_type}
+        )
+    
+    try:
+        resolution = validate_resolution(resolution)
+    except ValidationError as e:
+        return tool_error("Invalid resolution", data={"detail": str(e), "resolution": resolution})
+    
     try:
         blender = get_blender_connection()
         result = blender.send_command("download_polyhaven_asset", {
@@ -647,6 +666,17 @@ def set_texture(
     
     Returns a message indicating success or failure.
     """
+    # Validate inputs
+    from blender_mcp.shared.validators import validate_asset_id, ValidationError
+    
+    if not object_name or not isinstance(object_name, str):
+        return tool_error("Invalid object name", data={"detail": "Object name must be a non-empty string"})
+    
+    try:
+        texture_id = validate_asset_id(texture_id)
+    except ValidationError as e:
+        return tool_error("Invalid texture ID", data={"detail": str(e), "texture_id": texture_id})
+    
     try:
         # Get the global connection
         blender = get_blender_connection()
@@ -776,6 +806,19 @@ def search_sketchfab_models(
     
     Returns a formatted list of matching models.
     """
+    # Validate inputs
+    if not query or not isinstance(query, str):
+        return tool_error("Invalid query", data={"detail": "Query must be a non-empty string"})
+    
+    if len(query) > 200:
+        return tool_error("Query too long", data={"detail": "Max 200 characters", "length": len(query)})
+    
+    if not isinstance(count, int) or count < 1 or count > 100:
+        return tool_error(
+            "Invalid count",
+            data={"detail": "Count must be between 1 and 100", "count": count}
+        )
+    
     try:
         
         blender = get_blender_connection()
@@ -848,6 +891,14 @@ def download_sketchfab_model(
     Returns a message indicating success or failure.
     The model must be downloadable and you must have proper access rights.
     """
+    # Validate UID
+    from blender_mcp.shared.validators import validate_asset_id, ValidationError
+    
+    try:
+        uid = validate_asset_id(uid)
+    except ValidationError as e:
+        return tool_error("Invalid model UID", data={"detail": str(e), "uid": uid})
+    
     try:
         
         blender = get_blender_connection()

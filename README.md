@@ -364,11 +364,228 @@ Hyper3D's free trial key allows you to generate a limited number of models per d
 
 ## Troubleshooting
 
-- **Connection issues**: Make sure the Blender addon server is running, and the MCP server is configured in your chosen client. Do **not** run the `uvx` command in a terminal if the client already manages the process. Sometimes the first command won't go through but after that it starts working.
-- **Timeout errors**: Try simplifying your requests or breaking them into smaller steps. The MCP server retries socket operations by default; if you see `Blender did not respond after N attempts`, check that the addon is running and increase `BLENDER_SOCKET_TIMEOUT`, `BLENDER_CONNECT_ATTEMPTS`, or `BLENDER_COMMAND_ATTEMPTS` to match your Blender add-on settings.
-- **Incomplete/partial response**: Errors such as `Received incomplete response from Blender` or `Timeout waiting for Blender response` mean the TCP connection was interrupted. The server will reconnect on the next command. If it repeats, restart the Blender add-on and consider raising `BLENDER_RETRY_BACKOFF` so the socket has time to recover.
-- **Poly Haven integration**: Some assistants are occasionally erratic—remind them to toggle the Poly Haven checkbox or call the status tool again.
-- **Have you tried turning it off and on again?**: If you're still having connection errors, try restarting both the MCP client and the Blender server
+### Common Issues and Solutions
+
+#### Connection refused / Cannot connect to Blender
+
+**Symptoms**: Error messages like "Connection refused", "No connection could be made", or timeout errors.
+
+**Solutions**:
+1. **Verify addon is running**:
+   - Open Blender
+   - Go to 3D View sidebar (press `N`)
+   - Find the "BlenderMCP" tab
+   - Check that the status shows "Connected" or "Server running"
+   - If not, click "Connect to LLM client"
+
+2. **Check port and host match**:
+   - Addon uses `localhost:9876` by default
+   - Check environment variables `BLENDER_HOST` and `BLENDER_PORT`
+   - Ensure MCP server config matches addon settings
+
+3. **Firewall blocking**:
+   - Check if firewall is blocking port 9876
+   - On Linux: `sudo ufw allow 9876/tcp`
+   - On Windows: Add exception in Windows Defender Firewall
+   - On Mac: System Preferences > Security & Privacy > Firewall > Firewall Options
+
+4. **Port already in use**:
+   - Only one MCP server instance should run at a time
+   - Kill any existing processes: `lsof -ti:9876 | xargs kill -9` (Linux/Mac)
+   - On Windows: `netstat -ano | findstr :9876` then task kill
+
+#### MCP server not starting
+
+**Symptoms**: `uvx blender-mcp` fails or MCP client shows server not available.
+
+**Solutions**:
+1. **uv not installed**:
+   ```bash
+   # Mac
+   brew install uv
+   
+   # Windows
+   powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+   set Path=C:\Users\<username>\.local\bin;%Path%
+   
+   # Linux
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   ```
+
+2. **Python version mismatch**:
+   - Requires Python 3.10+
+   - Check: `python --version`
+   - Install from [python.org](https://www.python.org/downloads/)
+
+3. **Dependency issues**:
+   ```bash
+   # Force reinstall
+   uvx --force blender-mcp
+   ```
+
+#### Timeout errors / "Blender did not respond"
+
+**Symptoms**: Operations timeout, incomplete responses, or "Blender did not respond after N attempts".
+
+**Solutions**:
+1. **Increase timeout values**:
+   ```bash
+   export BLENDER_SOCKET_TIMEOUT=30
+   export BLENDER_CONNECT_ATTEMPTS=5
+   export BLENDER_COMMAND_ATTEMPTS=5
+   ```
+
+2. **Complex operations**:
+   - Break requests into smaller steps
+   - For Poly Haven/Sketchfab downloads, larger files need more time
+   - For Hyper3D generation, poll status instead of waiting
+
+3. **Blender is busy**:
+   - Ensure Blender window is responsive
+   - Close other heavy Blender operations
+   - Save your work before large operations
+
+#### PolyHaven integration not working
+
+**Symptoms**: "PolyHaven integration is disabled" or assets not downloading.
+
+**Solutions**:
+1. **Enable in Blender**:
+   - Open BlenderMCP tab in sidebar
+   - Check the "Poly Haven" checkbox
+   - Status should show "enabled"
+
+2. **Network issues**:
+   - Check internet connection
+   - Verify access to https://api.polyhaven.com
+   - Check proxy settings if behind corporate firewall
+
+3. **Remind the assistant**:
+   - Sometimes AI forgets
+   - Tell it: "Check PolyHaven status first" or "Enable PolyHaven checkbox in Blender"
+
+#### Hyper3D generation fails
+
+**Symptoms**: "Insufficient balance", generation errors, or timeout during generation.
+
+**Solutions**:
+1. **Free trial limits**:
+   - Free trial key has daily limits
+   - If exceeded, you must:
+     - Wait for next day (resets at midnight UTC)
+     - Get your own key from [hyper3d.ai](https://hyper3d.ai) or [fal.ai](https://fal.ai)
+
+2. **Check API mode**:
+   - Addon supports two modes: MAIN_SITE and FAL_AI
+   - Check which is configured in Blender
+   - Use appropriate parameters (paths vs URLs for images)
+
+3. **Polling vs waiting**:
+   - Don't wait synchronously for generation
+   - Create job → Poll status → Import when complete
+   - Generation can take several minutes
+
+#### Import errors / Module not found
+
+**Symptoms**: `ImportError`, `ModuleNotFoundError`, or missing dependencies.
+
+**Solutions**:
+1. **Install with extras**:
+   ```bash
+   # For GUI
+   uvx blender-mcp --with PySide6
+   
+   # Or install in venv
+   uv pip install 'blender-mcp[gui]'
+   ```
+
+2. **Check Python path**:
+   - Ensure `uvx` is using correct Python
+   - Check: `uvx --python 3.11 blender-mcp`
+
+3. **Reinstall clean**:
+   ```bash
+   uv cache clean
+   uvx --force --reinstall blender-mcp
+   ```
+
+#### Platform-specific issues
+
+**Windows**:
+- PowerShell execution policy: `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned`
+- Path separators: Use forward slashes `/` or escaped backslashes `\\`
+- Long paths: Enable [long path support](https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation)
+
+**Mac**:
+- Gatekeeper blocking: Right-click > Open for first run
+- Permissions: Grant Blender network permissions when prompted
+- Apple Silicon: Ensure ARM64 Python version
+
+**Linux**:
+- AppImage Blender: May have isolated environment
+- Snap Blender: Check confinement permissions
+- Flatpak Blender: Use `--socket` permissions
+
+### Advanced Troubleshooting
+
+#### Enable debug logging
+
+```bash
+export BLENDER_MCP_LOG_LEVEL=DEBUG
+export BLENDER_MCP_LOG_HANDLER=file
+uvx blender-mcp
+```
+
+Check `blender_mcp.log` for detailed diagnostics.
+
+#### Test connection manually
+
+Start a mock server to test connectivity:
+```python
+import socket, json
+sock = socket.socket()
+sock.bind(('localhost', 9876))
+sock.listen(1)
+print("Listening on localhost:9876")
+conn, addr = sock.accept()
+print(f"Connected: {addr}")
+while True:
+    data = conn.recv(8192)
+    if not data: break
+    print(f"Received: {data.decode()}")
+    response = json.dumps({"status": "ok", "result": {}})
+    conn.sendall(response.encode())
+```
+
+Then test from MCP client.
+
+#### Check addon console
+
+In Blender:
+- Window > Toggle System Console (Windows)
+- View console output for error messages
+- Check for socket binding errors or exceptions
+
+### Getting Help
+
+If issues persist:
+1. Check [GitHub Issues](https://github.com/modelcontextprotocol/blender-mcp/issues)
+2. Join [Discord community](https://discord.gg/z5apgR8TFU)
+3. Include in bug report:
+   - Operating system and version
+   - Blender version
+   - Python version
+   - Full error message
+   - Steps to reproduce
+   - Logs (with `--log-level DEBUG`)
+
+### Known Limitations
+
+- **Connection issues**: First command sometimes fails, subsequent ones work
+- **Complex operations**: May need to be broken into smaller steps
+- **Poly Haven**: Requires enabled checkbox; assistant may forget
+- **execute_blender_code**: Powerful but dangerous - always save first
+- **Screenshot quality**: Limited by viewport size and settings
 
 
 ## Technical Details
