@@ -487,16 +487,19 @@ class BlenderMCPServer:
 
                     # For HDRIs, we need to save to a temporary file first
                     # since Blender can't properly load HDR data directly from memory
-                    with tempfile.NamedTemporaryFile(suffix=f".{file_format}", delete=False) as tmp_file:
+                    tmp_file = tempfile.NamedTemporaryFile(suffix=f".{file_format}", delete=False)
+                    tmp_path = tmp_file.name
+                    tmp_file.close()
+
+                    try:
                         # Download the file
                         response = requests.get(file_url, headers=REQ_HEADERS)
                         if response.status_code != 200:
-                            return {"error": f"Failed to download HDRI: {response.status_code}"}
+                            return {" error": f"Failed to download HDRI: {response.status_code}"}
 
-                        tmp_file.write(response.content)
-                        tmp_path = tmp_file.name
+                        with open(tmp_path, 'wb') as f:
+                            f.write(response.content)
 
-                    try:
                         # Create a new world if none exists
                         if not bpy.data.worlds:
                             bpy.data.worlds.new("World")
@@ -553,12 +556,6 @@ class BlenderMCPServer:
                         # Set as active world
                         bpy.context.scene.world = world
 
-                        # Clean up temporary file
-                        try:
-                            tempfile._cleanup()  # This will clean up all temporary files
-                        except:
-                            pass
-
                         return {
                             "success": True,
                             "message": f"HDRI {asset_id} imported successfully",
@@ -566,6 +563,13 @@ class BlenderMCPServer:
                         }
                     except Exception as e:
                         return {"error": f"Failed to set up HDRI in Blender: {str(e)}"}
+                    finally:
+                        # CRITICAL: Always cleanup temporary file, even if there was an error
+                        try:
+                            if os.path.exists(tmp_path):
+                                os.unlink(tmp_path)
+                        except Exception as cleanup_error:
+                            print(f"Warning: Failed to cleanup temp file {tmp_path}: {cleanup_error}")
                 else:
                     return {"error": f"Requested resolution or format not available for this HDRI"}
 
@@ -582,13 +586,17 @@ class BlenderMCPServer:
                                 file_info = files_data[map_type][resolution][file_format]
                                 file_url = file_info["url"]
 
-                                # Use NamedTemporaryFile like we do for HDRIs
-                                with tempfile.NamedTemporaryFile(suffix=f".{file_format}", delete=False) as tmp_file:
+                                # Use NamedTemporaryFile to create temp file
+                                tmp_file = tempfile.NamedTemporaryFile(suffix=f".{file_format}", delete=False)
+                                tmp_path = tmp_file.name
+                                tmp_file.close()
+
+                                try:
                                     # Download the file
                                     response = requests.get(file_url, headers=REQ_HEADERS)
                                     if response.status_code == 200:
-                                        tmp_file.write(response.content)
-                                        tmp_path = tmp_file.name
+                                        with open(tmp_path, 'wb') as f:
+                                            f.write(response.content)
 
                                         # Load image from temporary file
                                         image = bpy.data.images.load(tmp_path)
@@ -610,12 +618,13 @@ class BlenderMCPServer:
                                                 pass
 
                                         downloaded_maps[map_type] = image
-
-                                        # Clean up temporary file
-                                        try:
+                                finally:
+                                    # CRITICAL: Always cleanup temporary file
+                                    try:
+                                        if os.path.exists(tmp_path):
                                             os.unlink(tmp_path)
-                                        except:
-                                            pass
+                                    except Exception as cleanup_error:
+                                        print(f"Warning: Failed to cleanup temp file {tmp_path}: {cleanup_error}")
 
                     if not downloaded_maps:
                         return {"error": f"No texture maps found for the requested resolution and format"}
@@ -1330,7 +1339,8 @@ class BlenderMCPServer:
             }
         )
         data_ = response.json()
-        temp_file = None
+        temp_file_path = None
+        
         for i in data_["list"]:
             if i["name"].endswith(".glb"):
                 temp_file = tempfile.NamedTemporaryFile(
@@ -1338,6 +1348,7 @@ class BlenderMCPServer:
                     prefix=task_uuid,
                     suffix=".glb",
                 )
+                temp_file_path = temp_file.name
 
                 try:
                     # Download the content
@@ -1354,7 +1365,8 @@ class BlenderMCPServer:
                 except Exception as e:
                     # Clean up the file if there's an error
                     temp_file.close()
-                    os.unlink(temp_file.name)
+                    if temp_file_path and os.path.exists(temp_file_path):
+                        os.unlink(temp_file_path)
                     return {"succeed": False, "error": str(e)}
 
                 break
@@ -1363,7 +1375,7 @@ class BlenderMCPServer:
 
         try:
             obj = self._clean_imported_glb(
-                filepath=temp_file.name,
+                filepath=temp_file_path,
                 mesh_name=name
             )
             result = {
@@ -1383,6 +1395,13 @@ class BlenderMCPServer:
             }
         except Exception as e:
             return {"succeed": False, "error": str(e)}
+        finally:
+            # CRITICAL: Always cleanup temporary file
+            if temp_file_path and os.path.exists(temp_file_path):
+                try:
+                    os.unlink(temp_file_path)
+                except Exception as cleanup_error:
+                    print(f"Warning: Failed to cleanup temp file {temp_file_path}: {cleanup_error}")
 
     def import_generated_asset_fal_ai(self, request_id: str, name: str):
         """Fetch the generated asset, import into blender"""
@@ -1393,13 +1412,13 @@ class BlenderMCPServer:
             }
         )
         data_ = response.json()
-        temp_file = None
 
         temp_file = tempfile.NamedTemporaryFile(
             delete=False,
             prefix=request_id,
             suffix=".glb",
         )
+        temp_file_path = temp_file.name
 
         try:
             # Download the content
@@ -1416,12 +1435,13 @@ class BlenderMCPServer:
         except Exception as e:
             # Clean up the file if there's an error
             temp_file.close()
-            os.unlink(temp_file.name)
+            if os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
             return {"succeed": False, "error": str(e)}
 
         try:
             obj = self._clean_imported_glb(
-                filepath=temp_file.name,
+                filepath=temp_file_path,
                 mesh_name=name
             )
             result = {
@@ -1441,6 +1461,13 @@ class BlenderMCPServer:
             }
         except Exception as e:
             return {"succeed": False, "error": str(e)}
+        finally:
+            # CRITICAL: Always cleanup temporary file
+            if os.path.exists(temp_file_path):
+                try:
+                    os.unlink(temp_file_path)
+                except Exception as cleanup_error:
+                    print(f"Warning: Failed to cleanup temp file {temp_file_path}: {cleanup_error}")
     #endregion
 
     #region Sketchfab API

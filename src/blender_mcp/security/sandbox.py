@@ -197,23 +197,38 @@ def execute_code_safe(
     
     output = io.StringIO()
     
-    def timeout_handler(signum, frame):
+    # Detect platform
+    import platform
+    use_signal_timeout = platform.system() != 'Windows'
+    
+    # Setup timeout mechanism
+    timer = None
+    timed_out = [False]  # Use list to allow modification in nested function
+    
+    def timeout_handler(*args):
+        timed_out[0] = True
         raise TimeoutError(f"Code execution exceeded {timeout}s timeout")
     
-    # Set up timeout (Unix only)
-    import platform
-    use_timeout = platform.system() != 'Windows'
-    
     try:
-        if use_timeout:
+        if use_signal_timeout:
+            # Unix/Linux: use signal-based timeout
             signal.signal(signal.SIGALRM, timeout_handler)
             signal.alarm(timeout)
+        else:
+            # Windows: use threading.Timer
+            import threading
+            timer = threading.Timer(timeout, timeout_handler)
+            timer.daemon = True
+            timer.start()
         
         with redirect_stdout(output):
             exec(code, namespace)
         
-        if use_timeout:
+        # Cancel timeout
+        if use_signal_timeout:
             signal.alarm(0)  # Cancel alarm
+        elif timer:
+            timer.cancel()
         
         return {
             "executed": True,
@@ -237,5 +252,8 @@ def execute_code_safe(
         }
     
     finally:
-        if use_timeout:
+        # Ensure cleanup
+        if use_signal_timeout:
             signal.alarm(0)  # Ensure alarm is cancelled
+        elif timer:
+            timer.cancel()
