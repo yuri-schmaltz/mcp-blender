@@ -34,6 +34,85 @@ RODIN_FREE_TRIAL_KEY = os.getenv("RODIN_FREE_TRIAL_KEY", "k9TcfFoEhNd9cCPP2guHAH
 REQ_HEADERS = requests.utils.default_headers()
 REQ_HEADERS.update({"User-Agent": "blender-mcp"})
 
+# MP-05: Asset cache configuration
+CACHE_DIR = os.path.join(os.path.expanduser("~"), ".blender_mcp", "cache")
+CACHE_TTL_DAYS = 7  # Cache expires after 7 days
+
+class AssetCache:
+    """Persistent cache for downloaded assets (MP-05)."""
+    
+    def __init__(self, cache_dir=CACHE_DIR, ttl_days=CACHE_TTL_DAYS):
+        self.cache_dir = cache_dir
+        self.ttl_seconds = ttl_days * 24 * 3600
+        os.makedirs(cache_dir, exist_ok=True)
+    
+    def _get_cache_path(self, asset_id: str, asset_type: str, resolution: str = "") -> str:
+        """Generate cache file path from asset identifiers."""
+        import hashlib
+        cache_key = f"{asset_id}_{asset_type}_{resolution}"
+        cache_hash = hashlib.md5(cache_key.encode()).hexdigest()
+        return os.path.join(self.cache_dir, f"{cache_hash}.cache")
+    
+    def get(self, asset_id: str, asset_type: str, resolution: str = "") -> str | None:
+        """Retrieve cached asset path if valid, None otherwise."""
+        cache_path = self._get_cache_path(asset_id, asset_type, resolution)
+        
+        if not os.path.exists(cache_path):
+            return None
+        
+        # Check if cache is expired
+        file_age = time.time() - os.path.getmtime(cache_path)
+        if file_age > self.ttl_seconds:
+            try:
+                os.remove(cache_path)
+            except:
+                pass
+            return None
+        
+        return cache_path
+    
+    def put(self, asset_id: str, asset_type: str, source_path: str, resolution: str = "") -> str:
+        """Store asset in cache and return cache path."""
+        cache_path = self._get_cache_path(asset_id, asset_type, resolution)
+        
+        try:
+            shutil.copy2(source_path, cache_path)
+            return cache_path
+        except Exception as e:
+            print(f"Failed to cache asset: {e}")
+            return source_path
+    
+    def clear(self) -> int:
+        """Clear all cached assets. Returns number of files deleted."""
+        deleted = 0
+        try:
+            for filename in os.listdir(self.cache_dir):
+                filepath = os.path.join(self.cache_dir, filename)
+                if os.path.isfile(filepath):
+                    os.remove(filepath)
+                    deleted += 1
+        except Exception as e:
+            print(f"Error clearing cache: {e}")
+        return deleted
+    
+    def get_cache_size(self) -> tuple[int, int]:
+        """Get cache size in bytes and number of files."""
+        total_size = 0
+        file_count = 0
+        try:
+            for filename in os.listdir(self.cache_dir):
+                filepath = os.path.join(self.cache_dir, filename)
+                if os.path.isfile(filepath):
+                    total_size += os.path.getsize(filepath)
+                    file_count += 1
+        except:
+            pass
+        return total_size, file_count
+
+# Global cache instance
+_asset_cache = AssetCache()
+
+
 class BlenderMCPServer:
     def __init__(self, host='localhost', port=9876):
         self.host = host
@@ -1750,6 +1829,15 @@ class BLENDERMCP_PT_Panel(bpy.types.Panel):
         else:
             layout.operator("blendermcp.stop_server", text="Disconnect from MCP server")
             layout.label(text=f"Running on port {scene.blendermcp_port}")
+        
+        # MP-05: Asset cache management
+        layout.separator()
+        cache_box = layout.box()
+        cache_box.label(text="Asset Cache", icon='FILE_CACHE')
+        cache_size, file_count = _asset_cache.get_cache_size()
+        size_mb = cache_size / (1024 * 1024)
+        cache_box.label(text=f"Files: {file_count}, Size: {size_mb:.1f} MB")
+        cache_box.operator("blendermcp.clear_cache", text="Clear Cache", icon='TRASH')
     
     @staticmethod
     def _draw_api_key_warning(layout):
@@ -1787,6 +1875,17 @@ class BLENDERMCP_OT_StartServer(bpy.types.Operator):
         bpy.types.blendermcp_server.start()
         scene.blendermcp_server_running = True
 
+        return {'FINISHED'}
+
+# Operator to clear asset cache (MP-05)
+class BLENDERMCP_OT_ClearCache(bpy.types.Operator):
+    bl_idname = "blendermcp.clear_cache"
+    bl_label = "Clear Asset Cache"
+    bl_description = "Clear all cached downloaded assets from Poly Haven and Sketchfab"
+    
+    def execute(self, context):
+        deleted = _asset_cache.clear()
+        self.report({'INFO'}, f"Cleared {deleted} cached files")
         return {'FINISHED'}
 
 # Operator to stop the server
@@ -1869,6 +1968,7 @@ def register():
     bpy.utils.register_class(BLENDERMCP_OT_SetFreeTrialHyper3DAPIKey)
     bpy.utils.register_class(BLENDERMCP_OT_StartServer)
     bpy.utils.register_class(BLENDERMCP_OT_StopServer)
+    bpy.utils.register_class(BLENDERMCP_OT_ClearCache)
 
     print("BlenderMCP addon registered")
 
@@ -1882,6 +1982,7 @@ def unregister():
     bpy.utils.unregister_class(BLENDERMCP_OT_SetFreeTrialHyper3DAPIKey)
     bpy.utils.unregister_class(BLENDERMCP_OT_StartServer)
     bpy.utils.unregister_class(BLENDERMCP_OT_StopServer)
+    bpy.utils.unregister_class(BLENDERMCP_OT_ClearCache)
 
     del bpy.types.Scene.blendermcp_port
     del bpy.types.Scene.blendermcp_server_running
