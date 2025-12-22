@@ -57,8 +57,8 @@ class BlenderMCPServer:
         if self.socket:
             try:
                 self.socket.close()
-            except:
-                pass
+            except Exception as e:
+                print(f"Error closing socket: {e}")
             self.socket = None
 
         # Wait for thread to finish
@@ -66,8 +66,8 @@ class BlenderMCPServer:
             try:
                 if self.server_thread.is_alive():
                     self.server_thread.join(timeout=1.0)
-            except:
-                pass
+            except Exception as e:
+                print(f"Error joining thread: {e}")
             self.server_thread = None
 
         print("BlenderMCP server stopped")
@@ -133,8 +133,8 @@ class BlenderMCPServer:
                                 response_json = json.dumps(response)
                                 try:
                                     client.sendall(response_json.encode('utf-8'))
-                                except:
-                                    print("Failed to send response - client disconnected")
+                                except Exception as e:
+                                    print(f"Failed to send response - client disconnected: {e}")
                             except Exception as e:
                                 print(f"Error executing command: {str(e)}")
                                 traceback.print_exc()
@@ -144,8 +144,8 @@ class BlenderMCPServer:
                                         "message": str(e)
                                     }
                                     client.sendall(json.dumps(error_response).encode('utf-8'))
-                                except:
-                                    pass
+                                except Exception as e:
+                                    print(f"Failed to send error response: {e}")
                             return None
 
                         # Schedule execution in main thread
@@ -161,8 +161,8 @@ class BlenderMCPServer:
         finally:
             try:
                 client.close()
-            except:
-                pass
+            except Exception as e:
+                print(f"Error closing client connection: {e}")
             print("Client handler stopped")
 
     def execute_command(self, command):
