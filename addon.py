@@ -2007,6 +2007,99 @@ class BLENDERMCP_OT_StopServer(bpy.types.Operator):
 
         return {'FINISHED'}
 
+# MP-02: Modal operator for download progress display
+class BLENDERMCP_OT_DownloadProgress(bpy.types.Operator):
+    """Display download progress with cancellation support."""
+    bl_idname = "blendermcp.download_progress"
+    bl_label = "Download Progress"
+    
+    operation_id: bpy.props.StringProperty(default="")
+    _timer = None
+    _last_progress = 0
+    
+    def modal(self, context, event):
+        if event.type == 'TIMER':
+            if not PROGRESS_AVAILABLE:
+                self.cancel(context)
+                return {'CANCELLED'}
+            
+            # Get progress update
+            tracker = get_progress_tracker()
+            if not tracker:
+                self.cancel(context)
+                return {'CANCELLED'}
+            
+            progress_info = tracker.get_progress(self.operation_id)
+            
+            if progress_info is None:
+                # Operation not found, clean up
+                self.cancel(context)
+                return {'CANCELLED'}
+            
+            # Update progress bar
+            progress_pct = int(progress_info.progress_percent)
+            if progress_pct != self._last_progress:
+                context.window_manager.progress_update(progress_pct)
+                self._last_progress = progress_pct
+            
+            # Check completion status
+            if progress_info.status == 'completed':
+                context.window_manager.progress_end()
+                self.report({'INFO'}, f"Download complete! ({progress_info.format_progress()})")
+                self.cancel(context)
+                return {'FINISHED'}
+            elif progress_info.status == 'error':
+                context.window_manager.progress_end()
+                self.report({'ERROR'}, f"Download failed: {progress_info.error_message}")
+                self.cancel(context)
+                return {'CANCELLED'}
+            elif progress_info.status == 'cancelled':
+                context.window_manager.progress_end()
+                self.report({'WARNING'}, "Download cancelled by user")
+                self.cancel(context)
+                return {'CANCELLED'}
+            
+            # Update area to show progress
+            context.area.tag_redraw() if hasattr(context, 'area') and context.area else None
+        
+        # Allow cancellation with ESC key
+        elif event.type == 'ESC':
+            if PROGRESS_AVAILABLE:
+                tracker = get_progress_tracker()
+                if tracker:
+                    tracker.cancel_operation(self.operation_id)
+            context.window_manager.progress_end()
+            self.report({'WARNING'}, "Download cancelled (ESC pressed)")
+            self.cancel(context)
+            return {'CANCELLED'}
+        
+        return {'RUNNING_MODAL'}
+    
+    def execute(self, context):
+        if not PROGRESS_AVAILABLE:
+            self.report({'ERROR'}, "Progress tracking not available")
+            return {'CANCELLED'}
+        
+        if not self.operation_id:
+            self.report({'ERROR'}, "No operation ID provided")
+            return {'CANCELLED'}
+        
+        # Start progress bar
+        context.window_manager.progress_begin(0, 100)
+        
+        # Register timer (update every 0.1 seconds)
+        wm = context.window_manager
+        self._timer = wm.event_timer_add(0.1, window=context.window)
+        wm.modal_handler_add(self)
+        
+        return {'RUNNING_MODAL'}
+    
+    def cancel(self, context):
+        if self._timer:
+            wm = context.window_manager
+            wm.event_timer_remove(self._timer)
+            self._timer = None
+
 # Registration functions
 def register():
     bpy.types.Scene.blendermcp_port = IntProperty(
@@ -2070,6 +2163,7 @@ def register():
     bpy.utils.register_class(BLENDERMCP_OT_StartServer)
     bpy.utils.register_class(BLENDERMCP_OT_StopServer)
     bpy.utils.register_class(BLENDERMCP_OT_ClearCache)
+    bpy.utils.register_class(BLENDERMCP_OT_DownloadProgress)
 
     print("BlenderMCP addon registered")
 
@@ -2084,6 +2178,7 @@ def unregister():
     bpy.utils.unregister_class(BLENDERMCP_OT_StartServer)
     bpy.utils.unregister_class(BLENDERMCP_OT_StopServer)
     bpy.utils.unregister_class(BLENDERMCP_OT_ClearCache)
+    bpy.utils.unregister_class(BLENDERMCP_OT_DownloadProgress)
 
     del bpy.types.Scene.blendermcp_port
     del bpy.types.Scene.blendermcp_server_running
