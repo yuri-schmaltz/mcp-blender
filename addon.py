@@ -1735,24 +1735,14 @@ class BLENDERMCP_PT_Panel(bpy.types.Panel):
 
         layout.prop(scene, "blendermcp_use_hyper3d", text="Use Hyper3D Rodin 3D model generation")
         if scene.blendermcp_use_hyper3d:
-            # Security warning box
-            box = layout.box()
-            box.alert = True
-            box.label(text="⚠️ API keys are saved in .blend file", icon='ERROR')
-            box.label(text="Do not share this file publicly", icon='BLANK1')
-            
+            self._draw_api_key_warning(layout)
             layout.prop(scene, "blendermcp_hyper3d_mode", text="Rodin Mode")
             layout.prop(scene, "blendermcp_hyper3d_api_key", text="API Key")
             layout.operator("blendermcp.set_hyper3d_free_trial_api_key", text="Set Free Trial API Key")
 
         layout.prop(scene, "blendermcp_use_sketchfab", text="Use assets from Sketchfab")
         if scene.blendermcp_use_sketchfab:
-            # Security warning box
-            box = layout.box()
-            box.alert = True
-            box.label(text="⚠️ API keys are saved in .blend file", icon='ERROR')
-            box.label(text="Do not share this file publicly", icon='BLANK1')
-            
+            self._draw_api_key_warning(layout)
             layout.prop(scene, "blendermcp_sketchfab_api_key", text="API Key")
 
         if not scene.blendermcp_server_running:
@@ -1760,6 +1750,14 @@ class BLENDERMCP_PT_Panel(bpy.types.Panel):
         else:
             layout.operator("blendermcp.stop_server", text="Disconnect from MCP server")
             layout.label(text=f"Running on port {scene.blendermcp_port}")
+    
+    @staticmethod
+    def _draw_api_key_warning(layout):
+        """Draw security warning box for API keys."""
+        box = layout.box()
+        box.alert = True
+        box.label(text="⚠️ API keys are saved in .blend file", icon='ERROR')
+        box.label(text="Do not share this file publicly", icon='BLANK1')
 
 # Operator to set Hyper3D API Key
 class BLENDERMCP_OT_SetFreeTrialHyper3DAPIKey(bpy.types.Operator):

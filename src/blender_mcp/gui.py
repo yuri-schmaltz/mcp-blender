@@ -37,6 +37,12 @@ from blender_mcp.server import DEFAULT_HOST, DEFAULT_PORT
 ENV_FILE = Path(os.getenv("BLENDER_MCP_ENV_FILE", Path.home() / ".blender_mcp.env"))
 VALID_LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 
+# Status icons for accessibility
+ICON_SUCCESS = "✅"
+ICON_ERROR = "❌"
+ICON_PROCESSING = "🔄"
+ICON_WARNING = "⚠️"
+
 
 @dataclass
 class MCPConfig:
@@ -291,20 +297,20 @@ class ConfigWindow(QWidget):
         self.test_connection_button.setEnabled(False)
         original_text = self.test_connection_button.text()
         self.test_connection_button.setText("Testando...")
-        self._set_status("🔄 Testando conexão...", error=False)
+        self._set_status(f"{ICON_PROCESSING} Testando conexão...", error=False)
         
         try:
             with socket.create_connection((host, port), timeout=1):
-                self._set_status(f"✅ Conexão bem-sucedida para {host}:{port}.")
+                self._set_status(f"{ICON_SUCCESS} Conexão bem-sucedida para {host}:{port}.")
         except OSError as exc:
             error_msg = str(exc)
             # Provide user-friendly error messages
             if "refused" in error_msg.lower():
-                self._set_status(f"❌ Conexão recusada. Verifique se o Blender está rodando e o addon está conectado.", error=True)
+                self._set_status(f"{ICON_ERROR} Conexão recusada. Verifique se o Blender está rodando e o addon está conectado.", error=True)
             elif "timed out" in error_msg.lower():
-                self._set_status(f"❌ Timeout ao conectar. Verifique o host e a porta.", error=True)
+                self._set_status(f"{ICON_ERROR} Timeout ao conectar. Verifique o host e a porta.", error=True)
             else:
-                self._set_status(f"❌ Falha ao conectar a {host}:{port}: {exc}", error=True)
+                self._set_status(f"{ICON_ERROR} Falha ao conectar a {host}:{port}: {exc}", error=True)
         finally:
             # Re-enable button
             self.test_connection_button.setEnabled(True)
@@ -312,8 +318,8 @@ class ConfigWindow(QWidget):
 
     def _set_status(self, message: str, *, error: bool = False) -> None:
         # Add icon prefix if not already present (QW-03)
-        if not message.startswith(("✅", "❌", "🔄", "⚠️")):
-            icon = "❌" if error else "✅"
+        if not message.startswith((ICON_SUCCESS, ICON_ERROR, ICON_PROCESSING, ICON_WARNING)):
+            icon = ICON_ERROR if error else ICON_SUCCESS
             message = f"{icon} {message}"
         
         self.status_label.setText(message)
