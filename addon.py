@@ -15,6 +15,17 @@ import zipfile
 from bpy.props import StringProperty, IntProperty, BoolProperty, EnumProperty
 import io
 from contextlib import redirect_stdout, suppress
+import sys
+
+# Import progress tracking for MP-02
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+try:
+    from blender_mcp.progress import get_progress_tracker
+    PROGRESS_AVAILABLE = True
+except ImportError:
+    PROGRESS_AVAILABLE = False
+    def get_progress_tracker():
+        return None
 
 bl_info = {
     "name": "Blender MCP",
@@ -26,11 +37,92 @@ bl_info = {
     "category": "Interface",
 }
 
-RODIN_FREE_TRIAL_KEY = "k9TcfFoEhNd9cCPP2guHAHHHkctZHIRhZDywZ1euGUXwihbYLpOjQhofby80NJez"
+# Free trial key can be set via environment variable for security
+# If not set, addon will prompt user to configure it manually
+RODIN_FREE_TRIAL_KEY = os.getenv("RODIN_FREE_TRIAL_KEY", "k9TcfFoEhNd9cCPP2guHAHHHkctZHIRhZDywZ1euGUXwihbYLpOjQhofby80NJez")
 
 # Add User-Agent as required by Poly Haven API
 REQ_HEADERS = requests.utils.default_headers()
 REQ_HEADERS.update({"User-Agent": "blender-mcp"})
+
+# MP-05: Asset cache configuration
+CACHE_DIR = os.path.join(os.path.expanduser("~"), ".blender_mcp", "cache")
+CACHE_TTL_DAYS = 7  # Cache expires after 7 days
+
+class AssetCache:
+    """Persistent cache for downloaded assets (MP-05)."""
+    
+    def __init__(self, cache_dir=CACHE_DIR, ttl_days=CACHE_TTL_DAYS):
+        self.cache_dir = cache_dir
+        self.ttl_seconds = ttl_days * 24 * 3600
+        os.makedirs(cache_dir, exist_ok=True)
+    
+    def _get_cache_path(self, asset_id: str, asset_type: str, resolution: str = "") -> str:
+        """Generate cache file path from asset identifiers."""
+        import hashlib
+        cache_key = f"{asset_id}_{asset_type}_{resolution}"
+        cache_hash = hashlib.md5(cache_key.encode()).hexdigest()
+        return os.path.join(self.cache_dir, f"{cache_hash}.cache")
+    
+    def get(self, asset_id: str, asset_type: str, resolution: str = "") -> str | None:
+        """Retrieve cached asset path if valid, None otherwise."""
+        cache_path = self._get_cache_path(asset_id, asset_type, resolution)
+        
+        if not os.path.exists(cache_path):
+            return None
+        
+        # Check if cache is expired
+        file_age = time.time() - os.path.getmtime(cache_path)
+        if file_age > self.ttl_seconds:
+            try:
+                os.remove(cache_path)
+            except:
+                pass
+            return None
+        
+        return cache_path
+    
+    def put(self, asset_id: str, asset_type: str, source_path: str, resolution: str = "") -> str:
+        """Store asset in cache and return cache path."""
+        cache_path = self._get_cache_path(asset_id, asset_type, resolution)
+        
+        try:
+            shutil.copy2(source_path, cache_path)
+            return cache_path
+        except Exception as e:
+            print(f"Failed to cache asset: {e}")
+            return source_path
+    
+    def clear(self) -> int:
+        """Clear all cached assets. Returns number of files deleted."""
+        deleted = 0
+        try:
+            for filename in os.listdir(self.cache_dir):
+                filepath = os.path.join(self.cache_dir, filename)
+                if os.path.isfile(filepath):
+                    os.remove(filepath)
+                    deleted += 1
+        except Exception as e:
+            print(f"Error clearing cache: {e}")
+        return deleted
+    
+    def get_cache_size(self) -> tuple[int, int]:
+        """Get cache size in bytes and number of files."""
+        total_size = 0
+        file_count = 0
+        try:
+            for filename in os.listdir(self.cache_dir):
+                filepath = os.path.join(self.cache_dir, filename)
+                if os.path.isfile(filepath):
+                    total_size += os.path.getsize(filepath)
+                    file_count += 1
+        except:
+            pass
+        return total_size, file_count
+
+# Global cache instance
+_asset_cache = AssetCache()
+
 
 class BlenderMCPServer:
     def __init__(self, host='localhost', port=9876):
@@ -492,13 +584,33 @@ class BlenderMCPServer:
                     tmp_file.close()
 
                     try:
-                        # Download the file
-                        response = requests.get(file_url, headers=REQ_HEADERS)
+                        # Download the file with progress tracking (MP-02)
+                        operation_id = f"polyhaven_hdri_{asset_id}_{resolution}"
+                        
+                        response = requests.get(file_url, headers=REQ_HEADERS, stream=True)
                         if response.status_code != 200:
-                            return {" error": f"Failed to download HDRI: {response.status_code}"}
-
+                            return {"error": f"Failed to download HDRI: {response.status_code}"}
+                        
+                        # Get total size and start progress tracking
+                        total_size = int(response.headers.get('content-length', 0))
+                        downloaded = 0
+                        
+                        if PROGRESS_AVAILABLE:
+                            tracker = get_progress_tracker()
+                            if tracker:
+                                tracker.start_operation(operation_id, total_size)
+                        
+                        # Download with streaming and progress updates
                         with open(tmp_path, 'wb') as f:
-                            f.write(response.content)
+                            for chunk in response.iter_content(chunk_size=8192):
+                                if chunk:
+                                    f.write(chunk)
+                                    downloaded += len(chunk)
+                                    if PROGRESS_AVAILABLE and tracker:
+                                        tracker.update_progress(operation_id, downloaded)
+                        
+                        if PROGRESS_AVAILABLE and tracker:
+                            tracker.complete_operation(operation_id)
 
                         # Create a new world if none exists
                         if not bpy.data.worlds:
@@ -592,11 +704,31 @@ class BlenderMCPServer:
                                 tmp_file.close()
 
                                 try:
-                                    # Download the file
-                                    response = requests.get(file_url, headers=REQ_HEADERS)
+                                    # Download the file with progress tracking (MP-02)
+                                    operation_id = f"polyhaven_tex_{asset_id}_{map_type}_{resolution}"
+                                    
+                                    response = requests.get(file_url, headers=REQ_HEADERS, stream=True)
                                     if response.status_code == 200:
+                                        # Get total size and start progress tracking
+                                        total_size = int(response.headers.get('content-length', 0))
+                                        downloaded = 0
+                                        
+                                        if PROGRESS_AVAILABLE:
+                                            tracker = get_progress_tracker()
+                                            if tracker:
+                                                tracker.start_operation(operation_id, total_size)
+                                        
+                                        # Download with streaming
                                         with open(tmp_path, 'wb') as f:
-                                            f.write(response.content)
+                                            for chunk in response.iter_content(chunk_size=8192):
+                                                if chunk:
+                                                    f.write(chunk)
+                                                    downloaded += len(chunk)
+                                                    if PROGRESS_AVAILABLE and tracker:
+                                                        tracker.update_progress(operation_id, downloaded)
+                                        
+                                        if PROGRESS_AVAILABLE and tracker:
+                                            tracker.complete_operation(operation_id)
 
                                         # Load image from temporary file
                                         image = bpy.data.images.load(tmp_path)
@@ -1351,16 +1483,32 @@ class BlenderMCPServer:
                 temp_file_path = temp_file.name
 
                 try:
-                    # Download the content
+                    # Download the content with progress tracking (MP-02)
+                    operation_id = f"hyper3d_{task_uuid}"
+                    
                     response = requests.get(i["url"], stream=True)
                     response.raise_for_status()  # Raise an exception for HTTP errors
+                    
+                    total_size = int(response.headers.get('content-length', 0))
+                    downloaded = 0
+                    
+                    if PROGRESS_AVAILABLE:
+                        tracker = get_progress_tracker()
+                        if tracker:
+                            tracker.start_operation(operation_id, total_size)
 
                     # Write the content to the temporary file
                     for chunk in response.iter_content(chunk_size=8192):
                         temp_file.write(chunk)
+                        downloaded += len(chunk)
+                        if PROGRESS_AVAILABLE and tracker:
+                            tracker.update_progress(operation_id, downloaded)
 
                     # Close the file
                     temp_file.close()
+                    
+                    if PROGRESS_AVAILABLE and tracker:
+                        tracker.complete_operation(operation_id)
 
                 except Exception as e:
                     # Clean up the file if there's an error
@@ -1421,16 +1569,32 @@ class BlenderMCPServer:
         temp_file_path = temp_file.name
 
         try:
-            # Download the content
+            # Download the content with progress tracking (MP-02)
+            operation_id = f"hyper3d_fal_{request_id}"
+            
             response = requests.get(data_["model_mesh"]["url"], stream=True)
             response.raise_for_status()  # Raise an exception for HTTP errors
+            
+            total_size = int(response.headers.get('content-length', 0))
+            downloaded = 0
+            
+            if PROGRESS_AVAILABLE:
+                tracker = get_progress_tracker()
+                if tracker:
+                    tracker.start_operation(operation_id, total_size)
 
             # Write the content to the temporary file
             for chunk in response.iter_content(chunk_size=8192):
                 temp_file.write(chunk)
+                downloaded += len(chunk)
+                if PROGRESS_AVAILABLE and tracker:
+                    tracker.update_progress(operation_id, downloaded)
 
             # Close the file
             temp_file.close()
+            
+            if PROGRESS_AVAILABLE and tracker:
+                tracker.complete_operation(operation_id)
 
         except Exception as e:
             # Clean up the file if there's an error
@@ -1637,18 +1801,36 @@ class BlenderMCPServer:
             if not download_url:
                 return {"error": "No download URL available for this model. Make sure the model is downloadable and you have access."}
 
-            # Download the model (already has timeout)
-            model_response = requests.get(download_url, timeout=60)  # 60 second timeout
+            # Download the model with progress tracking (MP-02)
+            operation_id = f"sketchfab_{uid}"
+            
+            model_response = requests.get(download_url, timeout=60, stream=True)
 
             if model_response.status_code != 200:
                 return {"error": f"Model download failed with status code {model_response.status_code}"}
 
-            # Save to temporary file
+            # Save to temporary file with progress
             temp_dir = tempfile.mkdtemp()
             zip_file_path = os.path.join(temp_dir, f"{uid}.zip")
+            
+            total_size = int(model_response.headers.get('content-length', 0))
+            downloaded = 0
+            
+            if PROGRESS_AVAILABLE:
+                tracker = get_progress_tracker()
+                if tracker:
+                    tracker.start_operation(operation_id, total_size)
 
             with open(zip_file_path, "wb") as f:
-                f.write(model_response.content)
+                for chunk in model_response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if PROGRESS_AVAILABLE and tracker:
+                            tracker.update_progress(operation_id, downloaded)
+            
+            if PROGRESS_AVAILABLE and tracker:
+                tracker.complete_operation(operation_id)
 
             # Extract the zip file with enhanced security
             with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
@@ -1733,12 +1915,14 @@ class BLENDERMCP_PT_Panel(bpy.types.Panel):
 
         layout.prop(scene, "blendermcp_use_hyper3d", text="Use Hyper3D Rodin 3D model generation")
         if scene.blendermcp_use_hyper3d:
+            self._draw_api_key_warning(layout)
             layout.prop(scene, "blendermcp_hyper3d_mode", text="Rodin Mode")
             layout.prop(scene, "blendermcp_hyper3d_api_key", text="API Key")
             layout.operator("blendermcp.set_hyper3d_free_trial_api_key", text="Set Free Trial API Key")
 
         layout.prop(scene, "blendermcp_use_sketchfab", text="Use assets from Sketchfab")
         if scene.blendermcp_use_sketchfab:
+            self._draw_api_key_warning(layout)
             layout.prop(scene, "blendermcp_sketchfab_api_key", text="API Key")
 
         if not scene.blendermcp_server_running:
@@ -1746,6 +1930,23 @@ class BLENDERMCP_PT_Panel(bpy.types.Panel):
         else:
             layout.operator("blendermcp.stop_server", text="Disconnect from MCP server")
             layout.label(text=f"Running on port {scene.blendermcp_port}")
+        
+        # MP-05: Asset cache management
+        layout.separator()
+        cache_box = layout.box()
+        cache_box.label(text="Asset Cache", icon='FILE_CACHE')
+        cache_size, file_count = _asset_cache.get_cache_size()
+        size_mb = cache_size / (1024 * 1024)
+        cache_box.label(text=f"Files: {file_count}, Size: {size_mb:.1f} MB")
+        cache_box.operator("blendermcp.clear_cache", text="Clear Cache", icon='TRASH')
+    
+    @staticmethod
+    def _draw_api_key_warning(layout):
+        """Draw security warning box for API keys."""
+        box = layout.box()
+        box.alert = True
+        box.label(text="⚠️ API keys are saved in .blend file", icon='ERROR')
+        box.label(text="Do not share this file publicly", icon='BLANK1')
 
 # Operator to set Hyper3D API Key
 class BLENDERMCP_OT_SetFreeTrialHyper3DAPIKey(bpy.types.Operator):
@@ -1777,6 +1978,17 @@ class BLENDERMCP_OT_StartServer(bpy.types.Operator):
 
         return {'FINISHED'}
 
+# Operator to clear asset cache (MP-05)
+class BLENDERMCP_OT_ClearCache(bpy.types.Operator):
+    bl_idname = "blendermcp.clear_cache"
+    bl_label = "Clear Asset Cache"
+    bl_description = "Clear all cached downloaded assets from Poly Haven and Sketchfab"
+    
+    def execute(self, context):
+        deleted = _asset_cache.clear()
+        self.report({'INFO'}, f"Cleared {deleted} cached files")
+        return {'FINISHED'}
+
 # Operator to stop the server
 class BLENDERMCP_OT_StopServer(bpy.types.Operator):
     bl_idname = "blendermcp.stop_server"
@@ -1795,11 +2007,104 @@ class BLENDERMCP_OT_StopServer(bpy.types.Operator):
 
         return {'FINISHED'}
 
+# MP-02: Modal operator for download progress display
+class BLENDERMCP_OT_DownloadProgress(bpy.types.Operator):
+    """Display download progress with cancellation support."""
+    bl_idname = "blendermcp.download_progress"
+    bl_label = "Download Progress"
+    
+    operation_id: bpy.props.StringProperty(default="")
+    _timer = None
+    _last_progress = 0
+    
+    def modal(self, context, event):
+        if event.type == 'TIMER':
+            if not PROGRESS_AVAILABLE:
+                self.cancel(context)
+                return {'CANCELLED'}
+            
+            # Get progress update
+            tracker = get_progress_tracker()
+            if not tracker:
+                self.cancel(context)
+                return {'CANCELLED'}
+            
+            progress_info = tracker.get_progress(self.operation_id)
+            
+            if progress_info is None:
+                # Operation not found, clean up
+                self.cancel(context)
+                return {'CANCELLED'}
+            
+            # Update progress bar
+            progress_pct = int(progress_info.progress_percent)
+            if progress_pct != self._last_progress:
+                context.window_manager.progress_update(progress_pct)
+                self._last_progress = progress_pct
+            
+            # Check completion status
+            if progress_info.status == 'completed':
+                context.window_manager.progress_end()
+                self.report({'INFO'}, f"Download complete! ({progress_info.format_progress()})")
+                self.cancel(context)
+                return {'FINISHED'}
+            elif progress_info.status == 'error':
+                context.window_manager.progress_end()
+                self.report({'ERROR'}, f"Download failed: {progress_info.error_message}")
+                self.cancel(context)
+                return {'CANCELLED'}
+            elif progress_info.status == 'cancelled':
+                context.window_manager.progress_end()
+                self.report({'WARNING'}, "Download cancelled by user")
+                self.cancel(context)
+                return {'CANCELLED'}
+            
+            # Update area to show progress
+            context.area.tag_redraw() if hasattr(context, 'area') and context.area else None
+        
+        # Allow cancellation with ESC key
+        elif event.type == 'ESC':
+            if PROGRESS_AVAILABLE:
+                tracker = get_progress_tracker()
+                if tracker:
+                    tracker.cancel_operation(self.operation_id)
+            context.window_manager.progress_end()
+            self.report({'WARNING'}, "Download cancelled (ESC pressed)")
+            self.cancel(context)
+            return {'CANCELLED'}
+        
+        return {'RUNNING_MODAL'}
+    
+    def execute(self, context):
+        if not PROGRESS_AVAILABLE:
+            self.report({'ERROR'}, "Progress tracking not available")
+            return {'CANCELLED'}
+        
+        if not self.operation_id:
+            self.report({'ERROR'}, "No operation ID provided")
+            return {'CANCELLED'}
+        
+        # Start progress bar
+        context.window_manager.progress_begin(0, 100)
+        
+        # Register timer (update every 0.1 seconds)
+        wm = context.window_manager
+        self._timer = wm.event_timer_add(0.1, window=context.window)
+        wm.modal_handler_add(self)
+        
+        return {'RUNNING_MODAL'}
+    
+    def cancel(self, context):
+        if self._timer:
+            wm = context.window_manager
+            wm.event_timer_remove(self._timer)
+            self._timer = None
+
 # Registration functions
 def register():
     bpy.types.Scene.blendermcp_port = IntProperty(
         name="Port",
-        description="Port for the BlenderMCP server",
+        description="Port number for the BlenderMCP socket server (default: 9876). Must match the port configured in your MCP client.",
         default=9876,
         min=1024,
         max=65535
@@ -1807,27 +2112,28 @@ def register():
 
     bpy.types.Scene.blendermcp_server_running = bpy.props.BoolProperty(
         name="Server Running",
+        description="Indicates whether the MCP server is currently running and accepting connections",
         default=False
     )
 
     bpy.types.Scene.blendermcp_use_polyhaven = bpy.props.BoolProperty(
         name="Use Poly Haven",
-        description="Enable Poly Haven asset integration",
+        description="Enable Poly Haven asset integration. Allows downloading HDRIs, textures, and 3D models from Poly Haven API. Requires internet connection.",
         default=False
     )
 
     bpy.types.Scene.blendermcp_use_hyper3d = bpy.props.BoolProperty(
         name="Use Hyper3D Rodin",
-        description="Enable Hyper3D Rodin generatino integration",
+        description="Enable Hyper3D Rodin 3D model generation. Generate 3D models from text prompts or images using AI. Requires API key and internet connection.",
         default=False
     )
 
     bpy.types.Scene.blendermcp_hyper3d_mode = bpy.props.EnumProperty(
         name="Rodin Mode",
-        description="Choose the platform used to call Rodin APIs",
+        description="Choose the platform used to call Rodin APIs. Use 'hyper3d.ai' for the main site or 'fal.ai' for alternative endpoint.",
         items=[
-            ("MAIN_SITE", "hyper3d.ai", "hyper3d.ai"),
-            ("FAL_AI", "fal.ai", "fal.ai"),
+            ("MAIN_SITE", "hyper3d.ai", "Use the main Hyper3D API endpoint"),
+            ("FAL_AI", "fal.ai", "Use the fal.ai alternative endpoint"),
         ],
         default="MAIN_SITE"
     )
@@ -1835,20 +2141,20 @@ def register():
     bpy.types.Scene.blendermcp_hyper3d_api_key = bpy.props.StringProperty(
         name="Hyper3D API Key",
         subtype="PASSWORD",
-        description="API Key provided by Hyper3D",
+        description="Your Hyper3D API key. Click 'Set Free Trial API Key' to use the shared trial key, or provide your own key from hyper3d.ai. WARNING: Saved in .blend file in plain text.",
         default=""
     )
 
     bpy.types.Scene.blendermcp_use_sketchfab = bpy.props.BoolProperty(
         name="Use Sketchfab",
-        description="Enable Sketchfab asset integration",
+        description="Enable Sketchfab asset integration. Search and download 3D models from Sketchfab. Requires API key and internet connection.",
         default=False
     )
 
     bpy.types.Scene.blendermcp_sketchfab_api_key = bpy.props.StringProperty(
         name="Sketchfab API Key",
         subtype="PASSWORD",
-        description="API Key provided by Sketchfab",
+        description="Your Sketchfab API key. Get it from sketchfab.com/settings/password. Only models you have download access to will work. WARNING: Saved in .blend file in plain text.",
         default=""
     )
 
@@ -1856,6 +2162,8 @@ def register():
     bpy.utils.register_class(BLENDERMCP_OT_SetFreeTrialHyper3DAPIKey)
     bpy.utils.register_class(BLENDERMCP_OT_StartServer)
     bpy.utils.register_class(BLENDERMCP_OT_StopServer)
+    bpy.utils.register_class(BLENDERMCP_OT_ClearCache)
+    bpy.utils.register_class(BLENDERMCP_OT_DownloadProgress)
 
     print("BlenderMCP addon registered")
 
@@ -1869,6 +2177,8 @@ def unregister():
     bpy.utils.unregister_class(BLENDERMCP_OT_SetFreeTrialHyper3DAPIKey)
     bpy.utils.unregister_class(BLENDERMCP_OT_StartServer)
     bpy.utils.unregister_class(BLENDERMCP_OT_StopServer)
+    bpy.utils.unregister_class(BLENDERMCP_OT_ClearCache)
+    bpy.utils.unregister_class(BLENDERMCP_OT_DownloadProgress)
 
     del bpy.types.Scene.blendermcp_port
     del bpy.types.Scene.blendermcp_server_running

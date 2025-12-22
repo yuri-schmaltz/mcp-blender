@@ -362,6 +362,25 @@ Here are some examples of what you can ask your local assistant to do:
 
 Hyper3D's free trial key allows you to generate a limited number of models per day. If the daily limit is reached, you can wait for the next day's reset or obtain your own key from hyper3d.ai and fal.ai.
 
+### Security Note
+
+⚠️ **Important**: API keys for Hyper3D and Sketchfab are stored in plain text in your `.blend` files. Do not share your Blender files publicly if they contain your personal API keys.
+
+For enhanced security, you can set the Hyper3D free trial key via an environment variable instead of storing it in the addon code:
+
+```bash
+# Linux/Mac
+export RODIN_FREE_TRIAL_KEY="your-key-here"
+
+# Windows PowerShell
+$env:RODIN_FREE_TRIAL_KEY="your-key-here"
+
+# Windows CMD
+set RODIN_FREE_TRIAL_KEY=your-key-here
+```
+
+If not set, the addon will use the embedded free trial key.
+
 ## Troubleshooting
 
 ### Common Issues and Solutions
