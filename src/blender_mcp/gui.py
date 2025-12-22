@@ -127,14 +127,21 @@ class ConfigWindow(QWidget):
         layout = QVBoxLayout()
         form = QFormLayout()
 
+        # Host field with inline validation
         self.host_edit = QLineEdit(self.config.host)
+        self.host_edit.textChanged.connect(self._validate_host_field)
         form.addRow("Host do Blender", self.host_edit)
+        self.host_error_label = QLabel("")
+        self.host_error_label.setStyleSheet("color: #d32f2f; font-size: 11px;")
+        form.addRow("", self.host_error_label)
 
+        # Port field (already validated by QSpinBox range)
         self.port_spin = QSpinBox()
         self.port_spin.setRange(1, 65535)
         self.port_spin.setValue(self.config.port)
         form.addRow("Porta", self.port_spin)
 
+        # Log level (validated by combo box)
         self.level_combo = QComboBox()
         self.level_combo.addItems(VALID_LEVELS)
         current_level = self.config.log_level.upper()
@@ -143,9 +150,15 @@ class ConfigWindow(QWidget):
             self.level_combo.setCurrentIndex(index)
         form.addRow("Nível de log", self.level_combo)
 
+        # Format field with inline validation
         self.format_edit = QLineEdit(self.config.log_format)
+        self.format_edit.textChanged.connect(self._validate_format_field)
         form.addRow("Formato de log", self.format_edit)
+        self.format_error_label = QLabel("")
+        self.format_error_label.setStyleSheet("color: #d32f2f; font-size: 11px;")
+        form.addRow("", self.format_error_label)
 
+        # Handler (validated by combo box)
         self.handler_combo = QComboBox()
         self.handler_combo.addItems(["console", "file"])
         handler_index = self.handler_combo.findText(self.config.log_handler.lower())
@@ -153,13 +166,18 @@ class ConfigWindow(QWidget):
             self.handler_combo.setCurrentIndex(handler_index)
         form.addRow("Destino do log", self.handler_combo)
 
+        # Log file field with inline validation
         file_row = QHBoxLayout()
         self.log_file_edit = QLineEdit(self.config.log_file)
+        self.log_file_edit.textChanged.connect(self._validate_file_field)
         browse_button = QPushButton("Escolher arquivo")
         browse_button.clicked.connect(self._browse_log_file)
         file_row.addWidget(self.log_file_edit)
         file_row.addWidget(browse_button)
         form.addRow("Arquivo de log", file_row)
+        self.file_error_label = QLabel("")
+        self.file_error_label.setStyleSheet("color: #d32f2f; font-size: 11px;")
+        form.addRow("", self.file_error_label)
 
         layout.addLayout(form)
 
@@ -203,6 +221,54 @@ class ConfigWindow(QWidget):
         if file_path:
             self.log_file_edit.setText(file_path)
             self._refresh_summary()
+    
+    def _validate_host_field(self, text: str) -> None:
+        """Validate host field in real-time (MP-01)."""
+        text = text.strip()
+        if not text:
+            self.host_edit.setStyleSheet("border: 2px solid #d32f2f;")
+            self.host_error_label.setText(f"{ICON_ERROR} Host não pode ser vazio")
+            self.apply_button.setEnabled(False)
+        else:
+            self.host_edit.setStyleSheet("")
+            self.host_error_label.setText("")
+            self._update_apply_button_state()
+    
+    def _validate_format_field(self, text: str) -> None:
+        """Validate log format field in real-time (MP-01)."""
+        text = text.strip()
+        if not text:
+            self.format_edit.setStyleSheet("border: 2px solid #d32f2f;")
+            self.format_error_label.setText(f"{ICON_ERROR} Formato não pode ser vazio")
+            self.apply_button.setEnabled(False)
+        elif not self._is_valid_log_format(text):
+            self.format_edit.setStyleSheet("border: 2px solid #d32f2f;")
+            self.format_error_label.setText(f"{ICON_ERROR} Formato de log inválido")
+            self.apply_button.setEnabled(False)
+        else:
+            self.format_edit.setStyleSheet("")
+            self.format_error_label.setText("")
+            self._update_apply_button_state()
+    
+    def _validate_file_field(self, text: str) -> None:
+        """Validate log file field in real-time (MP-01)."""
+        text = text.strip()
+        if not text:
+            self.log_file_edit.setStyleSheet("border: 2px solid #d32f2f;")
+            self.file_error_label.setText(f"{ICON_ERROR} Arquivo de log não pode ser vazio")
+            self.apply_button.setEnabled(False)
+        else:
+            self.log_file_edit.setStyleSheet("")
+            self.file_error_label.setText("")
+            self._update_apply_button_state()
+    
+    def _update_apply_button_state(self) -> None:
+        """Enable apply button only if all fields are valid (MP-01)."""
+        host_valid = bool(self.host_edit.text().strip()) and not self.host_error_label.text()
+        format_valid = bool(self.format_edit.text().strip()) and not self.format_error_label.text()
+        file_valid = bool(self.log_file_edit.text().strip()) and not self.file_error_label.text()
+        
+        self.apply_button.setEnabled(host_valid and format_valid and file_valid)
 
     def _apply_changes(self) -> None:
         is_valid, message = self._validate_inputs()
