@@ -15,6 +15,17 @@ import zipfile
 from bpy.props import StringProperty, IntProperty, BoolProperty, EnumProperty
 import io
 from contextlib import redirect_stdout, suppress
+import sys
+
+# Import progress tracking for MP-02
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+try:
+    from blender_mcp.progress import get_progress_tracker
+    PROGRESS_AVAILABLE = True
+except ImportError:
+    PROGRESS_AVAILABLE = False
+    def get_progress_tracker():
+        return None
 
 bl_info = {
     "name": "Blender MCP",
@@ -573,13 +584,33 @@ class BlenderMCPServer:
                     tmp_file.close()
 
                     try:
-                        # Download the file
-                        response = requests.get(file_url, headers=REQ_HEADERS)
+                        # Download the file with progress tracking (MP-02)
+                        operation_id = f"polyhaven_hdri_{asset_id}_{resolution}"
+                        
+                        response = requests.get(file_url, headers=REQ_HEADERS, stream=True)
                         if response.status_code != 200:
-                            return {" error": f"Failed to download HDRI: {response.status_code}"}
-
+                            return {"error": f"Failed to download HDRI: {response.status_code}"}
+                        
+                        # Get total size and start progress tracking
+                        total_size = int(response.headers.get('content-length', 0))
+                        downloaded = 0
+                        
+                        if PROGRESS_AVAILABLE:
+                            tracker = get_progress_tracker()
+                            if tracker:
+                                tracker.start_operation(operation_id, total_size)
+                        
+                        # Download with streaming and progress updates
                         with open(tmp_path, 'wb') as f:
-                            f.write(response.content)
+                            for chunk in response.iter_content(chunk_size=8192):
+                                if chunk:
+                                    f.write(chunk)
+                                    downloaded += len(chunk)
+                                    if PROGRESS_AVAILABLE and tracker:
+                                        tracker.update_progress(operation_id, downloaded)
+                        
+                        if PROGRESS_AVAILABLE and tracker:
+                            tracker.complete_operation(operation_id)
 
                         # Create a new world if none exists
                         if not bpy.data.worlds:
@@ -673,11 +704,31 @@ class BlenderMCPServer:
                                 tmp_file.close()
 
                                 try:
-                                    # Download the file
-                                    response = requests.get(file_url, headers=REQ_HEADERS)
+                                    # Download the file with progress tracking (MP-02)
+                                    operation_id = f"polyhaven_tex_{asset_id}_{map_type}_{resolution}"
+                                    
+                                    response = requests.get(file_url, headers=REQ_HEADERS, stream=True)
                                     if response.status_code == 200:
+                                        # Get total size and start progress tracking
+                                        total_size = int(response.headers.get('content-length', 0))
+                                        downloaded = 0
+                                        
+                                        if PROGRESS_AVAILABLE:
+                                            tracker = get_progress_tracker()
+                                            if tracker:
+                                                tracker.start_operation(operation_id, total_size)
+                                        
+                                        # Download with streaming
                                         with open(tmp_path, 'wb') as f:
-                                            f.write(response.content)
+                                            for chunk in response.iter_content(chunk_size=8192):
+                                                if chunk:
+                                                    f.write(chunk)
+                                                    downloaded += len(chunk)
+                                                    if PROGRESS_AVAILABLE and tracker:
+                                                        tracker.update_progress(operation_id, downloaded)
+                                        
+                                        if PROGRESS_AVAILABLE and tracker:
+                                            tracker.complete_operation(operation_id)
 
                                         # Load image from temporary file
                                         image = bpy.data.images.load(tmp_path)
@@ -1432,16 +1483,32 @@ class BlenderMCPServer:
                 temp_file_path = temp_file.name
 
                 try:
-                    # Download the content
+                    # Download the content with progress tracking (MP-02)
+                    operation_id = f"hyper3d_{task_uuid}"
+                    
                     response = requests.get(i["url"], stream=True)
                     response.raise_for_status()  # Raise an exception for HTTP errors
+                    
+                    total_size = int(response.headers.get('content-length', 0))
+                    downloaded = 0
+                    
+                    if PROGRESS_AVAILABLE:
+                        tracker = get_progress_tracker()
+                        if tracker:
+                            tracker.start_operation(operation_id, total_size)
 
                     # Write the content to the temporary file
                     for chunk in response.iter_content(chunk_size=8192):
                         temp_file.write(chunk)
+                        downloaded += len(chunk)
+                        if PROGRESS_AVAILABLE and tracker:
+                            tracker.update_progress(operation_id, downloaded)
 
                     # Close the file
                     temp_file.close()
+                    
+                    if PROGRESS_AVAILABLE and tracker:
+                        tracker.complete_operation(operation_id)
 
                 except Exception as e:
                     # Clean up the file if there's an error
@@ -1502,16 +1569,32 @@ class BlenderMCPServer:
         temp_file_path = temp_file.name
 
         try:
-            # Download the content
+            # Download the content with progress tracking (MP-02)
+            operation_id = f"hyper3d_fal_{request_id}"
+            
             response = requests.get(data_["model_mesh"]["url"], stream=True)
             response.raise_for_status()  # Raise an exception for HTTP errors
+            
+            total_size = int(response.headers.get('content-length', 0))
+            downloaded = 0
+            
+            if PROGRESS_AVAILABLE:
+                tracker = get_progress_tracker()
+                if tracker:
+                    tracker.start_operation(operation_id, total_size)
 
             # Write the content to the temporary file
             for chunk in response.iter_content(chunk_size=8192):
                 temp_file.write(chunk)
+                downloaded += len(chunk)
+                if PROGRESS_AVAILABLE and tracker:
+                    tracker.update_progress(operation_id, downloaded)
 
             # Close the file
             temp_file.close()
+            
+            if PROGRESS_AVAILABLE and tracker:
+                tracker.complete_operation(operation_id)
 
         except Exception as e:
             # Clean up the file if there's an error
@@ -1718,18 +1801,36 @@ class BlenderMCPServer:
             if not download_url:
                 return {"error": "No download URL available for this model. Make sure the model is downloadable and you have access."}
 
-            # Download the model (already has timeout)
-            model_response = requests.get(download_url, timeout=60)  # 60 second timeout
+            # Download the model with progress tracking (MP-02)
+            operation_id = f"sketchfab_{uid}"
+            
+            model_response = requests.get(download_url, timeout=60, stream=True)
 
             if model_response.status_code != 200:
                 return {"error": f"Model download failed with status code {model_response.status_code}"}
 
-            # Save to temporary file
+            # Save to temporary file with progress
             temp_dir = tempfile.mkdtemp()
             zip_file_path = os.path.join(temp_dir, f"{uid}.zip")
+            
+            total_size = int(model_response.headers.get('content-length', 0))
+            downloaded = 0
+            
+            if PROGRESS_AVAILABLE:
+                tracker = get_progress_tracker()
+                if tracker:
+                    tracker.start_operation(operation_id, total_size)
 
             with open(zip_file_path, "wb") as f:
-                f.write(model_response.content)
+                for chunk in model_response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if PROGRESS_AVAILABLE and tracker:
+                            tracker.update_progress(operation_id, downloaded)
+            
+            if PROGRESS_AVAILABLE and tracker:
+                tracker.complete_operation(operation_id)
 
             # Extract the zip file with enhanced security
             with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
