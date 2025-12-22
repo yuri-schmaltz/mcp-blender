@@ -1,0 +1,31 @@
+{
+  "app_title": "Blender MCP - Configuration",
+  "host_label": "Blender Host",
+  "port_label": "Port",
+  "log_level_label": "Log Level",
+  "log_format_label": "Log Format",
+  "log_destination_label": "Log Destination",
+  "log_file_label": "Log File",
+  "browse_button": "Browse",
+  "apply_button": "Apply and Configure",
+  "test_connection_button": "Test Connection",
+  "reset_defaults_button": "Restore Defaults",
+  "environment_summary_label": "Environment Variables Summary",
+  
+  "error_host_empty": "Host cannot be empty",
+  "error_format_empty": "Log format cannot be empty",
+  "error_format_invalid": "Invalid log format",
+  "error_file_empty": "Log file cannot be empty",
+  
+  "status_testing": "Testing connection...",
+  "status_success": "Connection successful to {host}:{port}",
+  "status_connection_refused": "Connection refused. Check if Blender is running and the addon is connected.",
+  "status_timeout": "Connection timeout. Check the host and port.",
+  "status_connection_failed": "Failed to connect to {host}:{port}: {error}",
+  "status_applied": "Settings applied successfully.",
+  "status_restored": "Settings restored to defaults.",
+  "status_log_error": "Error configuring logs: {error}",
+  
+  "console": "console",
+  "file": "file"
+}
