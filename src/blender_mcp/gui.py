@@ -160,12 +160,12 @@ class ConfigWindow(QWidget):
         buttons = QHBoxLayout()
         self.apply_button = QPushButton("Aplicar e configurar")
         self.apply_button.clicked.connect(self._apply_changes)
-        test_connection_button = QPushButton("Testar conexão")
-        test_connection_button.clicked.connect(self._test_connection)
+        self.test_connection_button = QPushButton("Testar conexão")
+        self.test_connection_button.clicked.connect(self._test_connection)
         reset_button = QPushButton("Restaurar padrão")
         reset_button.clicked.connect(self._reset_defaults)
         buttons.addWidget(self.apply_button)
-        buttons.addWidget(test_connection_button)
+        buttons.addWidget(self.test_connection_button)
         buttons.addWidget(reset_button)
         layout.addLayout(buttons)
 
@@ -179,6 +179,18 @@ class ConfigWindow(QWidget):
         layout.addWidget(self.status_label)
 
         self.setLayout(layout)
+        
+        # Set tab order for keyboard navigation (QW-04)
+        self.setTabOrder(self.host_edit, self.port_spin)
+        self.setTabOrder(self.port_spin, self.level_combo)
+        self.setTabOrder(self.level_combo, self.format_edit)
+        self.setTabOrder(self.format_edit, self.handler_combo)
+        self.setTabOrder(self.handler_combo, self.log_file_edit)
+        self.setTabOrder(self.log_file_edit, browse_button)
+        self.setTabOrder(browse_button, self.apply_button)
+        self.setTabOrder(self.apply_button, self.test_connection_button)
+        self.setTabOrder(self.test_connection_button, reset_button)
+        self.setTabOrder(reset_button, self.summary)
 
     def _browse_log_file(self) -> None:
         file_path, _ = QFileDialog.getSaveFileName(self, "Selecionar arquivo de log", self.log_file_edit.text())
@@ -275,13 +287,35 @@ class ConfigWindow(QWidget):
             self._set_status("Informe um host válido antes de testar a conexão.", error=True)
             return
 
+        # Disable button and show testing status
+        self.test_connection_button.setEnabled(False)
+        original_text = self.test_connection_button.text()
+        self.test_connection_button.setText("Testando...")
+        self._set_status("🔄 Testando conexão...", error=False)
+        
         try:
             with socket.create_connection((host, port), timeout=1):
-                self._set_status(f"Conexão bem-sucedida para {host}:{port}.")
+                self._set_status(f"✅ Conexão bem-sucedida para {host}:{port}.")
         except OSError as exc:
-            self._set_status(f"Falha ao conectar a {host}:{port}: {exc}", error=True)
+            error_msg = str(exc)
+            # Provide user-friendly error messages
+            if "refused" in error_msg.lower():
+                self._set_status(f"❌ Conexão recusada. Verifique se o Blender está rodando e o addon está conectado.", error=True)
+            elif "timed out" in error_msg.lower():
+                self._set_status(f"❌ Timeout ao conectar. Verifique o host e a porta.", error=True)
+            else:
+                self._set_status(f"❌ Falha ao conectar a {host}:{port}: {exc}", error=True)
+        finally:
+            # Re-enable button
+            self.test_connection_button.setEnabled(True)
+            self.test_connection_button.setText(original_text)
 
     def _set_status(self, message: str, *, error: bool = False) -> None:
+        # Add icon prefix if not already present (QW-03)
+        if not message.startswith(("✅", "❌", "🔄", "⚠️")):
+            icon = "❌" if error else "✅"
+            message = f"{icon} {message}"
+        
         self.status_label.setText(message)
         color = "#d32f2f" if error else "#2e7d32"
         self.status_label.setStyleSheet(f"color: {color}; font-weight: bold;")

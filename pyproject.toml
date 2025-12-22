@@ -1,7 +1,5 @@
 [project]
 name = "blender-mcp"
-version = "1.2"
-description = "Blender integration through the Model Context Protocol"
 version = "1.2.1"
 description = "Model Context Protocol server for Blender 3D integration"
 readme = "README.md"

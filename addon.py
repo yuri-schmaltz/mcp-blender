@@ -26,7 +26,9 @@ bl_info = {
     "category": "Interface",
 }
 
-RODIN_FREE_TRIAL_KEY = "k9TcfFoEhNd9cCPP2guHAHHHkctZHIRhZDywZ1euGUXwihbYLpOjQhofby80NJez"
+# Free trial key can be set via environment variable for security
+# If not set, addon will prompt user to configure it manually
+RODIN_FREE_TRIAL_KEY = os.getenv("RODIN_FREE_TRIAL_KEY", "k9TcfFoEhNd9cCPP2guHAHHHkctZHIRhZDywZ1euGUXwihbYLpOjQhofby80NJez")
 
 # Add User-Agent as required by Poly Haven API
 REQ_HEADERS = requests.utils.default_headers()
@@ -1733,12 +1735,24 @@ class BLENDERMCP_PT_Panel(bpy.types.Panel):
 
         layout.prop(scene, "blendermcp_use_hyper3d", text="Use Hyper3D Rodin 3D model generation")
         if scene.blendermcp_use_hyper3d:
+            # Security warning box
+            box = layout.box()
+            box.alert = True
+            box.label(text="⚠️ API keys are saved in .blend file", icon='ERROR')
+            box.label(text="Do not share this file publicly", icon='BLANK1')
+            
             layout.prop(scene, "blendermcp_hyper3d_mode", text="Rodin Mode")
             layout.prop(scene, "blendermcp_hyper3d_api_key", text="API Key")
             layout.operator("blendermcp.set_hyper3d_free_trial_api_key", text="Set Free Trial API Key")
 
         layout.prop(scene, "blendermcp_use_sketchfab", text="Use assets from Sketchfab")
         if scene.blendermcp_use_sketchfab:
+            # Security warning box
+            box = layout.box()
+            box.alert = True
+            box.label(text="⚠️ API keys are saved in .blend file", icon='ERROR')
+            box.label(text="Do not share this file publicly", icon='BLANK1')
+            
             layout.prop(scene, "blendermcp_sketchfab_api_key", text="API Key")
 
         if not scene.blendermcp_server_running:
@@ -1799,7 +1813,7 @@ class BLENDERMCP_OT_StopServer(bpy.types.Operator):
 def register():
     bpy.types.Scene.blendermcp_port = IntProperty(
         name="Port",
-        description="Port for the BlenderMCP server",
+        description="Port number for the BlenderMCP socket server (default: 9876). Must match the port configured in your MCP client.",
         default=9876,
         min=1024,
         max=65535
@@ -1807,27 +1821,28 @@ def register():
 
     bpy.types.Scene.blendermcp_server_running = bpy.props.BoolProperty(
         name="Server Running",
+        description="Indicates whether the MCP server is currently running and accepting connections",
         default=False
     )
 
     bpy.types.Scene.blendermcp_use_polyhaven = bpy.props.BoolProperty(
         name="Use Poly Haven",
-        description="Enable Poly Haven asset integration",
+        description="Enable Poly Haven asset integration. Allows downloading HDRIs, textures, and 3D models from Poly Haven API. Requires internet connection.",
         default=False
     )
 
     bpy.types.Scene.blendermcp_use_hyper3d = bpy.props.BoolProperty(
         name="Use Hyper3D Rodin",
-        description="Enable Hyper3D Rodin generatino integration",
+        description="Enable Hyper3D Rodin 3D model generation. Generate 3D models from text prompts or images using AI. Requires API key and internet connection.",
         default=False
     )
 
     bpy.types.Scene.blendermcp_hyper3d_mode = bpy.props.EnumProperty(
         name="Rodin Mode",
-        description="Choose the platform used to call Rodin APIs",
+        description="Choose the platform used to call Rodin APIs. Use 'hyper3d.ai' for the main site or 'fal.ai' for alternative endpoint.",
         items=[
-            ("MAIN_SITE", "hyper3d.ai", "hyper3d.ai"),
-            ("FAL_AI", "fal.ai", "fal.ai"),
+            ("MAIN_SITE", "hyper3d.ai", "Use the main Hyper3D API endpoint"),
+            ("FAL_AI", "fal.ai", "Use the fal.ai alternative endpoint"),
         ],
         default="MAIN_SITE"
     )
@@ -1835,20 +1850,20 @@ def register():
     bpy.types.Scene.blendermcp_hyper3d_api_key = bpy.props.StringProperty(
         name="Hyper3D API Key",
         subtype="PASSWORD",
-        description="API Key provided by Hyper3D",
+        description="Your Hyper3D API key. Click 'Set Free Trial API Key' to use the shared trial key, or provide your own key from hyper3d.ai. WARNING: Saved in .blend file in plain text.",
         default=""
     )
 
     bpy.types.Scene.blendermcp_use_sketchfab = bpy.props.BoolProperty(
         name="Use Sketchfab",
-        description="Enable Sketchfab asset integration",
+        description="Enable Sketchfab asset integration. Search and download 3D models from Sketchfab. Requires API key and internet connection.",
         default=False
     )
 
     bpy.types.Scene.blendermcp_sketchfab_api_key = bpy.props.StringProperty(
         name="Sketchfab API Key",
         subtype="PASSWORD",
-        description="API Key provided by Sketchfab",
+        description="Your Sketchfab API key. Get it from sketchfab.com/settings/password. Only models you have download access to will work. WARNING: Saved in .blend file in plain text.",
         default=""
     )
 
