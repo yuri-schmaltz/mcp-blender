@@ -32,6 +32,7 @@ from blender_mcp.logging_config import (
     configure_logging,
 )
 from blender_mcp.server import DEFAULT_HOST, DEFAULT_PORT
+from blender_mcp.i18n import _, get_i18n
 
 
 ENV_FILE = Path(os.getenv("BLENDER_MCP_ENV_FILE", Path.home() / ".blender_mcp.env"))
@@ -117,7 +118,7 @@ class ConfigWindow(QWidget):
 
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("Blender MCP - Configurações")
+        self.setWindowTitle(_("app_title"))
         _load_env_file()
         self.config = MCPConfig.from_environment()
         self._build_ui()
@@ -130,7 +131,7 @@ class ConfigWindow(QWidget):
         # Host field with inline validation
         self.host_edit = QLineEdit(self.config.host)
         self.host_edit.textChanged.connect(self._validate_host_field)
-        form.addRow("Host do Blender", self.host_edit)
+        form.addRow(_("host_label"), self.host_edit)
         self.host_error_label = QLabel("")
         self.host_error_label.setStyleSheet("color: #d32f2f; font-size: 11px;")
         form.addRow("", self.host_error_label)
@@ -139,7 +140,7 @@ class ConfigWindow(QWidget):
         self.port_spin = QSpinBox()
         self.port_spin.setRange(1, 65535)
         self.port_spin.setValue(self.config.port)
-        form.addRow("Porta", self.port_spin)
+        form.addRow(_("port_label"), self.port_spin)
 
         # Log level (validated by combo box)
         self.level_combo = QComboBox()
@@ -148,33 +149,33 @@ class ConfigWindow(QWidget):
         index = self.level_combo.findText(current_level)
         if index >= 0:
             self.level_combo.setCurrentIndex(index)
-        form.addRow("Nível de log", self.level_combo)
+        form.addRow(_("log_level_label"), self.level_combo)
 
         # Format field with inline validation
         self.format_edit = QLineEdit(self.config.log_format)
         self.format_edit.textChanged.connect(self._validate_format_field)
-        form.addRow("Formato de log", self.format_edit)
+        form.addRow(_("log_format_label"), self.format_edit)
         self.format_error_label = QLabel("")
         self.format_error_label.setStyleSheet("color: #d32f2f; font-size: 11px;")
         form.addRow("", self.format_error_label)
 
         # Handler (validated by combo box)
         self.handler_combo = QComboBox()
-        self.handler_combo.addItems(["console", "file"])
+        self.handler_combo.addItems([_("console"), _("file")])
         handler_index = self.handler_combo.findText(self.config.log_handler.lower())
         if handler_index >= 0:
             self.handler_combo.setCurrentIndex(handler_index)
-        form.addRow("Destino do log", self.handler_combo)
+        form.addRow(_("log_destination_label"), self.handler_combo)
 
         # Log file field with inline validation
         file_row = QHBoxLayout()
         self.log_file_edit = QLineEdit(self.config.log_file)
         self.log_file_edit.textChanged.connect(self._validate_file_field)
-        browse_button = QPushButton("Escolher arquivo")
+        browse_button = QPushButton(_("browse_button"))
         browse_button.clicked.connect(self._browse_log_file)
         file_row.addWidget(self.log_file_edit)
         file_row.addWidget(browse_button)
-        form.addRow("Arquivo de log", file_row)
+        form.addRow(_("log_file_label"), file_row)
         self.file_error_label = QLabel("")
         self.file_error_label.setStyleSheet("color: #d32f2f; font-size: 11px;")
         form.addRow("", self.file_error_label)
@@ -182,18 +183,18 @@ class ConfigWindow(QWidget):
         layout.addLayout(form)
 
         buttons = QHBoxLayout()
-        self.apply_button = QPushButton("Aplicar e configurar")
+        self.apply_button = QPushButton(_("apply_button"))
         self.apply_button.clicked.connect(self._apply_changes)
-        self.test_connection_button = QPushButton("Testar conexão")
+        self.test_connection_button = QPushButton(_("test_connection_button"))
         self.test_connection_button.clicked.connect(self._test_connection)
-        reset_button = QPushButton("Restaurar padrão")
+        reset_button = QPushButton(_("reset_defaults_button"))
         reset_button.clicked.connect(self._reset_defaults)
         buttons.addWidget(self.apply_button)
         buttons.addWidget(self.test_connection_button)
         buttons.addWidget(reset_button)
         layout.addLayout(buttons)
 
-        layout.addWidget(QLabel("Resumo das variáveis de ambiente"))
+        layout.addWidget(QLabel(_("environment_summary_label")))
         self.summary = QTextEdit()
         self.summary.setReadOnly(True)
         self.summary.setMinimumHeight(150)
@@ -227,7 +228,7 @@ class ConfigWindow(QWidget):
         text = text.strip()
         if not text:
             self.host_edit.setStyleSheet("border: 2px solid #d32f2f;")
-            self.host_error_label.setText(f"{ICON_ERROR} Host não pode ser vazio")
+            self.host_error_label.setText(f"{ICON_ERROR} {_('error_host_empty')}")
             self.apply_button.setEnabled(False)
         else:
             self.host_edit.setStyleSheet("")
@@ -239,11 +240,11 @@ class ConfigWindow(QWidget):
         text = text.strip()
         if not text:
             self.format_edit.setStyleSheet("border: 2px solid #d32f2f;")
-            self.format_error_label.setText(f"{ICON_ERROR} Formato não pode ser vazio")
+            self.format_error_label.setText(f"{ICON_ERROR} {_('error_format_empty')}")
             self.apply_button.setEnabled(False)
         elif not self._is_valid_log_format(text):
             self.format_edit.setStyleSheet("border: 2px solid #d32f2f;")
-            self.format_error_label.setText(f"{ICON_ERROR} Formato de log inválido")
+            self.format_error_label.setText(f"{ICON_ERROR} {_('error_format_invalid')}")
             self.apply_button.setEnabled(False)
         else:
             self.format_edit.setStyleSheet("")
@@ -255,7 +256,7 @@ class ConfigWindow(QWidget):
         text = text.strip()
         if not text:
             self.log_file_edit.setStyleSheet("border: 2px solid #d32f2f;")
-            self.file_error_label.setText(f"{ICON_ERROR} Arquivo de log não pode ser vazio")
+            self.file_error_label.setText(f"{ICON_ERROR} {_('error_file_empty')}")
             self.apply_button.setEnabled(False)
         else:
             self.log_file_edit.setStyleSheet("")
@@ -286,12 +287,12 @@ class ConfigWindow(QWidget):
                 handler_type=self.config.log_handler,
             )
         except Exception as exc:  # pragma: no cover - surface to UI
-            self._set_status(f"Erro ao configurar logs: {exc}", error=True)
+            self._set_status(_("status_log_error", error=exc), error=True)
             return
 
         _save_env_file(self.config.to_environment())
         self._refresh_summary()
-        self._set_status("Configurações aplicadas com sucesso.")
+        self._set_status(_("status_applied"))
 
     def _reset_defaults(self) -> None:
         self.config = MCPConfig()
@@ -303,7 +304,7 @@ class ConfigWindow(QWidget):
         self.log_file_edit.setText(self.config.log_file)
         self._refresh_summary()
         _save_env_file(self.config.to_environment())
-        self._set_status("Configurações restauradas para os padrões.")
+        self._set_status(_("status_restored"))
 
     def _refresh_summary(self) -> None:
         self._sync_config_from_widgets()
@@ -356,27 +357,27 @@ class ConfigWindow(QWidget):
         host = self.host_edit.text().strip()
         port = int(self.port_spin.value())
         if not host:
-            self._set_status("Informe um host válido antes de testar a conexão.", error=True)
+            self._set_status(_("error_host_empty"), error=True)
             return
 
         # Disable button and show testing status
         self.test_connection_button.setEnabled(False)
         original_text = self.test_connection_button.text()
-        self.test_connection_button.setText("Testando...")
-        self._set_status(f"{ICON_PROCESSING} Testando conexão...", error=False)
+        self.test_connection_button.setText(_("status_testing"))
+        self._set_status(f"{ICON_PROCESSING} {_('status_testing')}", error=False)
         
         try:
             with socket.create_connection((host, port), timeout=1):
-                self._set_status(f"{ICON_SUCCESS} Conexão bem-sucedida para {host}:{port}.")
+                self._set_status(f"{ICON_SUCCESS} {_('status_success', host=host, port=port)}")
         except OSError as exc:
             error_msg = str(exc)
             # Provide user-friendly error messages
             if "refused" in error_msg.lower():
-                self._set_status(f"{ICON_ERROR} Conexão recusada. Verifique se o Blender está rodando e o addon está conectado.", error=True)
+                self._set_status(f"{ICON_ERROR} {_('status_connection_refused')}", error=True)
             elif "timed out" in error_msg.lower():
-                self._set_status(f"{ICON_ERROR} Timeout ao conectar. Verifique o host e a porta.", error=True)
+                self._set_status(f"{ICON_ERROR} {_('status_timeout')}", error=True)
             else:
-                self._set_status(f"{ICON_ERROR} Falha ao conectar a {host}:{port}: {exc}", error=True)
+                self._set_status(f"{ICON_ERROR} {_('status_connection_failed', host=host, port=port, error=exc)}", error=True)
         finally:
             # Re-enable button
             self.test_connection_button.setEnabled(True)
