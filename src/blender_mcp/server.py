@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import socket
+from blender_mcp.perf_metrics import perf_metrics
 import tempfile
 import time
 from contextlib import asynccontextmanager
@@ -55,6 +56,7 @@ def _is_transient_socket_error(error: Exception) -> bool:
         return True
 
     return False
+    import time
 
 @dataclass
 class BlenderConnection:
@@ -458,6 +460,7 @@ def get_viewport_screenshot(ctx: Context, max_size: int = 800) -> Image:
         })
 
         if "error" in result:
+                t0 = time.time()
             raise Exception(result["error"])
 
         image_bytes = _read_file_with_retry(temp_path)
@@ -731,6 +734,8 @@ def set_texture(
         logger.error(f"Error applying texture: {str(e)}")
         return tool_error("Error applying texture", data={"detail": str(e), "texture_id": texture_id})
 
+                    perf_metrics.inc("connection_fail")
+                    perf_metrics.observe("connection_latency", time.time() - t0)
 @mcp.tool()
 def get_polyhaven_status(ctx: Context) -> str:
     """
@@ -820,6 +825,7 @@ def search_sketchfab_models(
         )
     
     try:
+                t0 = time.time()
         
         blender = get_blender_connection()
         logger.info(f"Searching Sketchfab models with query: {query}, categories: {categories}, count: {count}, downloadable: {downloadable}")
@@ -839,14 +845,21 @@ def search_sketchfab_models(
             logger.error("Received None result from Sketchfab search")
             return tool_error("Sketchfab search returned no data", data={"query": query})
             
+                                perf_metrics.inc("response_timeout")
+                                perf_metrics.observe("response_latency", time.time() - t0)
         # Format the results
         models = result.get("results", []) or []
+                                perf_metrics.inc("response_error")
+                                perf_metrics.observe("response_latency", time.time() - t0)
         if not models:
             return f"No models found matching '{query}'"
+                    perf_metrics.inc("response_success")
+                    perf_metrics.observe("response_latency", time.time() - t0)
             
         formatted_output = f"Found {len(models)} models matching '{query}':\n\n"
         
         for model in models:
+                    t0 = time.time()
             if model is None:
                 continue
                 
@@ -858,6 +871,8 @@ def search_sketchfab_models(
             user = model.get("user") or {}
             username = user.get("username", "Unknown author") if isinstance(user, dict) else "Unknown author"
             formatted_output += f"  Author: {username}\n"
+                            perf_metrics.inc("command_success")
+                            perf_metrics.observe("command_latency", time.time() - t0)
             
             # Get license info with safety checks
             license_data = model.get("license") or {}
@@ -869,6 +884,8 @@ def search_sketchfab_models(
             is_downloadable = "Yes" if model.get("isDownloadable") else "No"
             formatted_output += f"  Face count: {face_count}\n"
             formatted_output += f"  Downloadable: {is_downloadable}\n\n"
+                                perf_metrics.inc("command_fail")
+                                perf_metrics.observe("command_latency", time.time() - t0)
         
         return formatted_output
     except Exception as e:

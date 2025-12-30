@@ -29,6 +29,12 @@ jobs:
       - name: Verify metadata
         run: python -m twine check dist/*
 
+
+      - name: Lint (pylint)
+        run: |
+          pip install pylint
+          pylint src/blender_mcp addon --rcfile=.pylintrc || true
+
       - name: Run unit tests (pytest)
         run: |
           time pytest tests/unit
