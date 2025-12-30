@@ -22,32 +22,48 @@ class AssetCache:
         return os.path.join(self.cache_dir, f"{cache_hash}.cache")
     
     def get(self, asset_id: str, asset_type: str, resolution: str = "") -> str | None:
-        """Retrieve cached asset path if valid, None otherwise."""
+        """Retrieve cached asset path if valid, None otherwise. Logs hit/miss/expire and timing."""
+        import logging
+        start = time.time()
+        logger = logging.getLogger("AssetCache")
         cache_path = self._get_cache_path(asset_id, asset_type, resolution)
-        
+
         if not os.path.exists(cache_path):
+            logger.info(f"Cache MISS for {asset_id} [{asset_type}/{resolution}]")
+            logger.debug(f"Checked path: {cache_path}")
+            logger.info(f"Cache lookup took {time.time() - start:.4f}s")
             return None
-        
+
         # Check if cache is expired
         file_age = time.time() - os.path.getmtime(cache_path)
         if file_age > self.ttl_seconds:
             try:
                 os.remove(cache_path)
-            except:
-                pass
+                logger.info(f"Cache EXPIRED for {asset_id} [{asset_type}/{resolution}]")
+            except Exception as e:
+                logger.warning(f"Failed to remove expired cache: {e}")
+            logger.info(f"Cache lookup took {time.time() - start:.4f}s")
             return None
-        
+
+        logger.info(f"Cache HIT for {asset_id} [{asset_type}/{resolution}]")
+        logger.info(f"Cache lookup took {time.time() - start:.4f}s")
         return cache_path
     
     def put(self, asset_id: str, asset_type: str, source_path: str, resolution: str = "") -> str:
-        """Store asset in cache and return cache path."""
+        """Store asset in cache and return cache path. Logs operation and timing."""
+        import logging
+        start = time.time()
+        logger = logging.getLogger("AssetCache")
         cache_path = self._get_cache_path(asset_id, asset_type, resolution)
-        
+
         try:
             shutil.copy2(source_path, cache_path)
+            logger.info(f"Cached asset {asset_id} [{asset_type}/{resolution}] at {cache_path}")
+            logger.info(f"Cache store took {time.time() - start:.4f}s")
             return cache_path
         except Exception as e:
-            print(f"Failed to cache asset: {e}")
+            logger.error(f"Failed to cache asset: {e}")
+            logger.info(f"Cache store took {time.time() - start:.4f}s")
             return source_path
     
     def clear(self) -> int:

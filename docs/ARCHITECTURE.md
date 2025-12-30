@@ -1,5 +1,7 @@
 # BlenderMCP Architecture
 
+> **Decisões arquiteturais e convenções mínimas estão documentadas em [ADR-0001-estrutura-modular.md](ADR-0001-estrutura-modular.md). Consulte para padrões de modularização, logging, UI e testes. Atualize sempre que houver mudanças relevantes.**
+
 ## Overview
 
 BlenderMCP is a Model Context Protocol (MCP) server that enables AI assistants to control Blender 3D through a socket-based communication layer. The system consists of two main components:
