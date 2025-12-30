@@ -1,7 +1,15 @@
 """Security utilities for sandboxed code execution in Blender.
 
-This module provides safe code execution with restricted imports, timeouts,
-and rate limiting to prevent malicious operations.
+This module provê execução segura de código com restrição de imports, timeouts,
+rate limiting e logging de violações.
+
+Checklist de segurança (mínimo):
+ - Validação de entrada rigorosa
+ - Limite de tempo de execução (timeout)
+ - Rate limiting por janela de tempo
+ - Logging de toda violação (SecurityError, TimeoutError)
+ - Não permitir imports perigosos (os, sys, subprocess, etc)
+ - Testes de fuzzing e revisão periódica
 """
 
 from typing import Dict, Any, List, Optional
@@ -38,23 +46,20 @@ class RateLimiter:
         self.calls: deque = deque()
     
     def check_rate_limit(self) -> None:
-        """Check if rate limit is exceeded.
-        
-        Raises:
-            SecurityError: If rate limit is exceeded
-        """
+        """Check if rate limit is exceeded. Loga violações."""
         now = datetime.now()
-        
+
         # Remove old calls outside the window
         while self.calls and now - self.calls[0] > self.window:
             self.calls.popleft()
-        
+
         if len(self.calls) >= self.max_calls:
+            logger.warning(f"Rate limit exceeded: max {self.max_calls} calls per {self.window.seconds}s")
             raise SecurityError(
                 f"Rate limit exceeded: max {self.max_calls} calls per "
                 f"{self.window.seconds}s"
             )
-        
+
         self.calls.append(now)
 
 

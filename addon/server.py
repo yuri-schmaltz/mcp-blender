@@ -1,12 +1,14 @@
 # Blender MCP Server - Extracted from addon.py for MP-03 Phase 2
 # Original code by Siddharth Ahuja: www.github.com/ahujasid © 2025
 
+
 import bpy
 import json
 import threading
 import socket
 import time
 import traceback
+from addon.utils.metrics import metrics
 
 
 class BlenderMCPServer:
@@ -26,8 +28,10 @@ class BlenderMCPServer:
 
     def start(self):
         """Start the MCP server on configured host:port."""
+        import logging
+        logger = logging.getLogger("BlenderMCPServer")
         if self.running:
-            print("Server is already running")
+            logger.warning("Server is already running")
             return
 
         self.running = True
@@ -44,13 +48,17 @@ class BlenderMCPServer:
             self.server_thread.daemon = True
             self.server_thread.start()
 
-            print(f"BlenderMCP server started on {self.host}:{self.port}")
+            logger.info(f"BlenderMCP server started on {self.host}:{self.port}")
+            metrics.inc("server_start")
         except Exception as e:
-            print(f"Failed to start server: {str(e)}")
+            logger.error(f"Failed to start server: {str(e)}")
+            metrics.inc("server_start_error")
             self.stop()
 
     def stop(self):
         """Stop the MCP server and cleanup resources."""
+        import logging
+        logger = logging.getLogger("BlenderMCPServer")
         self.running = False
 
         # Close socket
@@ -58,7 +66,7 @@ class BlenderMCPServer:
             try:
                 self.socket.close()
             except Exception as e:
-                print(f"Error closing socket: {e}")
+                logger.error(f"Error closing socket: {e}")
             self.socket = None
 
         # Wait for thread to finish
@@ -67,14 +75,16 @@ class BlenderMCPServer:
                 if self.server_thread.is_alive():
                     self.server_thread.join(timeout=1.0)
             except Exception as e:
-                print(f"Error joining thread: {e}")
+                logger.error(f"Error joining thread: {e}")
             self.server_thread = None
 
-        print("BlenderMCP server stopped")
+        logger.info("BlenderMCP server stopped")
 
     def _server_loop(self):
         """Main server loop in a separate thread."""
-        print("Server thread started")
+        import logging
+        logger = logging.getLogger("BlenderMCPServer")
+        logger.info("Server thread started")
         self.socket.settimeout(1.0)  # Timeout to allow for stopping
 
         while self.running:
@@ -82,7 +92,8 @@ class BlenderMCPServer:
                 # Accept new connection
                 try:
                     client, address = self.socket.accept()
-                    print(f"Connected to client: {address}")
+                    logger.info(f"Connected to client: {address}")
+                    metrics.inc("client_connected")
 
                     # Handle client in a separate thread
                     client_thread = threading.Thread(
@@ -95,29 +106,35 @@ class BlenderMCPServer:
                     # Just check running condition
                     continue
                 except Exception as e:
-                    print(f"Error accepting connection: {str(e)}")
+                    logger.error(f"Error accepting connection: {str(e)}")
+                    metrics.inc("accept_error")
                     time.sleep(0.5)
             except Exception as e:
-                print(f"Error in server loop: {str(e)}")
+                logger.error(f"Error in server loop: {str(e)}")
+                metrics.inc("server_loop_error")
                 if not self.running:
                     break
                 time.sleep(0.5)
 
-        print("Server thread stopped")
+        logger.info("Server thread stopped")
 
     def _handle_client(self, client):
         """Handle connected client."""
-        print("Client handler started")
+        import logging
+        logger = logging.getLogger("BlenderMCPServer")
+        logger.info("Client handler started")
         client.settimeout(None)  # No timeout
         buffer = b''
 
         try:
+            t0 = time.time()
             while self.running:
                 # Receive data
                 try:
                     data = client.recv(8192)
                     if not data:
-                        print("Client disconnected")
+                        logger.info("Client disconnected")
+                        metrics.inc("client_disconnected")
                         break
 
                     buffer += data
@@ -133,11 +150,14 @@ class BlenderMCPServer:
                                 response_json = json.dumps(response)
                                 try:
                                     client.sendall(response_json.encode('utf-8'))
+                                    metrics.inc("response_sent")
                                 except Exception as e:
                                     print(f"Failed to send response - client disconnected: {e}")
+                                    metrics.inc("response_send_error")
                             except Exception as e:
                                 print(f"Error executing command: {str(e)}")
                                 traceback.print_exc()
+                                metrics.inc("command_executor_error")
                                 try:
                                     error_response = {
                                         "status": "error",
@@ -146,6 +166,7 @@ class BlenderMCPServer:
                                     client.sendall(json.dumps(error_response).encode('utf-8'))
                                 except Exception as e:
                                     print(f"Failed to send error response: {e}")
+                                    metrics.inc("response_send_error")
                             return None
 
                         # Schedule execution in main thread
@@ -155,9 +176,13 @@ class BlenderMCPServer:
                         pass
                 except Exception as e:
                     print(f"Error receiving data: {str(e)}")
+                    metrics.inc("client_handler_error")
                     break
         except Exception as e:
             print(f"Error in client handler: {str(e)}")
+            metrics.inc("client_handler_error")
+        finally:
+            metrics.observe("client_handler_duration", time.time() - t0)
         finally:
             try:
                 client.close()
