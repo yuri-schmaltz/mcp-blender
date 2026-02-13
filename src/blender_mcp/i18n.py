@@ -3,7 +3,6 @@
 import json
 import os
 from pathlib import Path
-from typing import Optional
 
 
 class I18n:
@@ -16,7 +15,7 @@ class I18n:
     SUPPORTED_LOCALES = ["en", "pt_BR"]
     DEFAULT_LOCALE = "en"
 
-    def __init__(self, locale: Optional[str] = None):
+    def __init__(self, locale: str | None = None):
         """Initialize i18n system.
 
         Args:
@@ -65,7 +64,7 @@ class I18n:
     def _load_json(self, filepath: Path) -> dict:
         """Load translation JSON file."""
         try:
-            with open(filepath, "r", encoding="utf-8") as f:
+            with open(filepath, encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
             print(f"Error loading translation file {filepath}: {e}")
@@ -118,7 +117,7 @@ class I18n:
 
 
 # Global i18n instance
-_i18n_instance: Optional[I18n] = None
+_i18n_instance: I18n | None = None
 
 
 def get_i18n() -> I18n:

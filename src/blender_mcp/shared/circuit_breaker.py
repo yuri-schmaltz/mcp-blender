@@ -1,8 +1,9 @@
 """Circuit breaker pattern for external API calls (MP-04)."""
 
 import time
+from collections.abc import Callable
 from enum import Enum
-from typing import Any, Callable, Optional
+from typing import Any
 
 
 class CircuitState(Enum):
@@ -51,7 +52,7 @@ class CircuitBreaker:
 
         self.failure_count = 0
         self.success_count = 0
-        self.last_failure_time: Optional[float] = None
+        self.last_failure_time: float | None = None
         self.state = CircuitState.CLOSED
 
     def call(self, func: Callable[[], Any]) -> Any:
@@ -84,7 +85,7 @@ class CircuitBreaker:
             result = func()
             self._on_success()
             return result
-        except Exception as e:
+        except Exception:
             self._on_failure()
             raise
 

@@ -3,7 +3,6 @@
 import os
 import re
 from pathlib import Path
-from typing import Union
 
 
 class ValidationError(ValueError):
@@ -12,7 +11,7 @@ class ValidationError(ValueError):
     pass
 
 
-def validate_port(port: Union[int, str]) -> int:
+def validate_port(port: int | str) -> int:
     """Validate port number is in acceptable range.
 
     Args:
@@ -135,7 +134,7 @@ def secure_filename(filename: str) -> str:
     return safe_name
 
 
-def validate_file_path(path: Union[str, Path], must_exist: bool = True) -> Path:
+def validate_file_path(path: str | Path, must_exist: bool = True) -> Path:
     """Validate file path is safe and optionally exists.
 
     Args:

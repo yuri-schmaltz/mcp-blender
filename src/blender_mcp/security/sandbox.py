@@ -14,10 +14,9 @@ Checklist de segurança (mínimo):
 
 import logging
 import signal
-import time
 from collections import deque
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +69,7 @@ class RateLimiter:
 _rate_limiter = RateLimiter(max_calls=10, window_seconds=60)
 
 
-def create_safe_namespace(allowed_modules: Optional[List[str]] = None) -> Dict[str, Any]:
+def create_safe_namespace(allowed_modules: list[str] | None = None) -> dict[str, Any]:
     """Create a restricted namespace for code execution.
 
     Args:
@@ -170,9 +169,9 @@ def validate_code(code: str) -> None:
 def execute_code_safe(
     code: str,
     timeout: int = 5,
-    allowed_modules: Optional[List[str]] = None,
+    allowed_modules: list[str] | None = None,
     check_rate_limit: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Execute Python code in a sandboxed environment.
 
     Args:

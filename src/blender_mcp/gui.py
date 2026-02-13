@@ -8,7 +8,6 @@ import socket
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict
 
 from PySide6.QtWidgets import (
     QApplication,
@@ -25,7 +24,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from blender_mcp.i18n import _, get_i18n
+from blender_mcp.i18n import _
 from blender_mcp.logging_config import (
     DEFAULT_HANDLER,
     DEFAULT_LOG_FORMAT,
@@ -56,7 +55,7 @@ class MCPConfig:
     log_file: str = os.getenv("BLENDER_MCP_LOG_FILE", "blender_mcp.log")
 
     @classmethod
-    def from_environment(cls) -> "MCPConfig":
+    def from_environment(cls) -> MCPConfig:
         """Create a config object populated from environment variables."""
 
         return cls(
@@ -68,7 +67,7 @@ class MCPConfig:
             log_file=os.getenv("BLENDER_MCP_LOG_FILE", "blender_mcp.log"),
         )
 
-    def to_environment(self) -> Dict[str, str]:
+    def to_environment(self) -> dict[str, str]:
         """Return a mapping of environment variables for the current settings."""
 
         return {
@@ -81,13 +80,13 @@ class MCPConfig:
         }
 
 
-def _load_env_file() -> Dict[str, str]:
+def _load_env_file() -> dict[str, str]:
     """Load persisted configuration from the user's env file."""
 
     if not ENV_FILE.exists():
         return {}
 
-    values: Dict[str, str] = {}
+    values: dict[str, str] = {}
     try:
         for line in ENV_FILE.read_text().splitlines():
             if not line or line.strip().startswith("#") or "=" not in line:
@@ -102,7 +101,7 @@ def _load_env_file() -> Dict[str, str]:
     return values
 
 
-def _save_env_file(env: Dict[str, str]) -> None:
+def _save_env_file(env: dict[str, str]) -> None:
     """Persist the current environment mapping to the user's env file."""
 
     try:
