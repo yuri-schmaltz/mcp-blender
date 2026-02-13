@@ -1,0 +1,15 @@
+schema_version = "1.0.0"
+id = "mcp_blender"
+version = "1.3.1"
+name = "Blender MCP"
+tagline = "Connect Blender to local LLM clients through MCP"
+maintainer = "BlenderMCP"
+type = "add-on"
+
+website = "https://github.com/yuri-schmaltz/mcp-blender"
+tags = ["3D View", "Pipeline"]
+blender_version_min = "4.2.0"
+license = ["SPDX:MIT"]
+
+[permissions]
+network = "Connects to local MCP client/server and external asset providers when enabled."
