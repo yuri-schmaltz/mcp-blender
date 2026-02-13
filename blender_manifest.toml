@@ -1,6 +1,6 @@
 schema_version = "1.0.0"
 id = "mcp_blender"
-version = "1.3.4"
+version = "1.3.5"
 name = "Blender MCP"
 tagline = "Connect Blender to local LLM clients through MCP"
 maintainer = "BlenderMCP"
