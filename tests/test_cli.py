@@ -1,4 +1,5 @@
 import importlib.util
+import socket
 from pathlib import Path
 
 import pytest
@@ -77,3 +78,41 @@ def test_cli_print_client_config_exits_without_starting_server(monkeypatch, caps
     assert '"mcpServers"' in output
     assert '"command": "uv"' in output
     assert '"blender-mcp"' in output
+
+
+def test_cli_doctor_success_exits_without_starting_server(monkeypatch, capsys):
+    monkeypatch.setattr(cli, "configure_logging", lambda **_: None)
+    monkeypatch.setattr(server, "main", lambda **_: pytest.fail("server.main should not run"))
+
+    class DummyConn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr(socket, "create_connection", lambda *args, **kwargs: DummyConn())
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["--doctor", "--host", "localhost", "--port", "9876"])
+
+    output = capsys.readouterr().out
+    assert exc.value.code == 0
+    assert "basic diagnostics passed" in output
+
+
+def test_cli_doctor_failure_returns_non_zero(monkeypatch, capsys):
+    monkeypatch.setattr(cli, "configure_logging", lambda **_: None)
+    monkeypatch.setattr(server, "main", lambda **_: pytest.fail("server.main should not run"))
+    monkeypatch.setattr(
+        socket,
+        "create_connection",
+        lambda *args, **kwargs: (_ for _ in ()).throw(OSError("connection refused")),
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["--doctor", "--host", "localhost", "--port", "9876"])
+
+    output = capsys.readouterr().out
+    assert exc.value.code == 1
+    assert "cannot connect to Blender addon" in output

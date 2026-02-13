@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import socket
 
 from blender_mcp.logging_config import (
     DEFAULT_LOG_FORMAT,
@@ -48,6 +49,11 @@ def _build_parser() -> argparse.ArgumentParser:
         choices=["claude", "cursor", "ollama", "lm_studio"],
         help="Print MCP stdio config snippet for a client and exit",
     )
+    parser.add_argument(
+        "--doctor",
+        action="store_true",
+        help="Run connectivity diagnostics and exit",
+    )
     return parser
 
 
@@ -62,6 +68,26 @@ def _client_config_snippet(client: str, host: str, port: int) -> str:
     return json.dumps(payload, indent=2)
 
 
+def _run_doctor(host: str, port: int) -> int:
+    print("[doctor] blender-mcp diagnostics")
+    print(f"[doctor] target socket: {host}:{port}")
+
+    if not (1 <= int(port) <= 65535):
+        print("[doctor] FAIL: port out of valid range (1-65535)")
+        return 1
+
+    try:
+        with socket.create_connection((host, port), timeout=2):
+            print("[doctor] OK: TCP connection to Blender addon succeeded")
+    except OSError as exc:
+        print(f"[doctor] FAIL: cannot connect to Blender addon: {exc}")
+        print("[doctor] Hint: In Blender, click 'Connect to MCP server' and confirm host/port.")
+        return 1
+
+    print("[doctor] OK: basic diagnostics passed")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> None:
     """Entry point for the blender-mcp package."""
     parser = _build_parser()
@@ -74,6 +100,8 @@ def main(argv: list[str] | None = None) -> None:
     if args.print_client_config:
         print(_client_config_snippet(args.print_client_config, args.host, args.port))
         return
+    if args.doctor:
+        raise SystemExit(_run_doctor(args.host, args.port))
 
     # Import lazily so logging is configured before server module side effects
     from blender_mcp import server
