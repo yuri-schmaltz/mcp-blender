@@ -53,7 +53,7 @@ except ImportError:
 bl_info = {
     "name": "Blender MCP",
     "author": "BlenderMCP",
-    "version": (1, 3, 1),
+    "version": (1, 3, 4),
     "blender": (3, 0, 0),
     "location": "View3D > Sidebar > BlenderMCP",
     "description": "Connect Blender to local LLM clients via MCP",
@@ -171,6 +171,43 @@ def _run_command(command: list[str], cwd: str) -> tuple[int, str]:
     err = (completed.stderr or "").strip()
     combined = "\n".join(part for part in [output, err] if part)
     return completed.returncode, combined
+
+
+def _uv_command_prefixes() -> list[list[str]]:
+    """Return candidate command prefixes to invoke uv across environments."""
+    candidates = [["uv"], [sys.executable, "-m", "uv"]]
+    if os.name == "nt":
+        candidates.append(["py", "-m", "uv"])
+    return candidates
+
+
+def _resolve_uv_command(cwd: str) -> list[str] | None:
+    """Find a working uv command prefix or return None."""
+    for prefix in _uv_command_prefixes():
+        code, _ = _run_command([*prefix, "--version"], cwd=cwd)
+        if code == 0:
+            return prefix
+    return None
+
+
+def _ensure_pip(cwd: str) -> tuple[bool, str]:
+    """Ensure pip is available in current Python runtime."""
+    code, out = _run_command([sys.executable, "-m", "pip", "--version"], cwd=cwd)
+    if code == 0:
+        return True, out
+    code, out = _run_command([sys.executable, "-m", "ensurepip", "--upgrade"], cwd=cwd)
+    if code != 0:
+        return False, out
+    code, out = _run_command([sys.executable, "-m", "pip", "--version"], cwd=cwd)
+    return code == 0, out
+
+
+def _install_runtime_dependencies_with_pip(cwd: str) -> tuple[int, str]:
+    """Install minimal runtime deps when repo metadata is not available."""
+    ok, out = _ensure_pip(cwd)
+    if not ok:
+        return 1, f"pip unavailable: {out}"
+    return _run_command([sys.executable, "-m", "pip", "install", "--upgrade", "requests>=2.25.0"], cwd=cwd)
 
 
 def _mcp_client_config_snippet(client: str, host: str, port: int) -> str:
@@ -1611,30 +1648,49 @@ class BLENDERMCP_OT_StartServer(bpy.types.Operator):
 class BLENDERMCP_OT_InstallDependencies(bpy.types.Operator):
     bl_idname = "blendermcp.install_dependencies"
     bl_label = "Check/Install Dependencies"
-    bl_description = "Run uv sync --extra gui --extra test in project root"
+    bl_description = "Install dependencies via uv sync (repo) or pip fallback (installed addon)"
 
     def execute(self, context):
         root = _project_root()
-        code, output = _run_command(["uv", "--version"], cwd=root)
-        if code != 0:
-            self.report(
-                {"ERROR"},
-                "uv not found in PATH. Install uv first, then try again.",
+        pyproject_path = os.path.join(root, "pyproject.toml")
+
+        if os.path.exists(pyproject_path):
+            uv_prefix = _resolve_uv_command(root)
+            if uv_prefix is None:
+                self.report(
+                    {"ERROR"},
+                    "uv not found. Install uv or run from a shell where uv is available.",
+                )
+                _update_action_status(context.scene, "Check/Install Dependencies", False, "uv not found")
+                return {"CANCELLED"}
+
+            code, output = _run_command(
+                [*uv_prefix, "sync", "--extra", "gui", "--extra", "test"],
+                cwd=root,
             )
-            _update_action_status(context.scene, "Check/Install Dependencies", False, "uv not found")
-            return {"CANCELLED"}
+            if code != 0:
+                self.report({"ERROR"}, "Dependency sync failed. See Blender console for details.")
+                if output:
+                    print("[blender-mcp] uv sync output:")
+                    print(output)
+                _update_action_status(context.scene, "Check/Install Dependencies", False, "uv sync failed")
+                return {"CANCELLED"}
 
-        code, output = _run_command(["uv", "sync", "--extra", "gui", "--extra", "test"], cwd=root)
+            self.report({"INFO"}, "Dependencies are ready (uv sync completed).")
+            _update_action_status(context.scene, "Check/Install Dependencies", True, "uv sync completed")
+            return {"FINISHED"}
+
+        code, output = _install_runtime_dependencies_with_pip(root)
         if code != 0:
-            self.report({"ERROR"}, "Dependency sync failed. See Blender console for details.")
+            self.report({"ERROR"}, "Fallback install failed. See Blender console for details.")
             if output:
-                print("[blender-mcp] uv sync output:")
+                print("[blender-mcp] pip install output:")
                 print(output)
-            _update_action_status(context.scene, "Check/Install Dependencies", False, "uv sync failed")
+            _update_action_status(context.scene, "Check/Install Dependencies", False, "pip fallback failed")
             return {"CANCELLED"}
 
-        self.report({"INFO"}, "Dependencies are ready (uv sync completed).")
-        _update_action_status(context.scene, "Check/Install Dependencies", True, "uv sync completed")
+        self.report({"INFO"}, "Runtime dependencies installed via Blender Python (pip).")
+        _update_action_status(context.scene, "Check/Install Dependencies", True, "pip fallback completed")
         return {"FINISHED"}
 
 
@@ -1647,16 +1703,25 @@ class BLENDERMCP_OT_RunMCPServerTerminal(bpy.types.Operator):
         port = int(context.scene.blendermcp_port)
         root = _project_root()
         host = "localhost"
+        uv_prefix = _resolve_uv_command(root)
+        if uv_prefix is None:
+            self.report({"ERROR"}, "uv not found. Install uv first.")
+            _update_action_status(context.scene, "Run MCP Server in Terminal", False, "uv not found")
+            return {"CANCELLED"}
 
         try:
             if os.name == "nt":
-                cmd = (
-                    f'cd /d "{root}" && uv run blender-mcp --host {host} --port {port}'
-                )
+                if uv_prefix[0] == "uv":
+                    run_part = f'uv run blender-mcp --host {host} --port {port}'
+                else:
+                    run_part = (
+                        f'"{uv_prefix[0]}" -m uv run blender-mcp --host {host} --port {port}'
+                    )
+                cmd = f'cd /d "{root}" && {run_part}'
                 subprocess.Popen(["cmd", "/c", "start", "cmd", "/k", cmd])
             else:
                 subprocess.Popen(
-                    ["uv", "run", "blender-mcp", "--host", host, "--port", str(port)],
+                    [*uv_prefix, "run", "blender-mcp", "--host", host, "--port", str(port)],
                     cwd=root,
                 )
         except Exception as exc:
@@ -1692,14 +1757,14 @@ class BLENDERMCP_OT_HealthCheck(bpy.types.Operator):
     def execute(self, context):
         root = _project_root()
         port = int(context.scene.blendermcp_port)
-        code, _ = _run_command(["uv", "--version"], cwd=root)
-        if code != 0:
+        uv_prefix = _resolve_uv_command(root)
+        if uv_prefix is None:
             self.report({"ERROR"}, "uv not found in PATH.")
             _update_action_status(context.scene, "Health Check", False, "uv not found")
             return {"CANCELLED"}
 
         code, output = _run_command(
-            ["uv", "run", "blender-mcp", "--doctor", "--host", "localhost", "--port", str(port)],
+            [*uv_prefix, "run", "blender-mcp", "--doctor", "--host", "localhost", "--port", str(port)],
             cwd=root,
         )
         if output:
