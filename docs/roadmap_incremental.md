@@ -1,5 +1,10 @@
 # roadmap_incremental.md - Roadmap visual e técnico
 
+## Marco atual
+- Marco 01 concluído: ver `docs/MARCO_01_AUDITORIA.md`
+- Marcos 02-04 concluídos: ver `docs/MARCOS_02_04_CONCLUSAO.md`
+- Fase adicional concluída: CI Windows com smoke E2E Blender (`windows-blender-e2e`)
+
 ## Onda 1: Baseline e acessibilidade
 - Instrumentação de métricas/logs
 - Tokens e checklist de acessibilidade aplicados

@@ -263,3 +263,34 @@ def test_send_command_retries_after_timeout_and_reconnects(stub_socket):
 
     assert result == {"pong": True}
     assert recovering.connect_calls == 1
+
+
+def test_get_mcp_diagnostics_reports_unreachable_connection(monkeypatch):
+    monkeypatch.setattr(
+        server,
+        "get_blender_connection",
+        lambda: (_ for _ in ()).throw(Exception("connection down")),
+    )
+
+    result = server.get_mcp_diagnostics(ctx=None)
+    payload = json.loads(result)
+
+    assert payload["connection"]["reachable"] is False
+    assert "connection down" in payload["connection"]["error"]
+    assert "perf_metrics" in payload
+
+
+def test_get_mcp_diagnostics_reports_scene_probe(monkeypatch):
+    mock_blender = MagicMock()
+    mock_blender.send_command.return_value = {
+        "name": "Scene",
+        "object_count": 3,
+        "materials_count": 1,
+    }
+    monkeypatch.setattr(server, "get_blender_connection", lambda: mock_blender)
+
+    result = server.get_mcp_diagnostics(ctx=None)
+    payload = json.loads(result)
+
+    assert payload["connection"]["reachable"] is True
+    assert payload["scene_probe"]["object_count"] == 3

@@ -130,7 +130,9 @@ class ConfigWindow(QWidget):
 
         # Host field with inline validation
         self.host_edit = QLineEdit(self.config.host)
+        self.host_edit.setAccessibleName("blender_host_input")
         self.host_edit.textChanged.connect(self._validate_host_field)
+        self.host_edit.textChanged.connect(lambda _text: self._refresh_summary())
         form.addRow(_("host_label"), self.host_edit)
         self.host_error_label = QLabel("")
         self.host_error_label.setStyleSheet("color: #d32f2f; font-size: 11px;")
@@ -138,22 +140,28 @@ class ConfigWindow(QWidget):
 
         # Port field (already validated by QSpinBox range)
         self.port_spin = QSpinBox()
+        self.port_spin.setAccessibleName("blender_port_input")
         self.port_spin.setRange(1, 65535)
         self.port_spin.setValue(self.config.port)
+        self.port_spin.valueChanged.connect(lambda _value: self._refresh_summary())
         form.addRow(_("port_label"), self.port_spin)
 
         # Log level (validated by combo box)
         self.level_combo = QComboBox()
+        self.level_combo.setAccessibleName("log_level_select")
         self.level_combo.addItems(VALID_LEVELS)
         current_level = self.config.log_level.upper()
         index = self.level_combo.findText(current_level)
         if index >= 0:
             self.level_combo.setCurrentIndex(index)
+        self.level_combo.currentTextChanged.connect(lambda _text: self._refresh_summary())
         form.addRow(_("log_level_label"), self.level_combo)
 
         # Format field with inline validation
         self.format_edit = QLineEdit(self.config.log_format)
+        self.format_edit.setAccessibleName("log_format_input")
         self.format_edit.textChanged.connect(self._validate_format_field)
+        self.format_edit.textChanged.connect(lambda _text: self._refresh_summary())
         form.addRow(_("log_format_label"), self.format_edit)
         self.format_error_label = QLabel("")
         self.format_error_label.setStyleSheet("color: #d32f2f; font-size: 11px;")
@@ -161,17 +169,23 @@ class ConfigWindow(QWidget):
 
         # Handler (validated by combo box)
         self.handler_combo = QComboBox()
-        self.handler_combo.addItems([_("console"), _("file")])
-        handler_index = self.handler_combo.findText(self.config.log_handler.lower())
+        self.handler_combo.setAccessibleName("log_handler_select")
+        self.handler_combo.addItem(_("console"), "console")
+        self.handler_combo.addItem(_("file"), "file")
+        handler_index = self.handler_combo.findData(self.config.log_handler.lower())
         if handler_index >= 0:
             self.handler_combo.setCurrentIndex(handler_index)
+        self.handler_combo.currentIndexChanged.connect(lambda _index: self._refresh_summary())
         form.addRow(_("log_destination_label"), self.handler_combo)
 
         # Log file field with inline validation
         file_row = QHBoxLayout()
         self.log_file_edit = QLineEdit(self.config.log_file)
+        self.log_file_edit.setAccessibleName("log_file_input")
         self.log_file_edit.textChanged.connect(self._validate_file_field)
+        self.log_file_edit.textChanged.connect(lambda _text: self._refresh_summary())
         browse_button = QPushButton(_("browse_button"))
+        browse_button.setAccessibleName("log_file_browse_button")
         browse_button.clicked.connect(self._browse_log_file)
         file_row.addWidget(self.log_file_edit)
         file_row.addWidget(browse_button)
@@ -184,10 +198,13 @@ class ConfigWindow(QWidget):
 
         buttons = QHBoxLayout()
         self.apply_button = QPushButton(_("apply_button"))
+        self.apply_button.setAccessibleName("apply_config_button")
         self.apply_button.clicked.connect(self._apply_changes)
         self.test_connection_button = QPushButton(_("test_connection_button"))
+        self.test_connection_button.setAccessibleName("test_connection_button")
         self.test_connection_button.clicked.connect(self._test_connection)
         reset_button = QPushButton(_("reset_defaults_button"))
+        reset_button.setAccessibleName("reset_defaults_button")
         reset_button.clicked.connect(self._reset_defaults)
         buttons.addWidget(self.apply_button)
         buttons.addWidget(self.test_connection_button)
@@ -300,7 +317,9 @@ class ConfigWindow(QWidget):
         self.port_spin.setValue(self.config.port)
         self.level_combo.setCurrentText(self.config.log_level)
         self.format_edit.setText(self.config.log_format)
-        self.handler_combo.setCurrentText(self.config.log_handler)
+        handler_index = self.handler_combo.findData(self.config.log_handler)
+        if handler_index >= 0:
+            self.handler_combo.setCurrentIndex(handler_index)
         self.log_file_edit.setText(self.config.log_file)
         self._refresh_summary()
         _save_env_file(self.config.to_environment())
@@ -320,7 +339,11 @@ class ConfigWindow(QWidget):
         self.config.port = int(self.port_spin.value())
         self.config.log_level = self.level_combo.currentText().upper()
         self.config.log_format = log_format or (DEFAULT_LOG_FORMAT if allow_defaults else "")
-        self.config.log_handler = self.handler_combo.currentText()
+        selected_handler = self.handler_combo.currentData()
+        if selected_handler:
+            self.config.log_handler = str(selected_handler)
+        else:
+            self.config.log_handler = self.handler_combo.currentText().strip().lower()
         self.config.log_file = log_file or ("blender_mcp.log" if allow_defaults else "")
 
     def _validate_inputs(self) -> tuple[bool, str]:
@@ -402,6 +425,11 @@ def launch_gui() -> None:
     window.resize(640, 420)
     window.show()
     app.exec()
+
+
+def main() -> None:
+    """Entrypoint used by console script `blender-mcp-gui`."""
+    launch_gui()
 
 
 if __name__ == "__main__":
