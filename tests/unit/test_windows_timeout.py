@@ -34,16 +34,16 @@ time.sleep(10)  # Sleep longer than timeout
         assert "1s timeout" in str(exc_info.value)
 
     def test_timeout_on_all_platforms(self):
-        """Test that timeout works on all platforms"""
+        """Sandbox should block forbidden modules consistently across platforms."""
         code = """
 import time
 time.sleep(10)  # Sleep longer than timeout
 """
 
-        with pytest.raises(TimeoutError) as exc_info:
+        with pytest.raises(SecurityError) as exc_info:
             execute_code_safe(code, timeout=1, check_rate_limit=False)
 
-        assert "exceeded" in str(exc_info.value).lower()
+        assert "forbidden" in str(exc_info.value).lower()
 
     def test_no_timeout_when_fast(self):
         """Test that fast code doesn't trigger timeout"""

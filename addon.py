@@ -4,10 +4,8 @@ import io
 import json
 import os
 import shutil
-import socket
 import sys
 import tempfile
-import threading
 import time
 import traceback
 import zipfile
@@ -16,7 +14,9 @@ from contextlib import redirect_stdout, suppress
 import bpy
 import mathutils
 import requests
-from bpy.props import BoolProperty, EnumProperty, IntProperty, StringProperty
+from bpy.props import IntProperty
+
+from addon.server import BlenderMCPServer as SocketBlenderMCPServer
 
 # Import progress tracking for MP-02
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
@@ -41,11 +41,8 @@ bl_info = {
     "category": "Interface",
 }
 
-# Free trial key can be set via environment variable for security
-# If not set, addon will prompt user to configure it manually
-RODIN_FREE_TRIAL_KEY = os.getenv(
-    "RODIN_FREE_TRIAL_KEY", "k9TcfFoEhNd9cCPP2guHAHHHkctZHIRhZDywZ1euGUXwihbYLpOjQhofby80NJez"
-)
+# Free trial key is loaded only from environment to avoid hardcoded credentials.
+RODIN_FREE_TRIAL_KEY = os.getenv("RODIN_FREE_TRIAL_KEY")
 
 # Add User-Agent as required by Poly Haven API
 REQ_HEADERS = requests.utils.default_headers()
@@ -69,7 +66,7 @@ class AssetCache:
         import hashlib
 
         cache_key = f"{asset_id}_{asset_type}_{resolution}"
-        cache_hash = hashlib.md5(cache_key.encode()).hexdigest()
+        cache_hash = hashlib.sha256(cache_key.encode("utf-8")).hexdigest()
         return os.path.join(self.cache_dir, f"{cache_hash}.cache")
 
     def get(self, asset_id: str, asset_type: str, resolution: str = "") -> str | None:
@@ -84,7 +81,7 @@ class AssetCache:
         if file_age > self.ttl_seconds:
             try:
                 os.remove(cache_path)
-            except:
+            except OSError:
                 pass
             return None
 
@@ -124,7 +121,7 @@ class AssetCache:
                 if os.path.isfile(filepath):
                     total_size += os.path.getsize(filepath)
                     file_count += 1
-        except:
+        except OSError:
             pass
         return total_size, file_count
 
@@ -133,156 +130,10 @@ class AssetCache:
 _asset_cache = AssetCache()
 
 
-class BlenderMCPServer:
+class BlenderMCPServer(SocketBlenderMCPServer):
     def __init__(self, host="localhost", port=9876):
-        self.host = host
-        self.port = port
-        self.running = False
-        self.socket = None
-        self.server_thread = None
-
-    def start(self):
-        if self.running:
-            print("Server is already running")
-            return
-
-        self.running = True
-
-        try:
-            # Create socket
-            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            self.socket.bind((self.host, self.port))
-            self.socket.listen(1)
-
-            # Start server thread
-            self.server_thread = threading.Thread(target=self._server_loop)
-            self.server_thread.daemon = True
-            self.server_thread.start()
-
-            print(f"BlenderMCP server started on {self.host}:{self.port}")
-        except Exception as e:
-            print(f"Failed to start server: {str(e)}")
-            self.stop()
-
-    def stop(self):
-        self.running = False
-
-        # Close socket
-        if self.socket:
-            try:
-                self.socket.close()
-            except:
-                pass
-            self.socket = None
-
-        # Wait for thread to finish
-        if self.server_thread:
-            try:
-                if self.server_thread.is_alive():
-                    self.server_thread.join(timeout=1.0)
-            except:
-                pass
-            self.server_thread = None
-
-        print("BlenderMCP server stopped")
-
-    def _server_loop(self):
-        """Main server loop in a separate thread"""
-        print("Server thread started")
-        self.socket.settimeout(1.0)  # Timeout to allow for stopping
-
-        while self.running:
-            try:
-                # Accept new connection
-                try:
-                    client, address = self.socket.accept()
-                    print(f"Connected to client: {address}")
-
-                    # Handle client in a separate thread
-                    client_thread = threading.Thread(target=self._handle_client, args=(client,))
-                    client_thread.daemon = True
-                    client_thread.start()
-                except socket.timeout:
-                    # Just check running condition
-                    continue
-                except Exception as e:
-                    print(f"Error accepting connection: {str(e)}")
-                    time.sleep(0.5)
-            except Exception as e:
-                print(f"Error in server loop: {str(e)}")
-                if not self.running:
-                    break
-                time.sleep(0.5)
-
-        print("Server thread stopped")
-
-    def _handle_client(self, client):
-        """Handle connected client"""
-        print("Client handler started")
-        client.settimeout(None)  # No timeout
-        buffer = b""
-
-        try:
-            while self.running:
-                # Receive data
-                try:
-                    data = client.recv(8192)
-                    if not data:
-                        print("Client disconnected")
-                        break
-
-                    buffer += data
-                    try:
-                        # Try to parse command
-                        command = json.loads(buffer.decode("utf-8"))
-                        buffer = b""
-
-                        # Execute command in Blender's main thread
-                        def execute_wrapper():
-                            try:
-                                response = self.execute_command(command)
-                                response_json = json.dumps(response)
-                                try:
-                                    client.sendall(response_json.encode("utf-8"))
-                                except:
-                                    print("Failed to send response - client disconnected")
-                            except Exception as e:
-                                print(f"Error executing command: {str(e)}")
-                                traceback.print_exc()
-                                try:
-                                    error_response = {"status": "error", "message": str(e)}
-                                    client.sendall(json.dumps(error_response).encode("utf-8"))
-                                except:
-                                    pass
-                            return None
-
-                        # Schedule execution in main thread
-                        bpy.app.timers.register(execute_wrapper, first_interval=0.0)
-                    except json.JSONDecodeError:
-                        # Incomplete data, wait for more
-                        pass
-                except Exception as e:
-                    print(f"Error receiving data: {str(e)}")
-                    break
-        except Exception as e:
-            print(f"Error in client handler: {str(e)}")
-        finally:
-            try:
-                client.close()
-            except:
-                pass
-            print("Client handler stopped")
-
-    def execute_command(self, command):
-        """Execute a command in the main Blender thread"""
-        try:
-            return self._execute_command_internal(command)
-
-        except Exception as e:
-            print(f"Error executing command: {str(e)}")
-            traceback.print_exc()
-            return {"status": "error", "message": str(e)}
+        super().__init__(host=host, port=port)
+        self.command_executor = self._execute_command_internal
 
     def _execute_command_internal(self, command):
         """Internal command execution with proper context"""
@@ -336,7 +187,7 @@ class BlenderMCPServer:
             try:
                 print(f"Executing handler for {cmd_type}")
                 result = handler(**params)
-                print(f"Handler execution complete")
+                print("Handler execution complete")
                 return {"status": "success", "result": result}
             except Exception as e:
                 print(f"Error in handler: {str(e)}")
@@ -649,7 +500,7 @@ class BlenderMCPServer:
                             # Try to use Linear color space for EXR files
                             try:
                                 env_tex.image.colorspace_settings.name = "Linear"
-                            except:
+                            except Exception:
                                 # Fallback to Non-Color if Linear isn't available
                                 env_tex.image.colorspace_settings.name = "Non-Color"
                         else:  # hdr
@@ -658,7 +509,7 @@ class BlenderMCPServer:
                                 try:
                                     env_tex.image.colorspace_settings.name = color_space
                                     break  # Stop if we successfully set a color space
-                                except:
+                                except Exception:
                                     continue
 
                         background = node_tree.nodes.new(type="ShaderNodeBackground")
@@ -697,7 +548,7 @@ class BlenderMCPServer:
                                 f"Warning: Failed to cleanup temp file {tmp_path}: {cleanup_error}"
                             )
                 else:
-                    return {"error": f"Requested resolution or format not available for this HDRI"}
+                    return {"error": "Requested resolution or format not available for this HDRI"}
 
             elif asset_type == "textures":
                 if not file_format:
@@ -766,12 +617,12 @@ class BlenderMCPServer:
                                         if map_type in ["color", "diffuse", "albedo"]:
                                             try:
                                                 image.colorspace_settings.name = "sRGB"
-                                            except:
+                                            except Exception:
                                                 pass
                                         else:
                                             try:
                                                 image.colorspace_settings.name = "Non-Color"
-                                            except:
+                                            except Exception:
                                                 pass
 
                                         downloaded_maps[map_type] = image
@@ -787,7 +638,7 @@ class BlenderMCPServer:
 
                     if not downloaded_maps:
                         return {
-                            "error": f"No texture maps found for the requested resolution and format"
+                            "error": "No texture maps found for the requested resolution and format"
                         }
 
                     # Create a new material with the downloaded textures
@@ -832,12 +683,12 @@ class BlenderMCPServer:
                         if map_type.lower() in ["color", "diffuse", "albedo"]:
                             try:
                                 tex_node.image.colorspace_settings.name = "sRGB"
-                            except:
+                            except Exception:
                                 pass  # Use default if sRGB not available
                         else:
                             try:
                                 tex_node.image.colorspace_settings.name = "Non-Color"
-                            except:
+                            except Exception:
                                 pass  # Use default if Non-Color not available
 
                         links.new(mapping.outputs["Vector"], tex_node.inputs["Vector"])
@@ -956,7 +807,7 @@ class BlenderMCPServer:
                         with suppress(Exception):
                             shutil.rmtree(temp_dir)
                 else:
-                    return {"error": f"Requested format or resolution not available for this model"}
+                    return {"error": "Requested format or resolution not available for this model"}
 
             else:
                 return {"error": f"Unsupported asset type: {asset_type}"}
@@ -990,12 +841,12 @@ class BlenderMCPServer:
                     if map_type.lower() in ["color", "diffuse", "albedo"]:
                         try:
                             img.colorspace_settings.name = "sRGB"
-                        except:
+                        except Exception:
                             pass
                     else:
                         try:
                             img.colorspace_settings.name = "Non-Color"
-                        except:
+                        except Exception:
                             pass
 
                     # Ensure the image is packed
@@ -1066,12 +917,12 @@ class BlenderMCPServer:
                 if map_type.lower() in ["color", "diffuse", "albedo"]:
                     try:
                         tex_node.image.colorspace_settings.name = "sRGB"
-                    except:
+                    except Exception:
                         pass  # Use default if sRGB not available
                 else:
                     try:
                         tex_node.image.colorspace_settings.name = "Non-Color"
-                    except:
+                    except Exception:
                         pass  # Use default if Non-Color not available
 
                 links.new(mapping.outputs["Vector"], tex_node.inputs["Vector"])
@@ -1337,7 +1188,7 @@ class BlenderMCPServer:
             case "FAL_AI":
                 return self.create_rodin_job_fal_ai(*args, **kwargs)
             case _:
-                return f"Error: Unknown Hyper3D Rodin mode!"
+                return "Error: Unknown Hyper3D Rodin mode!"
 
     def create_rodin_job_main_site(
         self, text_prompt: str = None, images: list[tuple[str, str]] = None, bbox_condition=None
@@ -1403,7 +1254,7 @@ class BlenderMCPServer:
             case "FAL_AI":
                 return self.poll_rodin_job_status_fal_ai(*args, **kwargs)
             case _:
-                return f"Error: Unknown Hyper3D Rodin mode!"
+                return "Error: Unknown Hyper3D Rodin mode!"
 
     def poll_rodin_job_status_main_site(self, subscription_key: str):
         """Call the job status API to get the job status"""
@@ -1496,7 +1347,7 @@ class BlenderMCPServer:
                 if mesh_obj.data.name is not None:
                     mesh_obj.data.name = mesh_name
                 print(f"Mesh renamed to: {mesh_name}")
-        except Exception as e:
+        except Exception:
             print("Having issue with renaming, give up renaming.")
 
         return mesh_obj
@@ -1508,7 +1359,7 @@ class BlenderMCPServer:
             case "FAL_AI":
                 return self.import_generated_asset_fal_ai(*args, **kwargs)
             case _:
-                return f"Error: Unknown Hyper3D Rodin mode!"
+                return "Error: Unknown Hyper3D Rodin mode!"
 
     def import_generated_asset_main_site(self, task_uuid: str, name: str):
         """Fetch the generated asset, import into blender"""
@@ -2009,6 +1860,12 @@ class BLENDERMCP_OT_SetFreeTrialHyper3DAPIKey(bpy.types.Operator):
     bl_label = "Set Free Trial API Key"
 
     def execute(self, context):
+        if not RODIN_FREE_TRIAL_KEY:
+            self.report(
+                {"ERROR"},
+                "RODIN_FREE_TRIAL_KEY not configured in environment. Set it before using this action.",
+            )
+            return {"CANCELLED"}
         context.scene.blendermcp_hyper3d_api_key = RODIN_FREE_TRIAL_KEY
         context.scene.blendermcp_hyper3d_mode = "MAIN_SITE"
         self.report({"INFO"}, "API Key set successfully!")
@@ -2202,7 +2059,7 @@ def register():
     bpy.types.Scene.blendermcp_hyper3d_api_key = bpy.props.StringProperty(
         name="Hyper3D API Key",
         subtype="PASSWORD",
-        description="Your Hyper3D API key. Click 'Set Free Trial API Key' to use the shared trial key, or provide your own key from hyper3d.ai. WARNING: Saved in .blend file in plain text.",
+        description="Your Hyper3D API key. Click 'Set Free Trial API Key' to load it from RODIN_FREE_TRIAL_KEY env var, or provide your own key from hyper3d.ai. WARNING: Saved in .blend file in plain text.",
         default="",
     )
 
@@ -2256,3 +2113,4 @@ def unregister():
 
 if __name__ == "__main__":
     register()
+
