@@ -47,7 +47,6 @@ Give feedback, get inspired, and build on top of the MCP: [Discord](https://disc
 
 ### Previously added features:
 - Support for Poly Haven assets through their API
-- Support to generate 3D models using Hyper3D Rodin
 - For newcomers, you can go straight to Installation. For existing users, see the points below
 - Download the latest addon.py file and replace the older one, then add it to Blender
 - Delete and re-add the MCP server in your preferred MCP-compatible client and you should be good to go!
@@ -325,7 +324,6 @@ Use the steps below the first time you bring everything online or when you are t
 - **Save often**: Tool calls can perform destructive actions (e.g., mass delete). Save versions or enable auto-save to protect work in progress.
 - **Prefer small, explicit requests**: Break complex prompts into steps like “create room layout” → “add lighting” → “apply materials” to get predictable results.
 - **Inspect tool calls**: Most MCP clients show a tool-call log. Use it to understand what the assistant is sending to Blender and to copy/adjust commands.
-- **Refresh Poly Haven and Hyper3D states**: Toggle the relevant checkboxes in the Blender panel if the assistant forgets to fetch assets or exceeds a quota.
 - **Run from scripts**: You can invoke `uvx blender-mcp` from your own automation (shell scripts, Makefiles, CI) as long as Blender is running with the addon enabled.
 
 ### Using with local LLM clients
@@ -341,7 +339,6 @@ Once your MCP client (LM Studio, Continue, Cursor, etc.) is configured and the a
 - Apply or create materials for objects
 - Execute any Python code in Blender
 - Download the right models, assets and HDRIs through [Poly Haven](https://polyhaven.com/)
-- AI generated 3D models through [Hyper3D Rodin](https://hyper3d.ai/)
 
 
 ### Example Commands
@@ -351,32 +348,24 @@ Here are some examples of what you can ask your local assistant to do:
 - "Create a low poly scene in a dungeon, with a dragon guarding a pot of gold" [Demo](https://www.youtube.com/watch?v=DqgKuLYUv00)
 - "Create a beach vibe using HDRIs, textures, and models like rocks and vegetation from Poly Haven" [Demo](https://www.youtube.com/watch?v=I29rn92gkC4)
 - Give a reference image, and create a Blender scene out of it [Demo](https://www.youtube.com/watch?v=FDRb03XPiRo)
-- "Generate a 3D model of a garden gnome through Hyper3D"
 - "Get information about the current scene, and make a threejs sketch from it" [Demo](https://www.youtube.com/watch?v=jxbNI5L7AH8)
 - "Make this car red and metallic" 
 - "Create a sphere and place it above the cube"
 - "Make the lighting like a studio"
 - "Point the camera at the scene, and make it isometric"
 
-## Hyper3D integration
 
-Hyper3D's free trial key allows you to generate a limited number of models per day. If the daily limit is reached, you can wait for the next day's reset or obtain your own key from hyper3d.ai and fal.ai.
 
 ### Security Note
 
-⚠️ **Important**: API keys for Hyper3D and Sketchfab are stored in plain text in your `.blend` files. Do not share your Blender files publicly if they contain your personal API keys.
 
-For enhanced security, you can set the Hyper3D free trial key via an environment variable instead of storing it in the addon code:
 
 ```bash
 # Linux/Mac
-export RODIN_FREE_TRIAL_KEY="your-key-here"
 
 # Windows PowerShell
-$env:RODIN_FREE_TRIAL_KEY="your-key-here"
 
 # Windows CMD
-set RODIN_FREE_TRIAL_KEY=your-key-here
 ```
 
 If not set, the addon will not auto-fill a free trial key.
@@ -457,7 +446,6 @@ If not set, the addon will not auto-fill a free trial key.
 2. **Complex operations**:
    - Break requests into smaller steps
    - For Poly Haven/Sketchfab downloads, larger files need more time
-   - For Hyper3D generation, poll status instead of waiting
 
 3. **Blender is busy**:
    - Ensure Blender window is responsive
@@ -483,7 +471,6 @@ If not set, the addon will not auto-fill a free trial key.
    - Sometimes AI forgets
    - Tell it: "Check PolyHaven status first" or "Enable PolyHaven checkbox in Blender"
 
-#### Hyper3D generation fails
 
 **Symptoms**: "Insufficient balance", generation errors, or timeout during generation.
 
@@ -492,7 +479,6 @@ If not set, the addon will not auto-fill a free trial key.
    - Free trial key has daily limits
    - If exceeded, you must:
      - Wait for next day (resets at midnight UTC)
-     - Get your own key from [hyper3d.ai](https://hyper3d.ai) or [fal.ai](https://fal.ai)
 
 2. **Check API mode**:
    - Addon supports two modes: MAIN_SITE and FAL_AI

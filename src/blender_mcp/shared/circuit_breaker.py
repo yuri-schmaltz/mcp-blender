@@ -146,7 +146,6 @@ class CircuitBreaker:
 # Global circuit breakers for external services
 _circuit_breakers = {
     "polyhaven": CircuitBreaker(failure_threshold=5, timeout=60, name="polyhaven"),
-    "hyper3d": CircuitBreaker(failure_threshold=3, timeout=120, name="hyper3d"),
     "sketchfab": CircuitBreaker(failure_threshold=5, timeout=60, name="sketchfab"),
 }
 

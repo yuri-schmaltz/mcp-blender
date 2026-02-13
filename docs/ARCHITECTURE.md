@@ -47,7 +47,6 @@ BlenderMCP is a Model Context Protocol (MCP) server that enables AI assistants t
 - Scene operations: `get_scene_info()`, `get_object_info()`, `get_viewport_screenshot()`
 - Code execution: `execute_code()` (sandboxed via MCP server)
 - Poly Haven: `download_polyhaven_asset()`, `set_texture()`
-- Hyper3D: `create_rodin_job()`, `poll_rodin_job_status()`, `import_generated_asset()`
 - Sketchfab: `search_sketchfab_models()`, `download_sketchfab_model()`
 
 **Communication Protocol**:
