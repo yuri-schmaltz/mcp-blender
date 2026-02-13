@@ -297,6 +297,44 @@ You can also use the new **Local Setup** buttons in the BlenderMCP panel:
 - **Check/Install Dependencies**: runs `uv sync --extra gui --extra test` in the project root.
 - **Run MCP Server in Terminal**: launches `uv run blender-mcp --host localhost --port <panel-port>` in a new terminal.
 - **Copy MCP Client Config**: copies a ready stdio config snippet (Claude Desktop, Cursor, Ollama-compatible MCP client, LM Studio) to your clipboard.
+- **Health Check**: runs `uv run blender-mcp --doctor --host localhost --port <panel-port>` and prints diagnostics in Blender console.
+- **Open Logs**: opens the active `blender_mcp.log` file (or `BLENDER_MCP_LOG_FILE`) in the OS default app.
+
+### MCP config snippets (Claude Desktop + LM Studio)
+
+Use these snippets when configuring MCP over `stdio`. Replace `localhost` and `9876` if your Blender addon is listening elsewhere.
+
+Claude Desktop (`claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "blender": {
+      "command": "uv",
+      "args": ["run", "blender-mcp", "--host", "localhost", "--port", "9876"]
+    }
+  }
+}
+```
+
+LM Studio (`mcpServers.json`):
+
+```json
+{
+  "mcpServers": {
+    "blender": {
+      "command": "uv",
+      "args": ["run", "blender-mcp", "--host", "localhost", "--port", "9876"]
+    }
+  }
+}
+```
+
+Quick diagnostics before connecting:
+
+```bash
+uv run blender-mcp --doctor --host localhost --port 9876
+```
 
 ### Complete usage walkthrough
 

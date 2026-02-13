@@ -3,6 +3,7 @@
 import io
 import json
 import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -171,6 +172,33 @@ def _mcp_client_config_snippet(client: str, host: str, port: int) -> str:
             + json.dumps(config, indent=2)
         )
     return json.dumps(config, indent=2)
+
+
+def _update_action_status(scene, action: str, ok: bool, details: str = "") -> None:
+    """Persist last action result in scene properties for UI visibility."""
+    scene.blendermcp_last_action = action
+    scene.blendermcp_last_action_ok = ok
+    scene.blendermcp_last_action_details = details[:500]
+    scene.blendermcp_last_action_at = time.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _logs_path() -> str:
+    """Resolve current log path from env or default value."""
+    log_file = os.getenv("BLENDER_MCP_LOG_FILE", "blender_mcp.log")
+    if os.path.isabs(log_file):
+        return log_file
+    return os.path.join(_project_root(), log_file)
+
+
+def _open_in_system(path: str) -> None:
+    """Open path using platform default app/file manager."""
+    if os.name == "nt":
+        os.startfile(path)
+        return
+    if platform.system() == "Darwin":
+        subprocess.Popen(["open", path])
+        return
+    subprocess.Popen(["xdg-open", path])
 
 
 class BlenderMCPServer(SocketBlenderMCPServer):
@@ -1502,6 +1530,27 @@ class BLENDERMCP_PT_Panel(bpy.types.Panel):
             text="Copy MCP Client Config",
             icon="COPYDOWN",
         )
+        setup_box.operator(
+            "blendermcp.health_check",
+            text="Health Check",
+            icon="CHECKMARK",
+        )
+        setup_box.operator(
+            "blendermcp.open_logs",
+            text="Open Logs",
+            icon="TEXT",
+        )
+
+        status_box = layout.box()
+        status_box.label(text="Last Action", icon="INFO")
+        if scene.blendermcp_last_action:
+            status = "OK" if scene.blendermcp_last_action_ok else "ERROR"
+            status_box.label(text=f"{status}: {scene.blendermcp_last_action}")
+            status_box.label(text=f"When: {scene.blendermcp_last_action_at}")
+            if scene.blendermcp_last_action_details:
+                status_box.label(text=scene.blendermcp_last_action_details[:80])
+        else:
+            status_box.label(text="No action recorded yet.")
 
         # MP-05: Asset cache management
         layout.separator()
@@ -1537,6 +1586,7 @@ class BLENDERMCP_OT_StartServer(bpy.types.Operator):
         # Start the server
         bpy.types.blendermcp_server.start()
         scene.blendermcp_server_running = True
+        _update_action_status(scene, "Connect to MCP server", True, f"Listening on port {scene.blendermcp_port}")
 
         return {"FINISHED"}
 
@@ -1554,6 +1604,7 @@ class BLENDERMCP_OT_InstallDependencies(bpy.types.Operator):
                 {"ERROR"},
                 "uv not found in PATH. Install uv first, then try again.",
             )
+            _update_action_status(context.scene, "Check/Install Dependencies", False, "uv not found")
             return {"CANCELLED"}
 
         code, output = _run_command(["uv", "sync", "--extra", "gui", "--extra", "test"], cwd=root)
@@ -1562,9 +1613,11 @@ class BLENDERMCP_OT_InstallDependencies(bpy.types.Operator):
             if output:
                 print("[blender-mcp] uv sync output:")
                 print(output)
+            _update_action_status(context.scene, "Check/Install Dependencies", False, "uv sync failed")
             return {"CANCELLED"}
 
         self.report({"INFO"}, "Dependencies are ready (uv sync completed).")
+        _update_action_status(context.scene, "Check/Install Dependencies", True, "uv sync completed")
         return {"FINISHED"}
 
 
@@ -1591,9 +1644,11 @@ class BLENDERMCP_OT_RunMCPServerTerminal(bpy.types.Operator):
                 )
         except Exception as exc:
             self.report({"ERROR"}, f"Failed to start MCP server terminal: {exc}")
+            _update_action_status(context.scene, "Run MCP Server in Terminal", False, str(exc))
             return {"CANCELLED"}
 
         self.report({"INFO"}, f"MCP server terminal launched on {host}:{port}.")
+        _update_action_status(context.scene, "Run MCP Server in Terminal", True, f"Started on {host}:{port}")
         return {"FINISHED"}
 
 
@@ -1608,6 +1663,59 @@ class BLENDERMCP_OT_CopyMCPClientConfig(bpy.types.Operator):
         snippet = _mcp_client_config_snippet(client, host="localhost", port=int(scene.blendermcp_port))
         context.window_manager.clipboard = snippet
         self.report({"INFO"}, f"Copied {client} MCP config to clipboard.")
+        _update_action_status(scene, "Copy MCP Client Config", True, f"Client: {client}")
+        return {"FINISHED"}
+
+
+class BLENDERMCP_OT_HealthCheck(bpy.types.Operator):
+    bl_idname = "blendermcp.health_check"
+    bl_label = "Health Check"
+    bl_description = "Run local diagnostics (uv + blender-mcp --doctor)"
+
+    def execute(self, context):
+        root = _project_root()
+        port = int(context.scene.blendermcp_port)
+        code, _ = _run_command(["uv", "--version"], cwd=root)
+        if code != 0:
+            self.report({"ERROR"}, "uv not found in PATH.")
+            _update_action_status(context.scene, "Health Check", False, "uv not found")
+            return {"CANCELLED"}
+
+        code, output = _run_command(
+            ["uv", "run", "blender-mcp", "--doctor", "--host", "localhost", "--port", str(port)],
+            cwd=root,
+        )
+        if output:
+            print("[blender-mcp] doctor output:")
+            print(output)
+        if code != 0:
+            self.report({"ERROR"}, "Health check failed. See Blender console.")
+            _update_action_status(context.scene, "Health Check", False, "doctor failed")
+            return {"CANCELLED"}
+
+        self.report({"INFO"}, "Health check passed. See Blender console for details.")
+        _update_action_status(context.scene, "Health Check", True, f"doctor ok for localhost:{port}")
+        return {"FINISHED"}
+
+
+class BLENDERMCP_OT_OpenLogs(bpy.types.Operator):
+    bl_idname = "blendermcp.open_logs"
+    bl_label = "Open Logs"
+    bl_description = "Open Blender MCP log file location"
+
+    def execute(self, context):
+        try:
+            path = _logs_path()
+            if not os.path.exists(path):
+                open(path, "a", encoding="utf-8").close()
+            _open_in_system(path)
+        except Exception as exc:
+            self.report({"ERROR"}, f"Could not open logs: {exc}")
+            _update_action_status(context.scene, "Open Logs", False, str(exc))
+            return {"CANCELLED"}
+
+        self.report({"INFO"}, f"Opened logs: {path}")
+        _update_action_status(context.scene, "Open Logs", True, os.path.basename(path))
         return {"FINISHED"}
 
 
@@ -1620,6 +1728,7 @@ class BLENDERMCP_OT_ClearCache(bpy.types.Operator):
     def execute(self, context):
         deleted = _asset_cache.clear()
         self.report({"INFO"}, f"Cleared {deleted} cached files")
+        _update_action_status(context.scene, "Clear Cache", True, f"Deleted files: {deleted}")
         return {"FINISHED"}
 
 
@@ -1638,6 +1747,7 @@ class BLENDERMCP_OT_StopServer(bpy.types.Operator):
             del bpy.types.blendermcp_server
 
         scene.blendermcp_server_running = False
+        _update_action_status(scene, "Disconnect from MCP server", True, "Server stopped")
 
         return {"FINISHED"}
 
@@ -1782,6 +1892,22 @@ def register():
         ],
         default="claude",
     )
+    bpy.types.Scene.blendermcp_last_action = bpy.props.StringProperty(
+        name="Last Action",
+        default="",
+    )
+    bpy.types.Scene.blendermcp_last_action_at = bpy.props.StringProperty(
+        name="Last Action At",
+        default="",
+    )
+    bpy.types.Scene.blendermcp_last_action_details = bpy.props.StringProperty(
+        name="Last Action Details",
+        default="",
+    )
+    bpy.types.Scene.blendermcp_last_action_ok = bpy.props.BoolProperty(
+        name="Last Action OK",
+        default=True,
+    )
 
     bpy.utils.register_class(BLENDERMCP_PT_Panel)
     bpy.utils.register_class(BLENDERMCP_OT_StartServer)
@@ -1789,6 +1915,8 @@ def register():
     bpy.utils.register_class(BLENDERMCP_OT_InstallDependencies)
     bpy.utils.register_class(BLENDERMCP_OT_RunMCPServerTerminal)
     bpy.utils.register_class(BLENDERMCP_OT_CopyMCPClientConfig)
+    bpy.utils.register_class(BLENDERMCP_OT_HealthCheck)
+    bpy.utils.register_class(BLENDERMCP_OT_OpenLogs)
     bpy.utils.register_class(BLENDERMCP_OT_ClearCache)
     bpy.utils.register_class(BLENDERMCP_OT_DownloadProgress)
 
@@ -1807,6 +1935,8 @@ def unregister():
     bpy.utils.unregister_class(BLENDERMCP_OT_InstallDependencies)
     bpy.utils.unregister_class(BLENDERMCP_OT_RunMCPServerTerminal)
     bpy.utils.unregister_class(BLENDERMCP_OT_CopyMCPClientConfig)
+    bpy.utils.unregister_class(BLENDERMCP_OT_HealthCheck)
+    bpy.utils.unregister_class(BLENDERMCP_OT_OpenLogs)
     bpy.utils.unregister_class(BLENDERMCP_OT_ClearCache)
     bpy.utils.unregister_class(BLENDERMCP_OT_DownloadProgress)
 
@@ -1816,6 +1946,10 @@ def unregister():
     del bpy.types.Scene.blendermcp_use_sketchfab
     del bpy.types.Scene.blendermcp_sketchfab_api_key
     del bpy.types.Scene.blendermcp_client_target
+    del bpy.types.Scene.blendermcp_last_action
+    del bpy.types.Scene.blendermcp_last_action_at
+    del bpy.types.Scene.blendermcp_last_action_details
+    del bpy.types.Scene.blendermcp_last_action_ok
 
     print("BlenderMCP addon unregistered")
 
