@@ -3,8 +3,10 @@ import logging
 import time
 from collections import defaultdict
 
+
 class Metrics:
     """Coleta e expõe métricas simples de uso, erro e latência."""
+
     def __init__(self):
         self.counters = defaultdict(int)
         self.timings = defaultdict(list)
@@ -21,7 +23,10 @@ class Metrics:
     def report(self):
         return {
             "counters": dict(self.counters),
-            "timings": {k: (min(v), max(v), sum(v)/len(v) if v else 0) for k, v in self.timings.items()}
+            "timings": {
+                k: (min(v), max(v), sum(v) / len(v) if v else 0) for k, v in self.timings.items()
+            },
         }
+
 
 metrics = Metrics()

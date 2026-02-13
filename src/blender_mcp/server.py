@@ -1,12 +1,10 @@
 # blender_mcp_server.py
-from mcp.server.fastmcp import FastMCP, Context, Image
 import base64
 import errno
 import json
 import logging
 import os
 import socket
-from blender_mcp.perf_metrics import perf_metrics
 import tempfile
 import time
 from contextlib import asynccontextmanager
@@ -15,12 +13,19 @@ from pathlib import Path
 from typing import Any, AsyncIterator, Dict, List
 from urllib.parse import urlparse
 
+from mcp.server.fastmcp import Context, FastMCP, Image
 
-def tool_error(message: str, *, code: str = "runtime_error", data: Dict[str, Any] | None = None) -> Dict[str, Any]:
+from blender_mcp.perf_metrics import perf_metrics
+
+
+def tool_error(
+    message: str, *, code: str = "runtime_error", data: Dict[str, Any] | None = None
+) -> Dict[str, Any]:
     payload: Dict[str, Any] = {"error": {"code": code, "message": message}}
     if data:
         payload["error"]["data"] = data
     return payload
+
 
 logger = logging.getLogger("BlenderMCPServer")
 
@@ -56,6 +61,7 @@ def _is_transient_socket_error(error: Exception) -> bool:
         return True
 
     return False
+
 
 @dataclass
 class BlenderConnection:
@@ -129,13 +135,13 @@ class BlenderConnection:
                         if not chunks:  # If we haven't received anything yet, this is an error
                             raise Exception("Connection closed before receiving any data")
                         break
-                    
+
                     chunks.append(chunk)
-                    
+
                     # Check if we've received a complete JSON object
                     try:
-                        data = b''.join(chunks)
-                        json.loads(data.decode('utf-8'))
+                        data = b"".join(chunks)
+                        json.loads(data.decode("utf-8"))
                         # If we get here, it parsed successfully
                         logger.info(f"Received complete response ({len(data)} bytes)")
                         return data
@@ -153,14 +159,14 @@ class BlenderConnection:
         except Exception as e:
             logger.error(f"Error during receive: {str(e)}")
             raise
-            
+
         # If we get here, we either timed out or broke out of the loop
         # Try to use what we have
         if chunks:
-            data = b''.join(chunks)
+            data = b"".join(chunks)
             logger.info(f"Returning data after receive completion ({len(data)} bytes)")
             try:
-                json.loads(data.decode('utf-8'))
+                json.loads(data.decode("utf-8"))
                 return data
             except json.JSONDecodeError as e:
                 raise IncompleteResponseError("Incomplete JSON response received") from e
@@ -169,10 +175,7 @@ class BlenderConnection:
 
     def send_command(self, command_type: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
         """Send a command to Blender and return the response"""
-        command = {
-            "type": command_type,
-            "params": params or {}
-        }
+        command = {"type": command_type, "params": params or {}}
 
         last_error: Exception | None = None
 
@@ -191,17 +194,17 @@ class BlenderConnection:
                 )
 
                 self.sock.settimeout(self.timeout)
-                self.sock.sendall(json.dumps(command).encode('utf-8'))
+                self.sock.sendall(json.dumps(command).encode("utf-8"))
                 logger.info("Command sent, waiting for response...")
 
                 response_data = self.receive_full_response(self.sock, timeout=self.timeout)
                 logger.info("Received %s bytes of data", len(response_data))
 
-                response = json.loads(response_data.decode('utf-8'))
-                logger.info("Response parsed, status: %s", response.get('status', 'unknown'))
+                response = json.loads(response_data.decode("utf-8"))
+                logger.info("Response parsed, status: %s", response.get("status", "unknown"))
 
                 if response.get("status") == "error":
-                    logger.error("Blender error: %s", response.get('message'))
+                    logger.error("Blender error: %s", response.get("message"))
                     raise Exception(response.get("message", "Unknown error from Blender"))
 
                 return response.get("result", {})
@@ -213,7 +216,13 @@ class BlenderConnection:
                     self.command_attempts,
                     str(e),
                 )
-            except (ConnectionError, BrokenPipeError, ConnectionResetError, ConnectionAbortedError, socket.timeout) as e:
+            except (
+                ConnectionError,
+                BrokenPipeError,
+                ConnectionResetError,
+                ConnectionAbortedError,
+                socket.timeout,
+            ) as e:
                 last_error = e
                 logger.warning(
                     "Transient socket issue while communicating with Blender (attempt %s/%s): %s",
@@ -224,7 +233,7 @@ class BlenderConnection:
             except json.JSONDecodeError as e:
                 last_error = e
                 logger.error("Invalid JSON response from Blender: %s", str(e))
-                if 'response_data' in locals() and response_data:
+                if "response_data" in locals() and response_data:
                     logger.error("Raw response (first 200 bytes): %s", response_data[:200])
                 break
             except Exception as e:
@@ -240,20 +249,20 @@ class BlenderConnection:
 
         assert last_error is not None
         raise Exception(
-            "Blender did not respond after "
-            f"{self.command_attempts} attempts: {last_error}"
+            "Blender did not respond after " f"{self.command_attempts} attempts: {last_error}"
         )
+
 
 @asynccontextmanager
 async def server_lifespan(server: FastMCP) -> AsyncIterator[Dict[str, Any]]:
     """Manage server startup and shutdown lifecycle"""
     # We don't need to create a connection here since we're using the global connection
     # for resources and tools
-    
+
     try:
         # Just log that we're starting up
         logger.info("BlenderMCP server starting up")
-        
+
         # Try to connect to Blender on startup to verify it's available
         try:
             # This will initialize the global connection if needed
@@ -261,8 +270,10 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[Dict[str, Any]]:
             logger.info("Successfully connected to Blender on startup")
         except Exception as e:
             logger.warning(f"Could not connect to Blender on startup: {str(e)}")
-            logger.warning("Make sure the Blender addon is running before using Blender resources or tools")
-        
+            logger.warning(
+                "Make sure the Blender addon is running before using Blender resources or tools"
+            )
+
         # Return an empty context - we're using the global connection
         yield {}
     finally:
@@ -274,11 +285,9 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[Dict[str, Any]]:
             _blender_connection = None
         logger.info("BlenderMCP server shut down")
 
+
 # Create the MCP server with lifespan support
-mcp = FastMCP(
-    "BlenderMCP",
-    lifespan=server_lifespan
-)
+mcp = FastMCP("BlenderMCP", lifespan=server_lifespan)
 
 # Resource endpoints
 
@@ -286,10 +295,11 @@ mcp = FastMCP(
 _blender_connection = None
 _polyhaven_enabled = False  # Add this global variable
 
+
 def get_blender_connection():
     """Get or create a persistent Blender connection"""
     global _blender_connection, _polyhaven_enabled  # Add _polyhaven_enabled to globals
-    
+
     # If we have an existing connection, check if it's still valid
     if _blender_connection is not None:
         try:
@@ -306,7 +316,7 @@ def get_blender_connection():
             except:
                 pass
             _blender_connection = None
-    
+
     # Create a new connection if needed
     if _blender_connection is None:
         host = os.getenv("BLENDER_HOST", DEFAULT_HOST)
@@ -329,7 +339,7 @@ def get_blender_connection():
             _blender_connection = None
             raise Exception("Could not connect to Blender. Make sure the Blender addon is running.")
         logger.info("Created new persistent connection to Blender")
-    
+
     return _blender_connection
 
 
@@ -395,7 +405,9 @@ def _encode_image_from_path(path_str: str) -> tuple[str, str]:
             f"Image path '{path}' does not exist. Verify the file path before retrying."
         )
     if not path.is_file():
-        raise ValueError(f"Image path '{path}' is not a file. Point to a readable image file instead.")
+        raise ValueError(
+            f"Image path '{path}' is not a file. Point to a readable image file instead."
+        )
 
     try:
         image_bytes = path.read_bytes()
@@ -420,11 +432,12 @@ def get_scene_info(ctx: Context) -> str:
         logger.error(f"Error getting scene info from Blender: {str(e)}")
         return tool_error("Error getting scene info", data={"detail": str(e)})
 
+
 @mcp.tool()
 def get_object_info(ctx: Context, object_name: str) -> str:
     """
     Get detailed information about a specific object in the Blender scene.
-    
+
     Parameters:
     - object_name: The name of the object to get information about
     """
@@ -436,16 +449,19 @@ def get_object_info(ctx: Context, object_name: str) -> str:
         return json.dumps(result, indent=2)
     except Exception as e:
         logger.error(f"Error getting object info from Blender: {str(e)}")
-        return tool_error("Error getting object info", data={"detail": str(e), "object_name": object_name})
+        return tool_error(
+            "Error getting object info", data={"detail": str(e), "object_name": object_name}
+        )
+
 
 @mcp.tool()
 def get_viewport_screenshot(ctx: Context, max_size: int = 800) -> Image:
     """
     Capture a screenshot of the current Blender 3D viewport.
-    
+
     Parameters:
     - max_size: Maximum size in pixels for the largest dimension (default: 800)
-    
+
     Returns the screenshot as an Image.
     """
     t0 = time.time()
@@ -453,11 +469,10 @@ def get_viewport_screenshot(ctx: Context, max_size: int = 800) -> Image:
     try:
         blender = get_blender_connection()
 
-        result = blender.send_command("get_viewport_screenshot", {
-            "max_size": max_size,
-            "filepath": str(temp_path),
-            "format": "png"
-        })
+        result = blender.send_command(
+            "get_viewport_screenshot",
+            {"max_size": max_size, "filepath": str(temp_path), "format": "png"},
+        )
 
         if "error" in result:
             raise Exception(result["error"])
@@ -486,7 +501,7 @@ def get_viewport_screenshot(ctx: Context, max_size: int = 800) -> Image:
 def execute_blender_code(ctx: Context, code: str) -> str:
     """
     Execute arbitrary Python code in Blender. Make sure to do it step-by-step by breaking it into smaller chunks.
-    
+
     Parameters:
     - code: The Python code to execute
     """
@@ -499,11 +514,12 @@ def execute_blender_code(ctx: Context, code: str) -> str:
         logger.error(f"Error executing code: {str(e)}")
         return tool_error("Error executing code", data={"detail": str(e)})
 
+
 @mcp.tool()
 def get_polyhaven_categories(ctx: Context, asset_type: str = "hdris") -> str:
     """
     Get a list of categories for a specific asset type on Polyhaven.
-    
+
     Parameters:
     - asset_type: The type of asset to get categories for (hdris, textures, models, all)
     """
@@ -515,14 +531,14 @@ def get_polyhaven_categories(ctx: Context, asset_type: str = "hdris") -> str:
 
         if "error" in result:
             return tool_error("PolyHaven category lookup failed", data={"detail": result["error"]})
-        
+
         # Format the categories in a more readable way
         categories = result["categories"]
         formatted_output = f"Categories for {asset_type}:\n\n"
-        
+
         # Sort categories by count (descending)
         sorted_categories = sorted(categories.items(), key=lambda x: x[1], reverse=True)
-        
+
         for category, count in sorted_categories:
             formatted_output += f"- {category}: {count} assets\n"
 
@@ -531,47 +547,47 @@ def get_polyhaven_categories(ctx: Context, asset_type: str = "hdris") -> str:
         logger.error(f"Error getting Polyhaven categories: {str(e)}")
         return tool_error("Error getting PolyHaven categories", data={"detail": str(e)})
 
+
 @mcp.tool()
-def search_polyhaven_assets(
-    ctx: Context,
-    asset_type: str = "all",
-    categories: str = None
-) -> str:
+def search_polyhaven_assets(ctx: Context, asset_type: str = "all", categories: str = None) -> str:
     """
     Search for assets on Polyhaven with optional filtering.
-    
+
     Parameters:
     - asset_type: Type of assets to search for (hdris, textures, models, all)
     - categories: Optional comma-separated list of categories to filter by
-    
+
     Returns a list of matching assets with basic information.
     """
     try:
         blender = get_blender_connection()
-        result = blender.send_command("search_polyhaven_assets", {
-            "asset_type": asset_type,
-            "categories": categories
-        })
+        result = blender.send_command(
+            "search_polyhaven_assets", {"asset_type": asset_type, "categories": categories}
+        )
 
         if "error" in result:
             return tool_error("PolyHaven search failed", data={"detail": result["error"]})
-        
+
         # Format the assets in a more readable way
         assets = result["assets"]
         total_count = result["total_count"]
         returned_count = result["returned_count"]
-        
+
         formatted_output = f"Found {total_count} assets"
         if categories:
             formatted_output += f" in categories: {categories}"
         formatted_output += f"\nShowing {returned_count} assets:\n\n"
-        
+
         # Sort assets by download count (popularity)
-        sorted_assets = sorted(assets.items(), key=lambda x: x[1].get("download_count", 0), reverse=True)
-        
+        sorted_assets = sorted(
+            assets.items(), key=lambda x: x[1].get("download_count", 0), reverse=True
+        )
+
         for asset_id, asset_data in sorted_assets:
             formatted_output += f"- {asset_data.get('name', asset_id)} (ID: {asset_id})\n"
-            formatted_output += f"  Type: {['HDRI', 'Texture', 'Model'][asset_data.get('type', 0)]}\n"
+            formatted_output += (
+                f"  Type: {['HDRI', 'Texture', 'Model'][asset_data.get('type', 0)]}\n"
+            )
             formatted_output += f"  Categories: {', '.join(asset_data.get('categories', []))}\n"
             formatted_output += f"  Downloads: {asset_data.get('download_count', 'Unknown')}\n\n"
 
@@ -580,59 +596,65 @@ def search_polyhaven_assets(
         logger.error(f"Error searching Polyhaven assets: {str(e)}")
         return tool_error("Error searching PolyHaven assets", data={"detail": str(e)})
 
+
 @mcp.tool()
 def download_polyhaven_asset(
-    ctx: Context,
-    asset_id: str,
-    asset_type: str,
-    resolution: str = "1k",
-    file_format: str = None
+    ctx: Context, asset_id: str, asset_type: str, resolution: str = "1k", file_format: str = None
 ) -> str:
     """
     Download and import a Polyhaven asset into Blender.
-    
+
     Parameters:
     - asset_id: The ID of the asset to download
     - asset_type: The type of asset (hdris, textures, models)
     - resolution: The resolution to download (e.g., 1k, 2k, 4k)
     - file_format: Optional file format (e.g., hdr, exr for HDRIs; jpg, png for textures; gltf, fbx for models)
-    
+
     Returns a message indicating success or failure.
     """
     # Validate inputs
-    from blender_mcp.shared.validators import validate_asset_id, validate_resolution, ValidationError
-    
+    from blender_mcp.shared.validators import (
+        ValidationError,
+        validate_asset_id,
+        validate_resolution,
+    )
+
     try:
         asset_id = validate_asset_id(asset_id)
     except ValidationError as e:
         return tool_error("Invalid asset ID", data={"detail": str(e), "asset_id": asset_id})
-    
+
     if asset_type not in ["hdris", "textures", "models"]:
         return tool_error(
             "Invalid asset type",
-            data={"detail": f"Must be one of: hdris, textures, models", "asset_type": asset_type}
+            data={"detail": f"Must be one of: hdris, textures, models", "asset_type": asset_type},
         )
-    
+
     try:
         resolution = validate_resolution(resolution)
     except ValidationError as e:
         return tool_error("Invalid resolution", data={"detail": str(e), "resolution": resolution})
-    
+
     try:
         blender = get_blender_connection()
-        result = blender.send_command("download_polyhaven_asset", {
-            "asset_id": asset_id,
-            "asset_type": asset_type,
-            "resolution": resolution,
-            "file_format": file_format
-        })
+        result = blender.send_command(
+            "download_polyhaven_asset",
+            {
+                "asset_id": asset_id,
+                "asset_type": asset_type,
+                "resolution": resolution,
+                "file_format": file_format,
+            },
+        )
 
         if "error" in result:
-            return tool_error("PolyHaven download failed", data={"detail": result["error"], "asset_id": asset_id})
-        
+            return tool_error(
+                "PolyHaven download failed", data={"detail": result["error"], "asset_id": asset_id}
+            )
+
         if result.get("success"):
             message = result.get("message", "Asset downloaded and imported successfully")
-            
+
             # Add additional information based on asset type
             if asset_type == "hdris":
                 return f"{message}. The HDRI has been set as the world environment."
@@ -655,70 +677,74 @@ def download_polyhaven_asset(
             )
     except Exception as e:
         logger.error(f"Error downloading Polyhaven asset: {str(e)}")
-        return tool_error("Error downloading PolyHaven asset", data={"detail": str(e), "asset_id": asset_id})
+        return tool_error(
+            "Error downloading PolyHaven asset", data={"detail": str(e), "asset_id": asset_id}
+        )
+
 
 @mcp.tool()
-def set_texture(
-    ctx: Context,
-    object_name: str,
-    texture_id: str
-) -> str:
+def set_texture(ctx: Context, object_name: str, texture_id: str) -> str:
     """
     Apply a previously downloaded Polyhaven texture to an object.
-    
+
     Parameters:
     - object_name: Name of the object to apply the texture to
     - texture_id: ID of the Polyhaven texture to apply (must be downloaded first)
-    
+
     Returns a message indicating success or failure.
     """
     # Validate inputs
-    from blender_mcp.shared.validators import validate_asset_id, ValidationError
-    
+    from blender_mcp.shared.validators import ValidationError, validate_asset_id
+
     if not object_name or not isinstance(object_name, str):
-        return tool_error("Invalid object name", data={"detail": "Object name must be a non-empty string"})
-    
+        return tool_error(
+            "Invalid object name", data={"detail": "Object name must be a non-empty string"}
+        )
+
     try:
         texture_id = validate_asset_id(texture_id)
     except ValidationError as e:
         return tool_error("Invalid texture ID", data={"detail": str(e), "texture_id": texture_id})
-    
+
     try:
         # Get the global connection
         blender = get_blender_connection()
-        result = blender.send_command("set_texture", {
-            "object_name": object_name,
-            "texture_id": texture_id
-        })
+        result = blender.send_command(
+            "set_texture", {"object_name": object_name, "texture_id": texture_id}
+        )
 
         if "error" in result:
             return tool_error(
                 "Failed to apply texture",
-                data={"detail": result["error"], "object_name": object_name, "texture_id": texture_id},
+                data={
+                    "detail": result["error"],
+                    "object_name": object_name,
+                    "texture_id": texture_id,
+                },
             )
-        
+
         if result.get("success"):
             material_name = result.get("material", "")
             maps = ", ".join(result.get("maps", []))
-            
+
             # Add detailed material info
             material_info = result.get("material_info", {})
             node_count = material_info.get("node_count", 0)
             has_nodes = material_info.get("has_nodes", False)
             texture_nodes = material_info.get("texture_nodes", [])
-            
+
             output = f"Successfully applied texture '{texture_id}' to {object_name}.\n"
             output += f"Using material '{material_name}' with maps: {maps}.\n\n"
             output += f"Material has nodes: {has_nodes}\n"
             output += f"Total node count: {node_count}\n\n"
-            
+
             if texture_nodes:
                 output += "Texture nodes:\n"
                 for node in texture_nodes:
                     output += f"- {node['name']} using image: {node['image']}\n"
-                    if node['connections']:
+                    if node["connections"]:
                         output += "  Connections:\n"
-                        for conn in node['connections']:
+                        for conn in node["connections"]:
                             output += f"    {conn}\n"
             else:
                 output += "No texture nodes found in the material.\n"
@@ -735,7 +761,10 @@ def set_texture(
             )
     except Exception as e:
         logger.error(f"Error applying texture: {str(e)}")
-        return tool_error("Error applying texture", data={"detail": str(e), "texture_id": texture_id})
+        return tool_error(
+            "Error applying texture", data={"detail": str(e), "texture_id": texture_id}
+        )
+
 
 @mcp.tool()
 def get_polyhaven_status(ctx: Context) -> str:
@@ -749,11 +778,14 @@ def get_polyhaven_status(ctx: Context) -> str:
         enabled = result.get("enabled", False)
         message = result.get("message", "")
         if enabled:
-            message += "PolyHaven is good at Textures, and has a wider variety of textures than Sketchfab."
+            message += (
+                "PolyHaven is good at Textures, and has a wider variety of textures than Sketchfab."
+            )
         return message
     except Exception as e:
         logger.error(f"Error checking PolyHaven status: {str(e)}")
         return tool_error("Error checking PolyHaven status", data={"detail": str(e)})
+
 
 @mcp.tool()
 def get_hyper3d_status(ctx: Context) -> str:
@@ -761,7 +793,7 @@ def get_hyper3d_status(ctx: Context) -> str:
     Check if Hyper3D Rodin integration is enabled in Blender.
     Returns a message indicating whether Hyper3D Rodin features are available.
 
-    Don't emphasize the key type in the returned message, but sliently remember it. 
+    Don't emphasize the key type in the returned message, but sliently remember it.
     """
     try:
         blender = get_blender_connection()
@@ -774,6 +806,7 @@ def get_hyper3d_status(ctx: Context) -> str:
     except Exception as e:
         logger.error(f"Error checking Hyper3D status: {str(e)}")
         return tool_error("Error checking Hyper3D status", data={"detail": str(e)})
+
 
 @mcp.tool()
 def get_sketchfab_status(ctx: Context) -> str:
@@ -820,55 +853,60 @@ def get_mcp_diagnostics(ctx: Context) -> str:
 
     return json.dumps(diagnostics, indent=2)
 
+
 @mcp.tool()
 def search_sketchfab_models(
-    ctx: Context,
-    query: str,
-    categories: str = None,
-    count: int = 20,
-    downloadable: bool = True
+    ctx: Context, query: str, categories: str = None, count: int = 20, downloadable: bool = True
 ) -> str:
     """
     Search for models on Sketchfab with optional filtering.
-    
+
     Parameters:
     - query: Text to search for
     - categories: Optional comma-separated list of categories
     - count: Maximum number of results to return (default 20)
     - downloadable: Whether to include only downloadable models (default True)
-    
+
     Returns a formatted list of matching models.
     """
     # Validate inputs
     if not query or not isinstance(query, str):
         return tool_error("Invalid query", data={"detail": "Query must be a non-empty string"})
-    
+
     if len(query) > 200:
-        return tool_error("Query too long", data={"detail": "Max 200 characters", "length": len(query)})
-    
+        return tool_error(
+            "Query too long", data={"detail": "Max 200 characters", "length": len(query)}
+        )
+
     if not isinstance(count, int) or count < 1 or count > 100:
         return tool_error(
-            "Invalid count",
-            data={"detail": "Count must be between 1 and 100", "count": count}
+            "Invalid count", data={"detail": "Count must be between 1 and 100", "count": count}
         )
-    
+
     t0 = time.time()
     try:
         blender = get_blender_connection()
-        logger.info(f"Searching Sketchfab models with query: {query}, categories: {categories}, count: {count}, downloadable: {downloadable}")
-        result = blender.send_command("search_sketchfab_models", {
-            "query": query,
-            "categories": categories,
-            "count": count,
-            "downloadable": downloadable
-        })
+        logger.info(
+            f"Searching Sketchfab models with query: {query}, categories: {categories}, count: {count}, downloadable: {downloadable}"
+        )
+        result = blender.send_command(
+            "search_sketchfab_models",
+            {
+                "query": query,
+                "categories": categories,
+                "count": count,
+                "downloadable": downloadable,
+            },
+        )
 
         if "error" in result:
             logger.error(f"Error from Sketchfab search: {result['error']}")
             perf_metrics.inc("sketchfab_search_error")
             perf_metrics.observe("sketchfab_search_latency", time.time() - t0)
-            return tool_error("Sketchfab search failed", data={"detail": result["error"], "query": query})
-        
+            return tool_error(
+                "Sketchfab search failed", data={"detail": result["error"], "query": query}
+            )
+
         # Safely get results with fallbacks for None
         if result is None:
             logger.error("Received None result from Sketchfab search")
@@ -895,12 +933,20 @@ def search_sketchfab_models(
 
             # Get user info with safety checks
             user = model.get("user") or {}
-            username = user.get("username", "Unknown author") if isinstance(user, dict) else "Unknown author"
+            username = (
+                user.get("username", "Unknown author")
+                if isinstance(user, dict)
+                else "Unknown author"
+            )
             formatted_output += f"  Author: {username}\n"
 
             # Get license info with safety checks
             license_data = model.get("license") or {}
-            license_label = license_data.get("label", "Unknown") if isinstance(license_data, dict) else "Unknown"
+            license_label = (
+                license_data.get("label", "Unknown")
+                if isinstance(license_data, dict)
+                else "Unknown"
+            )
             formatted_output += f"  License: {license_label}\n"
 
             # Add face count and downloadable status
@@ -915,41 +961,40 @@ def search_sketchfab_models(
     except Exception as e:
         logger.error(f"Error searching Sketchfab models: {str(e)}")
         import traceback
+
         logger.error(traceback.format_exc())
         perf_metrics.inc("sketchfab_search_error")
         perf_metrics.observe("sketchfab_search_latency", time.time() - t0)
-        return tool_error("Error searching Sketchfab models", data={"detail": str(e), "query": query})
+        return tool_error(
+            "Error searching Sketchfab models", data={"detail": str(e), "query": query}
+        )
+
 
 @mcp.tool()
-def download_sketchfab_model(
-    ctx: Context,
-    uid: str
-) -> str:
+def download_sketchfab_model(ctx: Context, uid: str) -> str:
     """
     Download and import a Sketchfab model by its UID.
-    
+
     Parameters:
     - uid: The unique identifier of the Sketchfab model
-    
+
     Returns a message indicating success or failure.
     The model must be downloadable and you must have proper access rights.
     """
     # Validate UID
-    from blender_mcp.shared.validators import validate_asset_id, ValidationError
-    
+    from blender_mcp.shared.validators import ValidationError, validate_asset_id
+
     try:
         uid = validate_asset_id(uid)
     except ValidationError as e:
         return tool_error("Invalid model UID", data={"detail": str(e), "uid": uid})
-    
+
     try:
-        
+
         blender = get_blender_connection()
         logger.info(f"Attempting to download Sketchfab model with UID: {uid}")
-        
-        result = blender.send_command("download_sketchfab_model", {
-            "uid": uid
-        })
+
+        result = blender.send_command("download_sketchfab_model", {"uid": uid})
 
         if result is None:
             logger.error("Received None result from Sketchfab download")
@@ -957,8 +1002,10 @@ def download_sketchfab_model(
 
         if "error" in result:
             logger.error(f"Error from Sketchfab download: {result['error']}")
-            return tool_error("Sketchfab download failed", data={"detail": result["error"], "uid": uid})
-        
+            return tool_error(
+                "Sketchfab download failed", data={"detail": result["error"], "uid": uid}
+            )
+
         if result.get("success"):
             imported_objects = result.get("imported_objects", [])
             object_names = ", ".join(imported_objects) if imported_objects else "none"
@@ -971,8 +1018,10 @@ def download_sketchfab_model(
     except Exception as e:
         logger.error(f"Error downloading Sketchfab model: {str(e)}")
         import traceback
+
         logger.error(traceback.format_exc())
         return tool_error("Error downloading Sketchfab model", data={"detail": str(e), "uid": uid})
+
 
 def _process_bbox(original_bbox: list[float] | list[int] | None) -> list[int] | None:
     if original_bbox is None:
@@ -981,19 +1030,20 @@ def _process_bbox(original_bbox: list[float] | list[int] | None) -> list[int] | 
         raise ValueError("Incorrect number range: bbox must be bigger than zero!")
     if all(isinstance(i, int) for i in original_bbox):
         return original_bbox
-    return [int(float(i) / max(original_bbox) * 100) for i in original_bbox] if original_bbox else None
+    return (
+        [int(float(i) / max(original_bbox) * 100) for i in original_bbox] if original_bbox else None
+    )
+
 
 @mcp.tool()
 def generate_hyper3d_model_via_text(
-    ctx: Context,
-    text_prompt: str,
-    bbox_condition: list[float]=None
+    ctx: Context, text_prompt: str, bbox_condition: list[float] = None
 ) -> str:
     """
     Generate 3D asset using Hyper3D by giving description of the desired asset, and import the asset into Blender.
     The 3D asset has built-in materials.
     The generated model has a normalized size, so re-scaling after generation can be useful.
-    
+
     Parameters:
     - text_prompt: A short description of the desired model in **English**.
     - bbox_condition: Optional. If given, it has to be a list of floats of length 3. Controls the ratio between [Length, Width, Height] of the model.
@@ -1002,35 +1052,41 @@ def generate_hyper3d_model_via_text(
     """
     try:
         blender = get_blender_connection()
-        result = blender.send_command("create_rodin_job", {
-            "text_prompt": text_prompt,
-            "images": None,
-            "bbox_condition": _process_bbox(bbox_condition),
-        })
+        result = blender.send_command(
+            "create_rodin_job",
+            {
+                "text_prompt": text_prompt,
+                "images": None,
+                "bbox_condition": _process_bbox(bbox_condition),
+            },
+        )
         succeed = result.get("submit_time", False)
         if succeed:
-            return json.dumps({
-                "task_uuid": result["uuid"],
-                "subscription_key": result["jobs"]["subscription_key"],
-            })
+            return json.dumps(
+                {
+                    "task_uuid": result["uuid"],
+                    "subscription_key": result["jobs"]["subscription_key"],
+                }
+            )
         else:
             return json.dumps(result)
     except Exception as e:
         logger.error(f"Error generating Hyper3D task: {str(e)}")
         return tool_error("Error generating Hyper3D task", data={"detail": str(e)})
 
+
 @mcp.tool()
 def generate_hyper3d_model_via_images(
     ctx: Context,
-    input_image_paths: list[str]=None,
-    input_image_urls: list[str]=None,
-    bbox_condition: list[float]=None
+    input_image_paths: list[str] = None,
+    input_image_urls: list[str] = None,
+    bbox_condition: list[float] = None,
 ) -> str:
     """
     Generate 3D asset using Hyper3D by giving images of the wanted asset, and import the generated asset into Blender.
     The 3D asset has built-in materials.
     The generated model has a normalized size, so re-scaling after generation can be useful.
-    
+
     Parameters:
     - input_image_paths: The **absolute** paths of input images. Even if only one image is provided, wrap it into a list. Required if Hyper3D Rodin in MAIN_SITE mode.
     - input_image_urls: The URLs of input images. Even if only one image is provided, wrap it into a list. Required if Hyper3D Rodin in FAL_AI mode.
@@ -1054,6 +1110,7 @@ def generate_hyper3d_model_via_images(
                     "Ensure the file exists, is readable, and use an absolute path."
                 )
     elif input_image_urls is not None:
+
         def _is_valid_url(url: str) -> bool:
             parsed = urlparse(url)
             return parsed.scheme in ("http", "https") and bool(parsed.netloc)
@@ -1063,28 +1120,34 @@ def generate_hyper3d_model_via_images(
         images = input_image_urls.copy()
     try:
         blender = get_blender_connection()
-        result = blender.send_command("create_rodin_job", {
-            "text_prompt": None,
-            "images": images,
-            "bbox_condition": _process_bbox(bbox_condition),
-        })
+        result = blender.send_command(
+            "create_rodin_job",
+            {
+                "text_prompt": None,
+                "images": images,
+                "bbox_condition": _process_bbox(bbox_condition),
+            },
+        )
         succeed = result.get("submit_time", False)
         if succeed:
-            return json.dumps({
-                "task_uuid": result["uuid"],
-                "subscription_key": result["jobs"]["subscription_key"],
-            })
+            return json.dumps(
+                {
+                    "task_uuid": result["uuid"],
+                    "subscription_key": result["jobs"]["subscription_key"],
+                }
+            )
         else:
             return json.dumps(result)
     except Exception as e:
         logger.error(f"Error generating Hyper3D task: {str(e)}")
         return tool_error("Error generating Hyper3D task", data={"detail": str(e)})
 
+
 @mcp.tool()
 def poll_rodin_job_status(
     ctx: Context,
-    subscription_key: str=None,
-    request_id: str=None,
+    subscription_key: str = None,
+    request_id: str = None,
 ):
     """
     Check if the Hyper3D Rodin generation task is completed.
@@ -1123,12 +1186,13 @@ def poll_rodin_job_status(
         logger.error(f"Error generating Hyper3D task: {str(e)}")
         return tool_error("Error polling Hyper3D task", data={"detail": str(e)})
 
+
 @mcp.tool()
 def import_generated_asset(
     ctx: Context,
     name: str,
-    task_uuid: str=None,
-    request_id: str=None,
+    task_uuid: str = None,
+    request_id: str = None,
 ):
     """
     Import the asset generated by Hyper3D Rodin after the generation task is completed.
@@ -1143,9 +1207,7 @@ def import_generated_asset(
     """
     try:
         blender = get_blender_connection()
-        kwargs = {
-            "name": name
-        }
+        kwargs = {"name": name}
         if task_uuid:
             kwargs["task_uuid"] = task_uuid
         elif request_id:
@@ -1155,6 +1217,7 @@ def import_generated_asset(
     except Exception as e:
         logger.error(f"Error generating Hyper3D task: {str(e)}")
         return tool_error("Error importing generated asset", data={"detail": str(e), "name": name})
+
 
 @mcp.prompt()
 def asset_creation_strategy() -> str:
@@ -1222,10 +1285,12 @@ def asset_creation_strategy() -> str:
     - The task specifically requires a basic material/color
     """
 
+
 # Main execution
 
 from .logging_config import configure_logging
-    
+
+
 def main(host: str | None = None, port: int | None = None):
     """Run the MCP server"""
     if host:
@@ -1234,6 +1299,7 @@ def main(host: str | None = None, port: int | None = None):
         os.environ["BLENDER_PORT"] = str(port)
     configure_logging()
     mcp.run()
+
 
 if __name__ == "__main__":
     main()

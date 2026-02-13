@@ -2,47 +2,44 @@
 
 import time
 from enum import Enum
-from typing import Callable, Any, Optional
+from typing import Any, Callable, Optional
 
 
 class CircuitState(Enum):
     """Circuit breaker states."""
+
     CLOSED = "closed"  # Normal operation, calls pass through
-    OPEN = "open"      # Circuit broken, calls fail immediately
+    OPEN = "open"  # Circuit broken, calls fail immediately
     HALF_OPEN = "half_open"  # Testing if service recovered
 
 
 class CircuitBreakerError(Exception):
     """Raised when circuit breaker is open."""
+
     pass
 
 
 class CircuitBreaker:
     """Circuit breaker to prevent cascading failures from external APIs.
-    
+
     States:
     - CLOSED: Normal operation, all calls pass through
     - OPEN: Too many failures, calls fail immediately
     - HALF_OPEN: After timeout, test if service recovered
-    
+
     Usage:
         breaker = CircuitBreaker(failure_threshold=5, timeout=60)
-        
+
         try:
             result = breaker.call(lambda: requests.get(url))
         except CircuitBreakerError:
             # Circuit is open, service unavailable
             pass
     """
-    
-    def __init__(
-        self,
-        failure_threshold: int = 5,
-        timeout: int = 60,
-        name: str = "default"
-    ):
+
+    def __init__(self, failure_threshold: int = 5, timeout: int = 60, name: str = "default"):
         """Initialize circuit breaker.
-        
+
         Args:
             failure_threshold: Number of failures before opening circuit
             timeout: Seconds to wait before trying again (OPEN -> HALF_OPEN)
@@ -51,21 +48,21 @@ class CircuitBreaker:
         self.failure_threshold = failure_threshold
         self.timeout = timeout
         self.name = name
-        
+
         self.failure_count = 0
         self.success_count = 0
         self.last_failure_time: Optional[float] = None
         self.state = CircuitState.CLOSED
-    
+
     def call(self, func: Callable[[], Any]) -> Any:
         """Execute function with circuit breaker protection.
-        
+
         Args:
             func: Function to execute
-            
+
         Returns:
             Result from function
-            
+
         Raises:
             CircuitBreakerError: If circuit is open
             Exception: Any exception raised by func
@@ -82,7 +79,7 @@ class CircuitBreaker:
                     f"Circuit breaker '{self.name}' is OPEN. "
                     f"Service unavailable. Retry in {remaining}s."
                 )
-        
+
         try:
             result = func()
             self._on_success()
@@ -90,7 +87,7 @@ class CircuitBreaker:
         except Exception as e:
             self._on_failure()
             raise
-    
+
     def _on_success(self) -> None:
         """Handle successful call."""
         if self.state == CircuitState.HALF_OPEN:
@@ -104,13 +101,13 @@ class CircuitBreaker:
         elif self.state == CircuitState.CLOSED:
             # Reset failure count on success
             self.failure_count = 0
-    
+
     def _on_failure(self) -> None:
         """Handle failed call."""
         self.failure_count += 1
         self.last_failure_time = time.time()
         self.success_count = 0  # Reset success count
-        
+
         if self.state == CircuitState.HALF_OPEN:
             # Failed during recovery test, back to open
             print(f"Circuit breaker '{self.name}': HALF_OPEN -> OPEN (recovery failed)")
@@ -122,7 +119,7 @@ class CircuitBreaker:
                 f"({self.failure_count} failures, threshold: {self.failure_threshold})"
             )
             self.state = CircuitState.OPEN
-    
+
     def reset(self) -> None:
         """Manually reset circuit breaker to closed state."""
         print(f"Circuit breaker '{self.name}': Manual reset to CLOSED")
@@ -130,7 +127,7 @@ class CircuitBreaker:
         self.failure_count = 0
         self.success_count = 0
         self.last_failure_time = None
-    
+
     def get_state(self) -> dict:
         """Get current state for monitoring."""
         return {
@@ -140,9 +137,8 @@ class CircuitBreaker:
             "failure_threshold": self.failure_threshold,
             "timeout": self.timeout,
             "time_since_last_failure": (
-                int(time.time() - self.last_failure_time)
-                if self.last_failure_time else None
-            )
+                int(time.time() - self.last_failure_time) if self.last_failure_time else None
+            ),
         }
 
 
@@ -163,7 +159,4 @@ def get_circuit_breaker(service: str) -> CircuitBreaker:
 
 def get_all_circuit_states() -> dict:
     """Get states of all circuit breakers."""
-    return {
-        name: breaker.get_state()
-        for name, breaker in _circuit_breakers.items()
-    }
+    return {name: breaker.get_state() for name, breaker in _circuit_breakers.items()}

@@ -1,6 +1,7 @@
 # handlers/hyper3d.py - Handler Hyper3D com robustez e logging
 import logging
 
+
 def create_rodin_job(params):
     """Cria job no Hyper3D (Rodin)."""
     logger = logging.getLogger("Handler.Hyper3D")

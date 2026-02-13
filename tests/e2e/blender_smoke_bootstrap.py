@@ -6,10 +6,10 @@ long enough for the pytest process to run MCP socket commands.
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import sys
 import traceback
-import importlib.util
 from pathlib import Path
 
 
@@ -22,6 +22,7 @@ def _prepare_imports() -> None:
 def main() -> None:
     _prepare_imports()
     import bpy  # type: ignore
+
     addon_path = Path(__file__).resolve().parents[2] / "addon.py"
     spec = importlib.util.spec_from_file_location("blendermcp_addon_runtime", addon_path)
     if spec is None or spec.loader is None:

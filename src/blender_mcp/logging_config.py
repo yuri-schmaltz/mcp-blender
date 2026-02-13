@@ -6,7 +6,6 @@ import logging
 import os
 from typing import Optional
 
-
 DEFAULT_LOG_LEVEL = "INFO"
 DEFAULT_LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 DEFAULT_HANDLER = "console"
@@ -46,7 +45,9 @@ def configure_logging(
 
     resolved_level = (level or os.getenv("BLENDER_MCP_LOG_LEVEL", DEFAULT_LOG_LEVEL)).upper()
     resolved_format = log_format or os.getenv("BLENDER_MCP_LOG_FORMAT", DEFAULT_LOG_FORMAT)
-    resolved_handler = (handler_type or os.getenv("BLENDER_MCP_LOG_HANDLER", DEFAULT_HANDLER)).lower()
+    resolved_handler = (
+        handler_type or os.getenv("BLENDER_MCP_LOG_HANDLER", DEFAULT_HANDLER)
+    ).lower()
 
     numeric_level = logging.getLevelName(resolved_level)
     if isinstance(numeric_level, str):
@@ -73,4 +74,3 @@ def configure_logging(
             }
         },
     )
-
