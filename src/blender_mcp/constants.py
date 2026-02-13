@@ -1,12 +1,7 @@
 """Centralized constants for BlenderMCP."""
 
-# API Configuration
-RODIN_FREE_TRIAL_KEY = "k9TcfFoEhNd9cCPP2guHAHHHkctZHIRhZDywZ1euGUXwihbYLpOjQhofby80NJez"
-
 # API Endpoints
 POLYHAVEN_API_BASE = "https://api.polyhaven.com"
-HYPER3D_API_BASE = "https://hyperhuman.deemos.com/api/v2"
-FAL_AI_API_BASE = "https://queue.fal.run/fal-ai/hyper3d"
 SKETCHFAB_API_BASE = "https://api.sketchfab.com/v3"
 
 # Network Configuration

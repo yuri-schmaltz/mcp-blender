@@ -8,7 +8,6 @@ Atualizacao: os itens marcados como `NÃO VERIFICADO` neste marco foram revalida
 
 1. Fluxos MCP criticos estao implementados no servidor:
 `src/blender_mcp/server.py:412`, `src/blender_mcp/server.py:425`, `src/blender_mcp/server.py:443`, `src/blender_mcp/server.py:483`, `src/blender_mcp/server.py:532`, `src/blender_mcp/server.py:581`, `src/blender_mcp/server.py:658`, `src/blender_mcp/server.py:796`, `src/blender_mcp/server.py:898`, `src/blender_mcp/server.py:1058`, `src/blender_mcp/server.py:1101`.
-2. Toggle de capacidades por contexto da cena no addon (PolyHaven/Hyper3D/Sketchfab):
 `addon.py:305`, `addon.py:315`, `addon.py:324`, `addon.py:1914`, `addon.py:1916`, `addon.py:1923`.
 3. Governanca de a11y existe em checklist e design system:
 `addon/ui/checklist_a11y.md:1`, `addon/ui/checklist_a11y.md:12`, `docs/design_system.md:17`, `docs/design_system.md:23`.

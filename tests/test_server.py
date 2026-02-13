@@ -1,9 +1,7 @@
-import base64
 import json
 import os
 import socket
 import sys
-import tempfile
 import types
 from pathlib import Path
 from unittest import TestCase
@@ -132,79 +130,6 @@ def stub_socket(monkeypatch):
 
     monkeypatch.setattr(server.socket, "socket", fake_socket)
     return queue_socket
-
-
-class GenerateHyper3DModelViaImagesTests(TestCase):
-    def test_file_paths_validation_fails(self):
-        result = server.generate_hyper3d_model_via_images(
-            ctx=None,
-            input_image_paths=["/nonexistent/path.png"],
-        )
-
-        self.assertIn("Error reading image '/nonexistent/path.png'", result)
-
-    def test_urls_validation_fails(self):
-        result = server.generate_hyper3d_model_via_images(
-            ctx=None,
-            input_image_urls=["not-a-valid-url"],
-        )
-
-        self.assertEqual(result, "Error: not all image URLs are valid!")
-
-    def test_generates_model_from_file_paths(self):
-        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-            tmp.write(b"image-bytes")
-            image_path = tmp.name
-
-        expected_b64 = base64.b64encode(b"image-bytes").decode("ascii")
-        mock_blender = MagicMock()
-        mock_blender.send_command.return_value = {
-            "submit_time": True,
-            "uuid": "task-123",
-            "jobs": {"subscription_key": "sub-456"},
-        }
-
-        try:
-            with patch(
-                "blender_mcp.server.get_blender_connection",
-                return_value=mock_blender,
-            ):
-                result = server.generate_hyper3d_model_via_images(
-                    ctx=None,
-                    input_image_paths=[image_path],
-                )
-        finally:
-            os.unlink(image_path)
-
-        payload = json.loads(result)
-        self.assertEqual(payload["task_uuid"], "task-123")
-        mock_blender.send_command.assert_called_once()
-        sent_params = mock_blender.send_command.call_args[0][1]
-        self.assertEqual(sent_params["images"], [(".png", expected_b64)])
-
-    def test_generates_model_from_urls(self):
-        mock_blender = MagicMock()
-        mock_blender.send_command.return_value = {
-            "submit_time": True,
-            "uuid": "task-789",
-            "jobs": {"subscription_key": "sub-987"},
-        }
-        urls = ["https://example.com/img.png"]
-
-        with patch(
-            "blender_mcp.server.get_blender_connection",
-            return_value=mock_blender,
-        ):
-            result = server.generate_hyper3d_model_via_images(
-                ctx=None,
-                input_image_urls=urls,
-            )
-
-        payload = json.loads(result)
-        self.assertEqual(payload["task_uuid"], "task-789")
-        mock_blender.send_command.assert_called_once()
-        sent_params = mock_blender.send_command.call_args[0][1]
-        self.assertEqual(sent_params["images"], urls)
 
 
 def _stub_connection(**kwargs) -> server.BlenderConnection:

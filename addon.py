@@ -41,9 +41,6 @@ bl_info = {
     "category": "Interface",
 }
 
-# Free trial key is loaded only from environment to avoid hardcoded credentials.
-RODIN_FREE_TRIAL_KEY = os.getenv("RODIN_FREE_TRIAL_KEY")
-
 # Add User-Agent as required by Poly Haven API
 REQ_HEADERS = requests.utils.default_headers()
 REQ_HEADERS.update({"User-Agent": "blender-mcp"})
@@ -151,7 +148,6 @@ class BlenderMCPServer(SocketBlenderMCPServer):
             "get_viewport_screenshot": self.get_viewport_screenshot,
             "execute_code": self.execute_code,
             "get_polyhaven_status": self.get_polyhaven_status,
-            "get_hyper3d_status": self.get_hyper3d_status,
             "get_sketchfab_status": self.get_sketchfab_status,
         }
 
@@ -162,15 +158,6 @@ class BlenderMCPServer(SocketBlenderMCPServer):
                 "search_polyhaven_assets": self.search_polyhaven_assets,
                 "download_polyhaven_asset": self.download_polyhaven_asset,
                 "set_texture": self.set_texture,
-            }
-            handlers.update(polyhaven_handlers)
-
-        # Add Hyper3d handlers only if enabled
-        if bpy.context.scene.blendermcp_use_hyper3d:
-            polyhaven_handlers = {
-                "create_rodin_job": self.create_rodin_job,
-                "poll_rodin_job_status": self.poll_rodin_job_status,
-                "import_generated_asset": self.import_generated_asset,
             }
             handlers.update(polyhaven_handlers)
 
@@ -1152,382 +1139,6 @@ class BlenderMCPServer(SocketBlenderMCPServer):
                             3. Restart the connection to your LLM client""",
             }
 
-    # region Hyper3D
-    def get_hyper3d_status(self):
-        """Get the current status of Hyper3D Rodin integration"""
-        enabled = bpy.context.scene.blendermcp_use_hyper3d
-        if enabled:
-            if not bpy.context.scene.blendermcp_hyper3d_api_key:
-                return {
-                    "enabled": False,
-                    "message": """Hyper3D Rodin integration is currently enabled, but API key is not given. To enable it:
-                                1. In the 3D Viewport, find the BlenderMCP panel in the sidebar (press N if hidden)
-                                2. Keep the 'Use Hyper3D Rodin 3D model generation' checkbox checked
-                                3. Choose the right platform and fill in the API Key
-                                4. Restart the connection to your LLM client""",
-                }
-            mode = bpy.context.scene.blendermcp_hyper3d_mode
-            message = (
-                f"Hyper3D Rodin integration is enabled and ready to use. Mode: {mode}. "
-                + f"Key type: {'private' if bpy.context.scene.blendermcp_hyper3d_api_key != RODIN_FREE_TRIAL_KEY else 'free_trial'}"
-            )
-            return {"enabled": True, "message": message}
-        else:
-            return {
-                "enabled": False,
-                "message": """Hyper3D Rodin integration is currently disabled. To enable it:
-                            1. In the 3D Viewport, find the BlenderMCP panel in the sidebar (press N if hidden)
-                            2. Check the 'Use Hyper3D Rodin 3D model generation' checkbox
-                            3. Restart the connection to your LLM client""",
-            }
-
-    def create_rodin_job(self, *args, **kwargs):
-        match bpy.context.scene.blendermcp_hyper3d_mode:
-            case "MAIN_SITE":
-                return self.create_rodin_job_main_site(*args, **kwargs)
-            case "FAL_AI":
-                return self.create_rodin_job_fal_ai(*args, **kwargs)
-            case _:
-                return "Error: Unknown Hyper3D Rodin mode!"
-
-    def create_rodin_job_main_site(
-        self, text_prompt: str = None, images: list[tuple[str, str]] = None, bbox_condition=None
-    ):
-        try:
-            if images is None:
-                images = []
-            """Call Rodin API, get the job uuid and subscription key"""
-            files = [
-                *[
-                    ("images", (f"{i:04d}{img_suffix}", img))
-                    for i, (img_suffix, img) in enumerate(images)
-                ],
-                ("tier", (None, "Sketch")),
-                ("mesh_mode", (None, "Raw")),
-            ]
-            if text_prompt:
-                files.append(("prompt", (None, text_prompt)))
-            if bbox_condition:
-                files.append(("bbox_condition", (None, json.dumps(bbox_condition))))
-            response = requests.post(
-                "https://hyperhuman.deemos.com/api/v2/rodin",
-                headers={
-                    "Authorization": f"Bearer {bpy.context.scene.blendermcp_hyper3d_api_key}",
-                },
-                files=files,
-            )
-            data = response.json()
-            return data
-        except Exception as e:
-            return {"error": str(e)}
-
-    def create_rodin_job_fal_ai(
-        self, text_prompt: str = None, images: list[tuple[str, str]] = None, bbox_condition=None
-    ):
-        try:
-            req_data = {
-                "tier": "Sketch",
-            }
-            if images:
-                req_data["input_image_urls"] = images
-            if text_prompt:
-                req_data["prompt"] = text_prompt
-            if bbox_condition:
-                req_data["bbox_condition"] = bbox_condition
-            response = requests.post(
-                "https://queue.fal.run/fal-ai/hyper3d/rodin",
-                headers={
-                    "Authorization": f"Key {bpy.context.scene.blendermcp_hyper3d_api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=req_data,
-            )
-            data = response.json()
-            return data
-        except Exception as e:
-            return {"error": str(e)}
-
-    def poll_rodin_job_status(self, *args, **kwargs):
-        match bpy.context.scene.blendermcp_hyper3d_mode:
-            case "MAIN_SITE":
-                return self.poll_rodin_job_status_main_site(*args, **kwargs)
-            case "FAL_AI":
-                return self.poll_rodin_job_status_fal_ai(*args, **kwargs)
-            case _:
-                return "Error: Unknown Hyper3D Rodin mode!"
-
-    def poll_rodin_job_status_main_site(self, subscription_key: str):
-        """Call the job status API to get the job status"""
-        response = requests.post(
-            "https://hyperhuman.deemos.com/api/v2/status",
-            headers={
-                "Authorization": f"Bearer {bpy.context.scene.blendermcp_hyper3d_api_key}",
-            },
-            json={
-                "subscription_key": subscription_key,
-            },
-        )
-        data = response.json()
-        return {"status_list": [i["status"] for i in data["jobs"]]}
-
-    def poll_rodin_job_status_fal_ai(self, request_id: str):
-        """Call the job status API to get the job status"""
-        response = requests.get(
-            f"https://queue.fal.run/fal-ai/hyper3d/requests/{request_id}/status",
-            headers={
-                "Authorization": f"KEY {bpy.context.scene.blendermcp_hyper3d_api_key}",
-            },
-        )
-        data = response.json()
-        return data
-
-    @staticmethod
-    def _clean_imported_glb(filepath, mesh_name=None):
-        # Get the set of existing objects before import
-        existing_objects = set(bpy.data.objects)
-
-        # Import the GLB file
-        bpy.ops.import_scene.gltf(filepath=filepath)
-
-        # Ensure the context is updated
-        bpy.context.view_layer.update()
-
-        # Get all imported objects
-        imported_objects = list(set(bpy.data.objects) - existing_objects)
-        # imported_objects = [obj for obj in bpy.context.view_layer.objects if obj.select_get()]
-
-        if not imported_objects:
-            print("Error: No objects were imported.")
-            return
-
-        # Identify the mesh object
-        mesh_obj = None
-
-        if len(imported_objects) == 1 and imported_objects[0].type == "MESH":
-            mesh_obj = imported_objects[0]
-            print("Single mesh imported, no cleanup needed.")
-        else:
-            if len(imported_objects) == 2:
-                empty_objs = [i for i in imported_objects if i.type == "EMPTY"]
-                if len(empty_objs) != 1:
-                    print(
-                        "Error: Expected an empty node with one mesh child or a single mesh object."
-                    )
-                    return
-                parent_obj = empty_objs.pop()
-                if len(parent_obj.children) == 1:
-                    potential_mesh = parent_obj.children[0]
-                    if potential_mesh.type == "MESH":
-                        print("GLB structure confirmed: Empty node with one mesh child.")
-
-                        # Unparent the mesh from the empty node
-                        potential_mesh.parent = None
-
-                        # Remove the empty node
-                        bpy.data.objects.remove(parent_obj)
-                        print("Removed empty node, keeping only the mesh.")
-
-                        mesh_obj = potential_mesh
-                    else:
-                        print("Error: Child is not a mesh object.")
-                        return
-                else:
-                    print(
-                        "Error: Expected an empty node with one mesh child or a single mesh object."
-                    )
-                    return
-            else:
-                print("Error: Expected an empty node with one mesh child or a single mesh object.")
-                return
-
-        # Rename the mesh if needed
-        try:
-            if mesh_obj and mesh_obj.name is not None and mesh_name:
-                mesh_obj.name = mesh_name
-                if mesh_obj.data.name is not None:
-                    mesh_obj.data.name = mesh_name
-                print(f"Mesh renamed to: {mesh_name}")
-        except Exception:
-            print("Having issue with renaming, give up renaming.")
-
-        return mesh_obj
-
-    def import_generated_asset(self, *args, **kwargs):
-        match bpy.context.scene.blendermcp_hyper3d_mode:
-            case "MAIN_SITE":
-                return self.import_generated_asset_main_site(*args, **kwargs)
-            case "FAL_AI":
-                return self.import_generated_asset_fal_ai(*args, **kwargs)
-            case _:
-                return "Error: Unknown Hyper3D Rodin mode!"
-
-    def import_generated_asset_main_site(self, task_uuid: str, name: str):
-        """Fetch the generated asset, import into blender"""
-        response = requests.post(
-            "https://hyperhuman.deemos.com/api/v2/download",
-            headers={
-                "Authorization": f"Bearer {bpy.context.scene.blendermcp_hyper3d_api_key}",
-            },
-            json={"task_uuid": task_uuid},
-        )
-        data_ = response.json()
-        temp_file_path = None
-
-        for i in data_["list"]:
-            if i["name"].endswith(".glb"):
-                temp_file = tempfile.NamedTemporaryFile(
-                    delete=False,
-                    prefix=task_uuid,
-                    suffix=".glb",
-                )
-                temp_file_path = temp_file.name
-
-                try:
-                    # Download the content with progress tracking (MP-02)
-                    operation_id = f"hyper3d_{task_uuid}"
-
-                    response = requests.get(i["url"], stream=True)
-                    response.raise_for_status()  # Raise an exception for HTTP errors
-
-                    total_size = int(response.headers.get("content-length", 0))
-                    downloaded = 0
-
-                    if PROGRESS_AVAILABLE:
-                        tracker = get_progress_tracker()
-                        if tracker:
-                            tracker.start_operation(operation_id, total_size)
-
-                    # Write the content to the temporary file
-                    for chunk in response.iter_content(chunk_size=8192):
-                        temp_file.write(chunk)
-                        downloaded += len(chunk)
-                        if PROGRESS_AVAILABLE and tracker:
-                            tracker.update_progress(operation_id, downloaded)
-
-                    # Close the file
-                    temp_file.close()
-
-                    if PROGRESS_AVAILABLE and tracker:
-                        tracker.complete_operation(operation_id)
-
-                except Exception as e:
-                    # Clean up the file if there's an error
-                    temp_file.close()
-                    if temp_file_path and os.path.exists(temp_file_path):
-                        os.unlink(temp_file_path)
-                    return {"succeed": False, "error": str(e)}
-
-                break
-        else:
-            return {
-                "succeed": False,
-                "error": "Generation failed. Please first make sure that all jobs of the task are done and then try again later.",
-            }
-
-        try:
-            obj = self._clean_imported_glb(filepath=temp_file_path, mesh_name=name)
-            result = {
-                "name": obj.name,
-                "type": obj.type,
-                "location": [obj.location.x, obj.location.y, obj.location.z],
-                "rotation": [obj.rotation_euler.x, obj.rotation_euler.y, obj.rotation_euler.z],
-                "scale": [obj.scale.x, obj.scale.y, obj.scale.z],
-            }
-
-            if obj.type == "MESH":
-                bounding_box = self._get_aabb(obj)
-                result["world_bounding_box"] = bounding_box
-
-            return {"succeed": True, **result}
-        except Exception as e:
-            return {"succeed": False, "error": str(e)}
-        finally:
-            # CRITICAL: Always cleanup temporary file
-            if temp_file_path and os.path.exists(temp_file_path):
-                try:
-                    os.unlink(temp_file_path)
-                except Exception as cleanup_error:
-                    print(f"Warning: Failed to cleanup temp file {temp_file_path}: {cleanup_error}")
-
-    def import_generated_asset_fal_ai(self, request_id: str, name: str):
-        """Fetch the generated asset, import into blender"""
-        response = requests.get(
-            f"https://queue.fal.run/fal-ai/hyper3d/requests/{request_id}",
-            headers={
-                "Authorization": f"Key {bpy.context.scene.blendermcp_hyper3d_api_key}",
-            },
-        )
-        data_ = response.json()
-
-        temp_file = tempfile.NamedTemporaryFile(
-            delete=False,
-            prefix=request_id,
-            suffix=".glb",
-        )
-        temp_file_path = temp_file.name
-
-        try:
-            # Download the content with progress tracking (MP-02)
-            operation_id = f"hyper3d_fal_{request_id}"
-
-            response = requests.get(data_["model_mesh"]["url"], stream=True)
-            response.raise_for_status()  # Raise an exception for HTTP errors
-
-            total_size = int(response.headers.get("content-length", 0))
-            downloaded = 0
-
-            if PROGRESS_AVAILABLE:
-                tracker = get_progress_tracker()
-                if tracker:
-                    tracker.start_operation(operation_id, total_size)
-
-            # Write the content to the temporary file
-            for chunk in response.iter_content(chunk_size=8192):
-                temp_file.write(chunk)
-                downloaded += len(chunk)
-                if PROGRESS_AVAILABLE and tracker:
-                    tracker.update_progress(operation_id, downloaded)
-
-            # Close the file
-            temp_file.close()
-
-            if PROGRESS_AVAILABLE and tracker:
-                tracker.complete_operation(operation_id)
-
-        except Exception as e:
-            # Clean up the file if there's an error
-            temp_file.close()
-            if os.path.exists(temp_file_path):
-                os.unlink(temp_file_path)
-            return {"succeed": False, "error": str(e)}
-
-        try:
-            obj = self._clean_imported_glb(filepath=temp_file_path, mesh_name=name)
-            result = {
-                "name": obj.name,
-                "type": obj.type,
-                "location": [obj.location.x, obj.location.y, obj.location.z],
-                "rotation": [obj.rotation_euler.x, obj.rotation_euler.y, obj.rotation_euler.z],
-                "scale": [obj.scale.x, obj.scale.y, obj.scale.z],
-            }
-
-            if obj.type == "MESH":
-                bounding_box = self._get_aabb(obj)
-                result["world_bounding_box"] = bounding_box
-
-            return {"succeed": True, **result}
-        except Exception as e:
-            return {"succeed": False, "error": str(e)}
-        finally:
-            # CRITICAL: Always cleanup temporary file
-            if os.path.exists(temp_file_path):
-                try:
-                    os.unlink(temp_file_path)
-                except Exception as cleanup_error:
-                    print(f"Warning: Failed to cleanup temp file {temp_file_path}: {cleanup_error}")
-
-    # endregion
-
     # region Sketchfab API
     def get_sketchfab_status(self):
         """Get the current status of Sketchfab integration"""
@@ -1816,15 +1427,6 @@ class BLENDERMCP_PT_Panel(bpy.types.Panel):
         layout.prop(scene, "blendermcp_port")
         layout.prop(scene, "blendermcp_use_polyhaven", text="Use assets from Poly Haven")
 
-        layout.prop(scene, "blendermcp_use_hyper3d", text="Use Hyper3D Rodin 3D model generation")
-        if scene.blendermcp_use_hyper3d:
-            self._draw_api_key_warning(layout)
-            layout.prop(scene, "blendermcp_hyper3d_mode", text="Rodin Mode")
-            layout.prop(scene, "blendermcp_hyper3d_api_key", text="API Key")
-            layout.operator(
-                "blendermcp.set_hyper3d_free_trial_api_key", text="Set Free Trial API Key"
-            )
-
         layout.prop(scene, "blendermcp_use_sketchfab", text="Use assets from Sketchfab")
         if scene.blendermcp_use_sketchfab:
             self._draw_api_key_warning(layout)
@@ -1852,24 +1454,6 @@ class BLENDERMCP_PT_Panel(bpy.types.Panel):
         box.alert = True
         box.label(text="⚠️ API keys are saved in .blend file", icon="ERROR")
         box.label(text="Do not share this file publicly", icon="BLANK1")
-
-
-# Operator to set Hyper3D API Key
-class BLENDERMCP_OT_SetFreeTrialHyper3DAPIKey(bpy.types.Operator):
-    bl_idname = "blendermcp.set_hyper3d_free_trial_api_key"
-    bl_label = "Set Free Trial API Key"
-
-    def execute(self, context):
-        if not RODIN_FREE_TRIAL_KEY:
-            self.report(
-                {"ERROR"},
-                "RODIN_FREE_TRIAL_KEY not configured in environment. Set it before using this action.",
-            )
-            return {"CANCELLED"}
-        context.scene.blendermcp_hyper3d_api_key = RODIN_FREE_TRIAL_KEY
-        context.scene.blendermcp_hyper3d_mode = "MAIN_SITE"
-        self.report({"INFO"}, "API Key set successfully!")
-        return {"FINISHED"}
 
 
 # Operator to start the server
@@ -2040,29 +1624,6 @@ def register():
         default=False,
     )
 
-    bpy.types.Scene.blendermcp_use_hyper3d = bpy.props.BoolProperty(
-        name="Use Hyper3D Rodin",
-        description="Enable Hyper3D Rodin 3D model generation. Generate 3D models from text prompts or images using AI. Requires API key and internet connection.",
-        default=False,
-    )
-
-    bpy.types.Scene.blendermcp_hyper3d_mode = bpy.props.EnumProperty(
-        name="Rodin Mode",
-        description="Choose the platform used to call Rodin APIs. Use 'hyper3d.ai' for the main site or 'fal.ai' for alternative endpoint.",
-        items=[
-            ("MAIN_SITE", "hyper3d.ai", "Use the main Hyper3D API endpoint"),
-            ("FAL_AI", "fal.ai", "Use the fal.ai alternative endpoint"),
-        ],
-        default="MAIN_SITE",
-    )
-
-    bpy.types.Scene.blendermcp_hyper3d_api_key = bpy.props.StringProperty(
-        name="Hyper3D API Key",
-        subtype="PASSWORD",
-        description="Your Hyper3D API key. Click 'Set Free Trial API Key' to load it from RODIN_FREE_TRIAL_KEY env var, or provide your own key from hyper3d.ai. WARNING: Saved in .blend file in plain text.",
-        default="",
-    )
-
     bpy.types.Scene.blendermcp_use_sketchfab = bpy.props.BoolProperty(
         name="Use Sketchfab",
         description="Enable Sketchfab asset integration. Search and download 3D models from Sketchfab. Requires API key and internet connection.",
@@ -2077,7 +1638,6 @@ def register():
     )
 
     bpy.utils.register_class(BLENDERMCP_PT_Panel)
-    bpy.utils.register_class(BLENDERMCP_OT_SetFreeTrialHyper3DAPIKey)
     bpy.utils.register_class(BLENDERMCP_OT_StartServer)
     bpy.utils.register_class(BLENDERMCP_OT_StopServer)
     bpy.utils.register_class(BLENDERMCP_OT_ClearCache)
@@ -2093,7 +1653,6 @@ def unregister():
         del bpy.types.blendermcp_server
 
     bpy.utils.unregister_class(BLENDERMCP_PT_Panel)
-    bpy.utils.unregister_class(BLENDERMCP_OT_SetFreeTrialHyper3DAPIKey)
     bpy.utils.unregister_class(BLENDERMCP_OT_StartServer)
     bpy.utils.unregister_class(BLENDERMCP_OT_StopServer)
     bpy.utils.unregister_class(BLENDERMCP_OT_ClearCache)
@@ -2102,9 +1661,6 @@ def unregister():
     del bpy.types.Scene.blendermcp_port
     del bpy.types.Scene.blendermcp_server_running
     del bpy.types.Scene.blendermcp_use_polyhaven
-    del bpy.types.Scene.blendermcp_use_hyper3d
-    del bpy.types.Scene.blendermcp_hyper3d_mode
-    del bpy.types.Scene.blendermcp_hyper3d_api_key
     del bpy.types.Scene.blendermcp_use_sketchfab
     del bpy.types.Scene.blendermcp_sketchfab_api_key
 

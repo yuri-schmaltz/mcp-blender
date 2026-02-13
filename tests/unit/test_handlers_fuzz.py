@@ -2,7 +2,6 @@ import json
 
 import pytest
 
-from addon.handlers.hyper3d import create_rodin_job
 from addon.handlers.polyhaven import download_polyhaven_asset
 from addon.handlers.scene import get_scene_info
 from addon.handlers.sketchfab import search_sketchfab_models
@@ -18,12 +17,6 @@ def test_polyhaven_download():
     result = download_polyhaven_asset("asset123")
     assert result["status"] == "success"
     assert result["asset_id"] == "asset123"
-
-
-def test_hyper3d_job():
-    result = create_rodin_job({"param": "value"})
-    assert result["status"] == "success"
-    assert "job_id" in result
 
 
 def test_sketchfab_search():

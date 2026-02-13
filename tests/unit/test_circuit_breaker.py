@@ -156,9 +156,6 @@ class TestCircuitBreaker:
         polyhaven = get_circuit_breaker("polyhaven")
         assert polyhaven.name == "polyhaven"
 
-        hyper3d = get_circuit_breaker("hyper3d")
-        assert hyper3d.name == "hyper3d"
-
         sketchfab = get_circuit_breaker("sketchfab")
         assert sketchfab.name == "sketchfab"
 
