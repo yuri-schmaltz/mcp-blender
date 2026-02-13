@@ -22,7 +22,9 @@ def app() -> Generator[QApplication, None, None]:
 
 
 @pytest.fixture
-def gui_window(monkeypatch, tmp_path, app):  # noqa: ARG001 - app fixture ensures QApplication exists
+def gui_window(
+    monkeypatch, tmp_path, app
+):  # noqa: ARG001 - app fixture ensures QApplication exists
     env_file = tmp_path / "config.env"
     monkeypatch.setenv("BLENDER_MCP_ENV_FILE", str(env_file))
 

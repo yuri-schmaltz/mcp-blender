@@ -1,6 +1,7 @@
 # handlers/sketchfab.py - Handler Sketchfab com robustez e logging
 import logging
 
+
 def search_sketchfab_models(query):
     """Busca modelos no Sketchfab."""
     logger = logging.getLogger("Handler.Sketchfab")

@@ -2,12 +2,14 @@
 # Original code by Siddharth Ahuja: www.github.com/ahujasid © 2025
 
 
-import bpy
 import json
-import threading
 import socket
+import threading
 import time
 import traceback
+
+import bpy
+
 from addon.utils.metrics import metrics
 
 
@@ -183,7 +185,6 @@ class BlenderMCPServer:
             metrics.inc("client_handler_error")
         finally:
             metrics.observe("client_handler_duration", time.time() - t0)
-        finally:
             try:
                 client.close()
             except Exception as e:

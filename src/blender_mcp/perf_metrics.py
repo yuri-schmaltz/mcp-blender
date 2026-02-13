@@ -2,8 +2,10 @@
 import logging
 from collections import defaultdict
 
+
 class PerfMetrics:
     """Coleta métricas detalhadas de latência, uso e erros."""
+
     def __init__(self):
         self.counters = defaultdict(int)
         self.timings = defaultdict(list)
@@ -50,5 +52,6 @@ class PerfMetrics:
                 if v
             },
         }
+
 
 perf_metrics = PerfMetrics()

@@ -9,7 +9,6 @@ from pathlib import Path
 
 import pytest
 
-
 BLENDER_EXE = Path(os.getenv("BLENDER_EXE", r"C:\Blender\blender.exe"))
 BOOTSTRAP_SCRIPT = Path(__file__).resolve().parent / "e2e" / "blender_smoke_bootstrap.py"
 

@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from blender_mcp.i18n import _, get_i18n
 from blender_mcp.logging_config import (
     DEFAULT_HANDLER,
     DEFAULT_LOG_FORMAT,
@@ -32,8 +33,6 @@ from blender_mcp.logging_config import (
     configure_logging,
 )
 from blender_mcp.server import DEFAULT_HOST, DEFAULT_PORT
-from blender_mcp.i18n import _, get_i18n
-
 
 ENV_FILE = Path(os.getenv("BLENDER_MCP_ENV_FILE", Path.home() / ".blender_mcp.env"))
 VALID_LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
@@ -221,7 +220,7 @@ class ConfigWindow(QWidget):
         layout.addWidget(self.status_label)
 
         self.setLayout(layout)
-        
+
         # Set tab order for keyboard navigation (QW-04)
         self.setTabOrder(self.host_edit, self.port_spin)
         self.setTabOrder(self.port_spin, self.level_combo)
@@ -235,11 +234,13 @@ class ConfigWindow(QWidget):
         self.setTabOrder(reset_button, self.summary)
 
     def _browse_log_file(self) -> None:
-        file_path, _ = QFileDialog.getSaveFileName(self, "Selecionar arquivo de log", self.log_file_edit.text())
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Selecionar arquivo de log", self.log_file_edit.text()
+        )
         if file_path:
             self.log_file_edit.setText(file_path)
             self._refresh_summary()
-    
+
     def _validate_host_field(self, text: str) -> None:
         """Validate host field in real-time (MP-01)."""
         text = text.strip()
@@ -251,7 +252,7 @@ class ConfigWindow(QWidget):
             self.host_edit.setStyleSheet("")
             self.host_error_label.setText("")
             self._update_apply_button_state()
-    
+
     def _validate_format_field(self, text: str) -> None:
         """Validate log format field in real-time (MP-01)."""
         text = text.strip()
@@ -267,7 +268,7 @@ class ConfigWindow(QWidget):
             self.format_edit.setStyleSheet("")
             self.format_error_label.setText("")
             self._update_apply_button_state()
-    
+
     def _validate_file_field(self, text: str) -> None:
         """Validate log file field in real-time (MP-01)."""
         text = text.strip()
@@ -279,13 +280,13 @@ class ConfigWindow(QWidget):
             self.log_file_edit.setStyleSheet("")
             self.file_error_label.setText("")
             self._update_apply_button_state()
-    
+
     def _update_apply_button_state(self) -> None:
         """Enable apply button only if all fields are valid (MP-01)."""
         host_valid = bool(self.host_edit.text().strip()) and not self.host_error_label.text()
         format_valid = bool(self.format_edit.text().strip()) and not self.format_error_label.text()
         file_valid = bool(self.log_file_edit.text().strip()) and not self.file_error_label.text()
-        
+
         self.apply_button.setEnabled(host_valid and format_valid and file_valid)
 
     def _apply_changes(self) -> None:
@@ -369,7 +370,13 @@ class ConfigWindow(QWidget):
         try:
             formatter = logging.Formatter(log_format)
             record = logging.LogRecord(
-                name="test", level=logging.INFO, pathname=__file__, lineno=1, msg="msg", args=(), exc_info=None
+                name="test",
+                level=logging.INFO,
+                pathname=__file__,
+                lineno=1,
+                msg="msg",
+                args=(),
+                exc_info=None,
             )
             formatter.format(record)
         except Exception:
@@ -388,7 +395,7 @@ class ConfigWindow(QWidget):
         original_text = self.test_connection_button.text()
         self.test_connection_button.setText(_("status_testing"))
         self._set_status(f"{ICON_PROCESSING} {_('status_testing')}", error=False)
-        
+
         try:
             with socket.create_connection((host, port), timeout=1):
                 self._set_status(f"{ICON_SUCCESS} {_('status_success', host=host, port=port)}")
@@ -400,7 +407,10 @@ class ConfigWindow(QWidget):
             elif "timed out" in error_msg.lower():
                 self._set_status(f"{ICON_ERROR} {_('status_timeout')}", error=True)
             else:
-                self._set_status(f"{ICON_ERROR} {_('status_connection_failed', host=host, port=port, error=exc)}", error=True)
+                self._set_status(
+                    f"{ICON_ERROR} {_('status_connection_failed', host=host, port=port, error=exc)}",
+                    error=True,
+                )
         finally:
             # Re-enable button
             self.test_connection_button.setEnabled(True)
@@ -411,7 +421,7 @@ class ConfigWindow(QWidget):
         if not message.startswith((ICON_SUCCESS, ICON_ERROR, ICON_PROCESSING, ICON_WARNING)):
             icon = ICON_ERROR if error else ICON_SUCCESS
             message = f"{icon} {message}"
-        
+
         self.status_label.setText(message)
         color = "#d32f2f" if error else "#2e7d32"
         self.status_label.setStyleSheet(f"color: {color}; font-weight: bold;")

@@ -1,6 +1,7 @@
 # handlers/scene.py - Handler de cena com robustez e logging
 import logging
 
+
 def get_scene_info():
     """Obtém informações da cena atual do Blender."""
     logger = logging.getLogger("Handler.Scene")

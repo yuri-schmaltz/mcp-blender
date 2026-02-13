@@ -3,8 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from blender_mcp import cli
-from blender_mcp import server
+from blender_mcp import cli, server
 
 
 def test_cli_entrypoint_runs_without_blender(monkeypatch):
@@ -15,9 +14,7 @@ def test_cli_entrypoint_runs_without_blender(monkeypatch):
             calls.append("run")
 
     monkeypatch.setattr(server, "mcp", DummyMCP())
-    monkeypatch.setattr(
-        server, "get_blender_connection", lambda: pytest.fail("Should not connect")
-    )
+    monkeypatch.setattr(server, "get_blender_connection", lambda: pytest.fail("Should not connect"))
     monkeypatch.setattr(cli, "configure_logging", lambda **_: None)
 
     spec = importlib.util.spec_from_file_location(

@@ -1,6 +1,7 @@
 # handlers/polyhaven.py - Handler PolyHaven com robustez e logging
 import logging
 
+
 def download_polyhaven_asset(asset_id):
     """Baixa asset do PolyHaven."""
     logger = logging.getLogger("Handler.PolyHaven")

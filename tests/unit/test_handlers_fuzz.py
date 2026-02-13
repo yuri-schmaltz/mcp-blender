@@ -1,29 +1,36 @@
-import pytest
 import json
-from addon.handlers.scene import get_scene_info
-from addon.handlers.polyhaven import download_polyhaven_asset
+
+import pytest
+
 from addon.handlers.hyper3d import create_rodin_job
+from addon.handlers.polyhaven import download_polyhaven_asset
+from addon.handlers.scene import get_scene_info
 from addon.handlers.sketchfab import search_sketchfab_models
+
 
 def test_scene_info():
     result = get_scene_info()
     assert result["status"] == "success"
     assert "scene" in result
 
+
 def test_polyhaven_download():
     result = download_polyhaven_asset("asset123")
     assert result["status"] == "success"
     assert result["asset_id"] == "asset123"
+
 
 def test_hyper3d_job():
     result = create_rodin_job({"param": "value"})
     assert result["status"] == "success"
     assert "job_id" in result
 
+
 def test_sketchfab_search():
     result = search_sketchfab_models("car")
     assert result["status"] == "success"
     assert "results" in result
+
 
 def test_scene_info_fuzz():
     # Fuzzing: entrada inválida não deve quebrar
@@ -31,6 +38,7 @@ def test_scene_info_fuzz():
         get_scene_info(None)
     except Exception:
         pass
+
 
 def test_polyhaven_download_fuzz():
     try:

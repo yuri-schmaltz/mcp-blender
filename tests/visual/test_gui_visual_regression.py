@@ -6,12 +6,12 @@ from pathlib import Path
 
 import pytest
 
-
 pytest.importorskip("PySide6")
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
-
-BASELINE_IMAGE = Path(__file__).resolve().parents[2] / "assets" / "baseline" / "gui_config_window.png"
+BASELINE_IMAGE = (
+    Path(__file__).resolve().parents[2] / "assets" / "baseline" / "gui_config_window.png"
+)
 
 
 def _pixel_diff_ratio(actual, baseline) -> float:

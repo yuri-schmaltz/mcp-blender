@@ -3,4 +3,4 @@
 Modular architecture for better maintainability and testing.
 """
 
-__all__ = ['server', 'handlers', 'ui', 'utils']
+__all__ = ["server", "handlers", "ui", "utils"]
