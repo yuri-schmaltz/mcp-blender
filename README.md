@@ -275,10 +275,10 @@ _Prerequisites_: Make sure you have [Visual Studio Code](https://code.visualstud
 
 ### Installing the Blender Addon
 
-1. Download the `addon.py` file from this repo
+1. In GitHub Releases, download the Blender addon asset (for example: `blender-mcp-addon-v1.3.1.zip`). Do not use the automatic "Source code (zip)" file.
 1. Open Blender
 2. Go to Edit > Preferences > Add-ons
-3. Click "Install..." and select the `addon.py` file
+3. Click "Install..." and select the addon asset `.zip`
 4. Enable the addon by checking the box next to "Interface: Blender MCP"
 
 
