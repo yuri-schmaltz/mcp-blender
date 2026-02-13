@@ -11,7 +11,10 @@ import traceback
 
 import bpy
 
-from addon.utils.metrics import metrics
+try:
+    from .utils.metrics import metrics
+except ImportError:  # pragma: no cover - fallback for legacy direct module loading
+    from utils.metrics import metrics
 
 
 class BlenderMCPServer:

@@ -1,5 +1,6 @@
 # Code created by Siddharth Ahuja: www.github.com/ahujasid © 2025
 
+import importlib.util
 import io
 import json
 import os
@@ -18,7 +19,23 @@ import mathutils
 import requests
 from bpy.props import IntProperty
 
-from addon.server import BlenderMCPServer as SocketBlenderMCPServer
+
+def _load_socket_server_class():
+    """Load addon/server.py robustly in both legacy addon and extension modes."""
+    addon_pkg_dir = os.path.join(os.path.dirname(__file__), "addon")
+    if addon_pkg_dir not in sys.path:
+        sys.path.insert(0, addon_pkg_dir)
+
+    server_path = os.path.join(addon_pkg_dir, "server.py")
+    spec = importlib.util.spec_from_file_location("blender_mcp_socket_server", server_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Could not load socket server module from {server_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.BlenderMCPServer
+
+
+SocketBlenderMCPServer = _load_socket_server_class()
 
 # Import progress tracking for MP-02
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
