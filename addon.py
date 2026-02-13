@@ -53,7 +53,7 @@ except ImportError:
 bl_info = {
     "name": "Blender MCP",
     "author": "BlenderMCP",
-    "version": (1, 3, 4),
+    "version": (1, 3, 5),
     "blender": (3, 0, 0),
     "location": "View3D > Sidebar > BlenderMCP",
     "description": "Connect Blender to local LLM clients via MCP",
@@ -188,6 +188,23 @@ def _resolve_uv_command(cwd: str) -> list[str] | None:
         if code == 0:
             return prefix
     return None
+
+
+def _uv_blender_mcp_command(cwd: str, host: str, port: int, doctor: bool = False) -> list[str] | None:
+    """Build a uv command that works both in repo checkout and installed addon mode."""
+    uv_prefix = _resolve_uv_command(cwd)
+    if uv_prefix is None:
+        return None
+
+    pyproject_path = os.path.join(cwd, "pyproject.toml")
+    if os.path.exists(pyproject_path):
+        cmd = [*uv_prefix, "run", "blender-mcp", "--host", host, "--port", str(port)]
+    else:
+        cmd = [*uv_prefix, "tool", "run", "blender-mcp", "--host", host, "--port", str(port)]
+
+    if doctor:
+        cmd.insert(-4, "--doctor")
+    return cmd
 
 
 def _ensure_pip(cwd: str) -> tuple[bool, str]:
@@ -1703,27 +1720,21 @@ class BLENDERMCP_OT_RunMCPServerTerminal(bpy.types.Operator):
         port = int(context.scene.blendermcp_port)
         root = _project_root()
         host = "localhost"
-        uv_prefix = _resolve_uv_command(root)
-        if uv_prefix is None:
+        cmd = _uv_blender_mcp_command(root, host=host, port=port, doctor=False)
+        if cmd is None:
             self.report({"ERROR"}, "uv not found. Install uv first.")
             _update_action_status(context.scene, "Run MCP Server in Terminal", False, "uv not found")
             return {"CANCELLED"}
 
         try:
             if os.name == "nt":
-                if uv_prefix[0] == "uv":
-                    run_part = f'uv run blender-mcp --host {host} --port {port}'
-                else:
-                    run_part = (
-                        f'"{uv_prefix[0]}" -m uv run blender-mcp --host {host} --port {port}'
-                    )
-                cmd = f'cd /d "{root}" && {run_part}'
-                subprocess.Popen(["cmd", "/c", "start", "cmd", "/k", cmd])
-            else:
                 subprocess.Popen(
-                    [*uv_prefix, "run", "blender-mcp", "--host", host, "--port", str(port)],
+                    cmd,
                     cwd=root,
+                    creationflags=subprocess.CREATE_NEW_CONSOLE,
                 )
+            else:
+                subprocess.Popen(cmd, cwd=root)
         except Exception as exc:
             self.report({"ERROR"}, f"Failed to start MCP server terminal: {exc}")
             _update_action_status(context.scene, "Run MCP Server in Terminal", False, str(exc))
@@ -1757,16 +1768,13 @@ class BLENDERMCP_OT_HealthCheck(bpy.types.Operator):
     def execute(self, context):
         root = _project_root()
         port = int(context.scene.blendermcp_port)
-        uv_prefix = _resolve_uv_command(root)
-        if uv_prefix is None:
+        cmd = _uv_blender_mcp_command(root, host="localhost", port=port, doctor=True)
+        if cmd is None:
             self.report({"ERROR"}, "uv not found in PATH.")
             _update_action_status(context.scene, "Health Check", False, "uv not found")
             return {"CANCELLED"}
 
-        code, output = _run_command(
-            [*uv_prefix, "run", "blender-mcp", "--doctor", "--host", "localhost", "--port", str(port)],
-            cwd=root,
-        )
+        code, output = _run_command(cmd, cwd=root)
         if output:
             print("[blender-mcp] doctor output:")
             print(output)
