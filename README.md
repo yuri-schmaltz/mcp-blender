@@ -379,7 +379,7 @@ $env:RODIN_FREE_TRIAL_KEY="your-key-here"
 set RODIN_FREE_TRIAL_KEY=your-key-here
 ```
 
-If not set, the addon will use the embedded free trial key.
+If not set, the addon will not auto-fill a free trial key.
 
 ## Troubleshooting
 

@@ -20,7 +20,7 @@ class AssetCache:
         import hashlib
 
         cache_key = f"{asset_id}_{asset_type}_{resolution}"
-        cache_hash = hashlib.md5(cache_key.encode()).hexdigest()
+        cache_hash = hashlib.sha256(cache_key.encode("utf-8")).hexdigest()
         return os.path.join(self.cache_dir, f"{cache_hash}.cache")
 
     def get(self, asset_id: str, asset_type: str, resolution: str = "") -> str | None:
@@ -93,7 +93,7 @@ class AssetCache:
                 if os.path.isfile(filepath):
                     total_size += os.path.getsize(filepath)
                     file_count += 1
-        except:
+        except OSError:
             pass
         return total_size, file_count
 

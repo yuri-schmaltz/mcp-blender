@@ -6,22 +6,26 @@ import logging
 import os
 import socket
 import tempfile
+import threading
 import time
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, AsyncIterator, Dict, List
+from typing import Any
 from urllib.parse import urlparse
 
 from mcp.server.fastmcp import Context, FastMCP, Image
 
 from blender_mcp.perf_metrics import perf_metrics
 
+from .logging_config import configure_logging
+
 
 def tool_error(
-    message: str, *, code: str = "runtime_error", data: Dict[str, Any] | None = None
-) -> Dict[str, Any]:
-    payload: Dict[str, Any] = {"error": {"code": code, "message": message}}
+    message: str, *, code: str = "runtime_error", data: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {"error": {"code": code, "message": message}}
     if data:
         payload["error"]["data"] = data
     return payload
@@ -44,7 +48,7 @@ class IncompleteResponseError(Exception):
 
 def _is_transient_socket_error(error: Exception) -> bool:
     transient_errors = (
-        socket.timeout,
+        TimeoutError,
         BrokenPipeError,
         ConnectionAbortedError,
         ConnectionResetError,
@@ -148,7 +152,7 @@ class BlenderConnection:
                     except json.JSONDecodeError:
                         # Incomplete JSON, continue receiving
                         continue
-                except socket.timeout as e:
+                except TimeoutError as e:
                     logger.warning("Socket timeout during chunked receive")
                     raise IncompleteResponseError("Timed out waiting for Blender response") from e
                 except (ConnectionError, BrokenPipeError, ConnectionResetError) as e:
@@ -173,7 +177,7 @@ class BlenderConnection:
 
         raise IncompleteResponseError("No data received")
 
-    def send_command(self, command_type: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
+    def send_command(self, command_type: str, params: dict[str, Any] = None) -> dict[str, Any]:
         """Send a command to Blender and return the response"""
         command = {"type": command_type, "params": params or {}}
 
@@ -221,7 +225,7 @@ class BlenderConnection:
                 BrokenPipeError,
                 ConnectionResetError,
                 ConnectionAbortedError,
-                socket.timeout,
+                TimeoutError,
             ) as e:
                 last_error = e
                 logger.warning(
@@ -254,7 +258,7 @@ class BlenderConnection:
 
 
 @asynccontextmanager
-async def server_lifespan(server: FastMCP) -> AsyncIterator[Dict[str, Any]]:
+async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
     """Manage server startup and shutdown lifecycle"""
     # We don't need to create a connection here since we're using the global connection
     # for resources and tools
@@ -266,7 +270,7 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[Dict[str, Any]]:
         # Try to connect to Blender on startup to verify it's available
         try:
             # This will initialize the global connection if needed
-            blender = get_blender_connection()
+            get_blender_connection()
             logger.info("Successfully connected to Blender on startup")
         except Exception as e:
             logger.warning(f"Could not connect to Blender on startup: {str(e)}")
@@ -277,12 +281,12 @@ async def server_lifespan(server: FastMCP) -> AsyncIterator[Dict[str, Any]]:
         # Return an empty context - we're using the global connection
         yield {}
     finally:
-        # Clean up the global connection on shutdown
-        global _blender_connection
-        if _blender_connection:
+        # Clean up persistent connection on shutdown.
+        connection = _connection_state.get_connection()
+        if connection:
             logger.info("Disconnecting from Blender on shutdown")
-            _blender_connection.disconnect()
-            _blender_connection = None
+            connection.disconnect()
+            _connection_state.clear()
         logger.info("BlenderMCP server shut down")
 
 
@@ -291,56 +295,88 @@ mcp = FastMCP("BlenderMCP", lifespan=server_lifespan)
 
 # Resource endpoints
 
-# Global connection for resources (since resources can't access context)
-_blender_connection = None
-_polyhaven_enabled = False  # Add this global variable
+class _ConnectionState:
+    """Thread-safe state for persistent addon connection and feature flags."""
+
+    def __init__(self) -> None:
+        self._lock = threading.RLock()
+        self.connection: BlenderConnection | None = None
+        self.polyhaven_enabled = False
+
+    def get_connection(self) -> BlenderConnection | None:
+        with self._lock:
+            return self.connection
+
+    def set_connection(self, connection: BlenderConnection | None) -> None:
+        with self._lock:
+            self.connection = connection
+
+    def set_polyhaven_enabled(self, enabled: bool) -> None:
+        with self._lock:
+            self.polyhaven_enabled = enabled
+
+    def is_polyhaven_enabled(self) -> bool:
+        with self._lock:
+            return self.polyhaven_enabled
+
+    def clear(self) -> None:
+        with self._lock:
+            self.connection = None
+            self.polyhaven_enabled = False
+
+
+_connection_state = _ConnectionState()
 
 
 def get_blender_connection():
     """Get or create a persistent Blender connection"""
-    global _blender_connection, _polyhaven_enabled  # Add _polyhaven_enabled to globals
-
-    # If we have an existing connection, check if it's still valid
-    if _blender_connection is not None:
+    existing_connection = _connection_state.get_connection()
+    # If we have an existing connection, check if it's still valid.
+    if existing_connection is not None:
         try:
-            # First check if PolyHaven is enabled by sending a ping command
-            result = _blender_connection.send_command("get_polyhaven_status")
-            # Store the PolyHaven status globally
-            _polyhaven_enabled = result.get("enabled", False)
-            return _blender_connection
+            result = existing_connection.send_command("get_polyhaven_status")
+            _connection_state.set_polyhaven_enabled(result.get("enabled", False))
+            return existing_connection
         except Exception as e:
-            # Connection is dead, close it and create a new one
             logger.warning(f"Existing connection is no longer valid: {str(e)}")
             try:
-                _blender_connection.disconnect()
-            except:
+                existing_connection.disconnect()
+            except Exception:
                 pass
-            _blender_connection = None
+            _connection_state.clear()
 
-    # Create a new connection if needed
-    if _blender_connection is None:
-        host = os.getenv("BLENDER_HOST", DEFAULT_HOST)
-        port = int(os.getenv("BLENDER_PORT", DEFAULT_PORT))
-        timeout = float(os.getenv("BLENDER_SOCKET_TIMEOUT", DEFAULT_SOCKET_TIMEOUT))
-        connect_attempts = int(os.getenv("BLENDER_CONNECT_ATTEMPTS", DEFAULT_CONNECT_ATTEMPTS))
-        command_attempts = int(os.getenv("BLENDER_COMMAND_ATTEMPTS", DEFAULT_COMMAND_ATTEMPTS))
-        backoff_seconds = float(os.getenv("BLENDER_RETRY_BACKOFF", DEFAULT_RETRY_BACKOFF))
+    # Double-check after potential concurrent creation.
+    existing_connection = _connection_state.get_connection()
+    if existing_connection is not None:
+        return existing_connection
 
-        _blender_connection = BlenderConnection(
-            host=host,
-            port=port,
-            timeout=timeout,
-            connect_attempts=connect_attempts,
-            command_attempts=command_attempts,
-            backoff_seconds=backoff_seconds,
-        )
-        if not _blender_connection.connect():
-            logger.error("Failed to connect to Blender")
-            _blender_connection = None
-            raise Exception("Could not connect to Blender. Make sure the Blender addon is running.")
-        logger.info("Created new persistent connection to Blender")
+    host = os.getenv("BLENDER_HOST", DEFAULT_HOST)
+    port = int(os.getenv("BLENDER_PORT", DEFAULT_PORT))
+    timeout = float(os.getenv("BLENDER_SOCKET_TIMEOUT", DEFAULT_SOCKET_TIMEOUT))
+    connect_attempts = int(os.getenv("BLENDER_CONNECT_ATTEMPTS", DEFAULT_CONNECT_ATTEMPTS))
+    command_attempts = int(os.getenv("BLENDER_COMMAND_ATTEMPTS", DEFAULT_COMMAND_ATTEMPTS))
+    backoff_seconds = float(os.getenv("BLENDER_RETRY_BACKOFF", DEFAULT_RETRY_BACKOFF))
 
-    return _blender_connection
+    new_connection = BlenderConnection(
+        host=host,
+        port=port,
+        timeout=timeout,
+        connect_attempts=connect_attempts,
+        command_attempts=command_attempts,
+        backoff_seconds=backoff_seconds,
+    )
+    if not new_connection.connect():
+        logger.error("Failed to connect to Blender")
+        raise Exception("Could not connect to Blender. Make sure the Blender addon is running.")
+
+    existing_connection = _connection_state.get_connection()
+    if existing_connection is not None:
+        new_connection.disconnect()
+        return existing_connection
+
+    _connection_state.set_connection(new_connection)
+    logger.info("Created new persistent connection to Blender")
+    return new_connection
 
 
 def _prepare_temp_file_path(prefix: str = "blender_screenshot", suffix: str = ".png") -> Path:
@@ -525,7 +561,7 @@ def get_polyhaven_categories(ctx: Context, asset_type: str = "hdris") -> str:
     """
     try:
         blender = get_blender_connection()
-        if not _polyhaven_enabled:
+        if not _connection_state.is_polyhaven_enabled():
             return "PolyHaven integration is disabled. Select it in the sidebar in BlenderMCP, then run it again."
         result = blender.send_command("get_polyhaven_categories", {"asset_type": asset_type})
 
@@ -627,7 +663,7 @@ def download_polyhaven_asset(
     if asset_type not in ["hdris", "textures", "models"]:
         return tool_error(
             "Invalid asset type",
-            data={"detail": f"Must be one of: hdris, textures, models", "asset_type": asset_type},
+            data={"detail": "Must be one of: hdris, textures, models", "asset_type": asset_type},
         )
 
     try:
@@ -830,7 +866,7 @@ def get_sketchfab_status(ctx: Context) -> str:
 @mcp.tool()
 def get_mcp_diagnostics(ctx: Context) -> str:
     """Return MCP server diagnostics (metrics + Blender connectivity probe)."""
-    diagnostics: Dict[str, Any] = {
+    diagnostics: dict[str, Any] = {
         "perf_metrics": perf_metrics.report(),
         "connection": {
             "host": os.getenv("BLENDER_HOST", DEFAULT_HOST),
@@ -1269,7 +1305,7 @@ def asset_creation_strategy() -> str:
     3. Always check the world_bounding_box for each item so that:
         - Ensure that all objects that should not be clipping are not clipping.
         - Items have right spatial relationship.
-    
+
     4. Recommended asset source priority:
         - For specific existing objects: First try Sketchfab, then PolyHaven
         - For generic objects/furniture: First try PolyHaven, then Sketchfab
@@ -1284,11 +1320,7 @@ def asset_creation_strategy() -> str:
     - Hyper3D Rodin failed to generate the desired asset
     - The task specifically requires a basic material/color
     """
-
-
 # Main execution
-
-from .logging_config import configure_logging
 
 
 def main(host: str | None = None, port: int | None = None):
@@ -1303,3 +1335,4 @@ def main(host: str | None = None, port: int | None = None):
 
 if __name__ == "__main__":
     main()
+

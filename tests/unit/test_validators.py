@@ -170,7 +170,7 @@ class TestFilePathValidation:
 
     def test_must_exist_check(self):
         """Should check file existence when required."""
-        fake_path = Path("/tmp/nonexistent_file_12345.txt")
+        fake_path = Path(tempfile.gettempdir()) / "nonexistent_file_12345.txt"
         with pytest.raises(ValidationError, match="does not exist"):
             validate_file_path(fake_path, must_exist=True)
 

@@ -6,7 +6,7 @@
 
 BlenderMCP is a Model Context Protocol (MCP) server that enables AI assistants to control Blender 3D through a socket-based communication layer. The system consists of two main components:
 
-1. **Blender Addon** (`addon.py`) - Runs inside Blender, listens on a TCP socket
+1. **Blender Addon** (`addon.py` + `addon/server.py`) - Runs inside Blender, listens on a TCP socket
 2. **MCP Server** (`src/blender_mcp/`) - FastMCP-based server that communicates with the addon
 
 ## System Architecture
@@ -21,7 +21,7 @@ BlenderMCP is a Model Context Protocol (MCP) server that enables AI assistants t
                                                              │
                                                     ┌────────▼────────┐
                                                     │  Blender Addon  │
-                                                    │   (addon.py)    │
+                                                    │ (addon package) │
                                                     └────────┬────────┘
                                                              │
                                                     ┌────────▼────────┐
@@ -32,12 +32,13 @@ BlenderMCP is a Model Context Protocol (MCP) server that enables AI assistants t
 
 ## Components
 
-### 1. Blender Addon (`addon.py`)
+### 1. Blender Addon (`addon.py`, `addon/server.py`)
 
 **Purpose**: Socket server running inside Blender that executes commands.
 
 **Key Classes**:
-- `BlenderMCPServer`: Main server class with socket management
+- `addon.server.BlenderMCPServer`: Socket lifecycle and client handling
+- `addon.py::BlenderMCPServer`: Command router/handlers on top of socket server base
   - `_server_loop()`: Accepts connections in background thread
   - `_handle_client()`: Processes commands from MCP server
   - `execute_command()`: Dispatches to specific handlers
@@ -85,13 +86,13 @@ src/blender_mcp/
 │   ├── validators.py   # Input validation utilities
 │   ├── retry.py        # Retry with exponential backoff
 │   └── __init__.py
-└── temp_file_manager.py # Temporary file cleanup (future use)
 ```
 
 #### Key Modules
 
-**`server.py`** (1142 lines):
+**`server.py`** (~1300 lines):
 - `BlenderConnection`: Socket connection wrapper with retry logic
+- `_ConnectionState`: Thread-safe holder for persistent connection and feature flags
 - MCP tool implementations decorated with `@mcp.tool()`
 - Connection management and error handling
 

@@ -1,6 +1,3 @@
-# test_integration_failures.py - Testes de resiliência e simulação de falhas
-import socket
-
 import pytest
 
 from blender_mcp.server import BlenderConnection, tool_error
@@ -23,7 +20,7 @@ def test_command_timeout(monkeypatch):
             pass
 
         def recv(self, buf):
-            raise socket.timeout()
+            raise TimeoutError()
 
     conn = BlenderConnection(host="localhost", port=9876)
     conn.sock = DummySocket()
@@ -43,5 +40,5 @@ def test_command_fail(monkeypatch):
 
     conn = BlenderConnection(host="localhost", port=9876)
     conn.sock = DummySocket()
-    result = conn.send_command("fake_command")
-    assert "error" in result
+    with pytest.raises(Exception, match="did not respond"):
+        conn.send_command("fake_command")
