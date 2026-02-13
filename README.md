@@ -273,13 +273,15 @@ _Prerequisites_: Make sure you have [Visual Studio Code](https://code.visualstud
 
 [![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_blender--mcp_server-0098FF?style=flat-square&logo=visualstudiocode&logoColor=ffffff)](vscode:mcp/install?%7B%22name%22%3A%22blender-mcp%22%2C%22type%22%3A%22stdio%22%2C%22command%22%3A%22uvx%22%2C%22args%22%3A%5B%22blender-mcp%22%5D%7D)
 
-### Installing the Blender Addon
+### Installing the Blender Extension
 
-1. In GitHub Releases, download the Blender addon asset (for example: `blender-mcp-addon-v1.3.1.zip`). Do not use the automatic "Source code (zip)" file.
+1. In GitHub Releases, download the Blender extension asset (for example: `blender-mcp-extension-v1.3.1.zip`). Do not use the automatic "Source code (zip)" file.
 1. Open Blender
-2. Go to Edit > Preferences > Add-ons
-3. Click "Install..." and select the addon asset `.zip`
-4. Enable the addon by checking the box next to "Interface: Blender MCP"
+2. Go to Edit > Preferences > Extensions
+3. Click the dropdown menu and choose "Install from Disk..."
+4. Select the extension `.zip` and enable "Blender MCP"
+
+The extension package includes `blender_manifest.toml` and `__init__.py` at zip root, as required by Blender Extensions.
 
 
 ## Usage
@@ -341,7 +343,7 @@ uv run blender-mcp --doctor --host localhost --port 9876
 Use the steps below the first time you bring everything online or when you are troubleshooting a broken setup. The goal is to ensure Blender, the MCP server, and your chosen client are all pointing at each other correctly.
 
 1. **Prep Blender and the addon**
-   - Install and enable `addon.py` (see [Installing the Blender Addon](#installing-the-blender-addon)).
+   - Install and enable Blender MCP (see [Installing the Blender Extension](#installing-the-blender-extension)).
    - Open the **BlenderMCP** tab in the sidebar and keep the panel visible so you can read connection status updates.
 2. **Verify host/port alignment**
    - In the Blender panel, check the host and port fields. They default to `localhost` and `9876`.
