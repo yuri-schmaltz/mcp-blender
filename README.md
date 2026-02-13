@@ -293,6 +293,11 @@ _Prerequisites_: Make sure you have [Visual Studio Code](https://code.visualstud
 4. Click "Connect to LLM client"
 5. Ensure your MCP client has started the `blender-mcp` server (you can also launch it manually with `uvx blender-mcp` if needed)
 
+You can also use the new **Local Setup** buttons in the BlenderMCP panel:
+- **Check/Install Dependencies**: runs `uv sync --extra gui --extra test` in the project root.
+- **Run MCP Server in Terminal**: launches `uv run blender-mcp --host localhost --port <panel-port>` in a new terminal.
+- **Copy MCP Client Config**: copies a ready stdio config snippet (Claude Desktop, Cursor, Ollama-compatible MCP client, LM Studio) to your clipboard.
+
 ### Complete usage walkthrough
 
 Use the steps below the first time you bring everything online or when you are troubleshooting a broken setup. The goal is to ensure Blender, the MCP server, and your chosen client are all pointing at each other correctly.

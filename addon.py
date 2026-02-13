@@ -4,6 +4,7 @@ import io
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import time
@@ -125,6 +126,51 @@ class AssetCache:
 
 # Global cache instance
 _asset_cache = AssetCache()
+
+
+def _project_root() -> str:
+    """Return repository root path based on addon.py location."""
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def _run_command(command: list[str], cwd: str) -> tuple[int, str]:
+    """Run command and return exit code + combined output."""
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=1200,
+            check=False,
+        )
+    except FileNotFoundError:
+        return 127, f"Command not found: {command[0]}"
+    except Exception as exc:  # pragma: no cover - defensive path
+        return 1, str(exc)
+
+    output = (completed.stdout or "").strip()
+    err = (completed.stderr or "").strip()
+    combined = "\n".join(part for part in [output, err] if part)
+    return completed.returncode, combined
+
+
+def _mcp_client_config_snippet(client: str, host: str, port: int) -> str:
+    """Generate stdio config snippets for MCP-compatible clients."""
+    args = ["run", "blender-mcp", "--host", host, "--port", str(port)]
+    config = {"mcpServers": {"blender": {"command": "uv", "args": args}}}
+    if client == "claude":
+        return json.dumps(config, indent=2)
+    if client == "cursor":
+        return json.dumps(config, indent=2)
+    if client == "lm_studio":
+        return json.dumps(config, indent=2)
+    if client == "ollama":
+        return (
+            "Use this in your MCP-capable Ollama client (Continue/Open WebUI/etc):\n"
+            + json.dumps(config, indent=2)
+        )
+    return json.dumps(config, indent=2)
 
 
 class BlenderMCPServer(SocketBlenderMCPServer):
@@ -1438,6 +1484,25 @@ class BLENDERMCP_PT_Panel(bpy.types.Panel):
             layout.operator("blendermcp.stop_server", text="Disconnect from MCP server")
             layout.label(text=f"Running on port {scene.blendermcp_port}")
 
+        setup_box = layout.box()
+        setup_box.label(text="Local Setup", icon="CONSOLE")
+        setup_box.operator(
+            "blendermcp.install_dependencies",
+            text="Check/Install Dependencies",
+            icon="IMPORT",
+        )
+        setup_box.operator(
+            "blendermcp.run_mcp_terminal_server",
+            text="Run MCP Server in Terminal",
+            icon="PLAY",
+        )
+        setup_box.prop(scene, "blendermcp_client_target", text="Client")
+        setup_box.operator(
+            "blendermcp.copy_mcp_client_config",
+            text="Copy MCP Client Config",
+            icon="COPYDOWN",
+        )
+
         # MP-05: Asset cache management
         layout.separator()
         cache_box = layout.box()
@@ -1473,6 +1538,76 @@ class BLENDERMCP_OT_StartServer(bpy.types.Operator):
         bpy.types.blendermcp_server.start()
         scene.blendermcp_server_running = True
 
+        return {"FINISHED"}
+
+
+class BLENDERMCP_OT_InstallDependencies(bpy.types.Operator):
+    bl_idname = "blendermcp.install_dependencies"
+    bl_label = "Check/Install Dependencies"
+    bl_description = "Run uv sync --extra gui --extra test in project root"
+
+    def execute(self, context):
+        root = _project_root()
+        code, output = _run_command(["uv", "--version"], cwd=root)
+        if code != 0:
+            self.report(
+                {"ERROR"},
+                "uv not found in PATH. Install uv first, then try again.",
+            )
+            return {"CANCELLED"}
+
+        code, output = _run_command(["uv", "sync", "--extra", "gui", "--extra", "test"], cwd=root)
+        if code != 0:
+            self.report({"ERROR"}, "Dependency sync failed. See Blender console for details.")
+            if output:
+                print("[blender-mcp] uv sync output:")
+                print(output)
+            return {"CANCELLED"}
+
+        self.report({"INFO"}, "Dependencies are ready (uv sync completed).")
+        return {"FINISHED"}
+
+
+class BLENDERMCP_OT_RunMCPServerTerminal(bpy.types.Operator):
+    bl_idname = "blendermcp.run_mcp_terminal_server"
+    bl_label = "Run MCP Server in Terminal"
+    bl_description = "Launch uv run blender-mcp --host localhost --port <port> in a new terminal"
+
+    def execute(self, context):
+        port = int(context.scene.blendermcp_port)
+        root = _project_root()
+        host = "localhost"
+
+        try:
+            if os.name == "nt":
+                cmd = (
+                    f'cd /d "{root}" && uv run blender-mcp --host {host} --port {port}'
+                )
+                subprocess.Popen(["cmd", "/c", "start", "cmd", "/k", cmd])
+            else:
+                subprocess.Popen(
+                    ["uv", "run", "blender-mcp", "--host", host, "--port", str(port)],
+                    cwd=root,
+                )
+        except Exception as exc:
+            self.report({"ERROR"}, f"Failed to start MCP server terminal: {exc}")
+            return {"CANCELLED"}
+
+        self.report({"INFO"}, f"MCP server terminal launched on {host}:{port}.")
+        return {"FINISHED"}
+
+
+class BLENDERMCP_OT_CopyMCPClientConfig(bpy.types.Operator):
+    bl_idname = "blendermcp.copy_mcp_client_config"
+    bl_label = "Copy MCP Client Config"
+    bl_description = "Copy stdio config snippet for Claude/Cursor/Ollama/LM Studio"
+
+    def execute(self, context):
+        scene = context.scene
+        client = scene.blendermcp_client_target
+        snippet = _mcp_client_config_snippet(client, host="localhost", port=int(scene.blendermcp_port))
+        context.window_manager.clipboard = snippet
+        self.report({"INFO"}, f"Copied {client} MCP config to clipboard.")
         return {"FINISHED"}
 
 
@@ -1636,10 +1771,24 @@ def register():
         description="Your Sketchfab API key. Get it from sketchfab.com/settings/password. Only models you have download access to will work. WARNING: Saved in .blend file in plain text.",
         default="",
     )
+    bpy.types.Scene.blendermcp_client_target = bpy.props.EnumProperty(
+        name="MCP Client",
+        description="Client target for config snippet",
+        items=[
+            ("claude", "Claude Desktop", "Copy config snippet for Claude Desktop"),
+            ("cursor", "Cursor", "Copy config snippet for Cursor"),
+            ("ollama", "Ollama", "Copy config snippet for an MCP-capable Ollama client"),
+            ("lm_studio", "LM Studio", "Copy config snippet for LM Studio"),
+        ],
+        default="claude",
+    )
 
     bpy.utils.register_class(BLENDERMCP_PT_Panel)
     bpy.utils.register_class(BLENDERMCP_OT_StartServer)
     bpy.utils.register_class(BLENDERMCP_OT_StopServer)
+    bpy.utils.register_class(BLENDERMCP_OT_InstallDependencies)
+    bpy.utils.register_class(BLENDERMCP_OT_RunMCPServerTerminal)
+    bpy.utils.register_class(BLENDERMCP_OT_CopyMCPClientConfig)
     bpy.utils.register_class(BLENDERMCP_OT_ClearCache)
     bpy.utils.register_class(BLENDERMCP_OT_DownloadProgress)
 
@@ -1655,6 +1804,9 @@ def unregister():
     bpy.utils.unregister_class(BLENDERMCP_PT_Panel)
     bpy.utils.unregister_class(BLENDERMCP_OT_StartServer)
     bpy.utils.unregister_class(BLENDERMCP_OT_StopServer)
+    bpy.utils.unregister_class(BLENDERMCP_OT_InstallDependencies)
+    bpy.utils.unregister_class(BLENDERMCP_OT_RunMCPServerTerminal)
+    bpy.utils.unregister_class(BLENDERMCP_OT_CopyMCPClientConfig)
     bpy.utils.unregister_class(BLENDERMCP_OT_ClearCache)
     bpy.utils.unregister_class(BLENDERMCP_OT_DownloadProgress)
 
@@ -1663,6 +1815,7 @@ def unregister():
     del bpy.types.Scene.blendermcp_use_polyhaven
     del bpy.types.Scene.blendermcp_use_sketchfab
     del bpy.types.Scene.blendermcp_sketchfab_api_key
+    del bpy.types.Scene.blendermcp_client_target
 
     print("BlenderMCP addon unregistered")
 

@@ -65,3 +65,15 @@ def test_cli_arguments_override_env(monkeypatch):
 
     assert logging_calls == [("debug", "%(levelname)s:%(message)s", "file")]
     assert server_calls == [("cli-host", 1234)]
+
+
+def test_cli_print_client_config_exits_without_starting_server(monkeypatch, capsys):
+    monkeypatch.setattr(cli, "configure_logging", lambda **_: None)
+    monkeypatch.setattr(server, "main", lambda **_: pytest.fail("server.main should not run"))
+
+    cli.main(["--print-client-config", "lm_studio", "--host", "localhost", "--port", "9876"])
+    output = capsys.readouterr().out
+
+    assert '"mcpServers"' in output
+    assert '"command": "uv"' in output
+    assert '"blender-mcp"' in output
