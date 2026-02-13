@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Optional
 
 DEFAULT_LOG_LEVEL = "INFO"
 DEFAULT_LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -29,9 +28,9 @@ def _create_handler(handler_type: str, log_format: str, log_level: int) -> loggi
 
 def configure_logging(
     *,
-    level: Optional[str] = None,
-    log_format: Optional[str] = None,
-    handler_type: Optional[str] = None,
+    level: str | None = None,
+    log_format: str | None = None,
+    handler_type: str | None = None,
 ) -> None:
     """Configure root logging for the MCP server.
 

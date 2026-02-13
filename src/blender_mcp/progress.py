@@ -5,8 +5,8 @@ and other long-running operations in the Blender addon.
 """
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Optional
 
 
 @dataclass
@@ -18,7 +18,7 @@ class ProgressInfo:
     downloaded_bytes: int
     start_time: float
     status: str  # 'running', 'completed', 'cancelled', 'error'
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
     @property
     def progress_percent(self) -> float:
@@ -41,7 +41,7 @@ class ProgressInfo:
         return mb_downloaded / self.elapsed_time
 
     @property
-    def eta_seconds(self) -> Optional[int]:
+    def eta_seconds(self) -> int | None:
         """Get estimated time remaining in seconds."""
         if self.downloaded_bytes == 0 or self.download_speed_mbps == 0:
             return None
@@ -143,7 +143,7 @@ class ProgressTracker:
             progress.error_message = error_message
             self._notify_callbacks(progress)
 
-    def get_progress(self, operation_id: str) -> Optional[ProgressInfo]:
+    def get_progress(self, operation_id: str) -> ProgressInfo | None:
         """Get progress for an operation."""
         return self._operations.get(operation_id)
 
@@ -190,7 +190,7 @@ class ProgressTracker:
 
 
 # Global progress tracker instance
-_global_tracker: Optional[ProgressTracker] = None
+_global_tracker: ProgressTracker | None = None
 
 
 def get_progress_tracker() -> ProgressTracker:

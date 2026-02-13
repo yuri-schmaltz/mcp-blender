@@ -1,8 +1,6 @@
 # panel.py - Exemplo de painel com tokens e acessibilidade
 import bpy
 
-from .tokens import COLORS, FONT_SIZES, SPACING
-
 
 class MCP_PT_MainPanel(bpy.types.Panel):
     bl_label = "MCP Principal"

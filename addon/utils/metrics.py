@@ -1,6 +1,5 @@
 # metrics.py - Instrumentação mínima de métricas para baseline
 import logging
-import time
 from collections import defaultdict
 
 

@@ -1,8 +1,6 @@
 # operators.py - Exemplo de operador com feedback e acessibilidade
 import bpy
 
-from .tokens import COLORS
-
 
 class MCP_OT_Executar(bpy.types.Operator):
     bl_idname = "mcp.executar"
