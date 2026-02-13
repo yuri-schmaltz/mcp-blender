@@ -7,6 +7,8 @@ import os
 from typing import Generator
 
 import pytest
+
+pytest.importorskip("PySide6")
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
@@ -37,7 +39,8 @@ def test_invalid_host_triggers_error(gui_window):
 
     QTest.mouseClick(gui_window.apply_button, Qt.LeftButton)
 
-    assert "Host não pode ser vazio" in gui_window.status_label.text()
+    assert gui_window.apply_button.isEnabled() is False
+    assert gui_window.host_error_label.text()
 
 
 def test_invalid_format_triggers_error(gui_window):
@@ -46,7 +49,8 @@ def test_invalid_format_triggers_error(gui_window):
 
     QTest.mouseClick(gui_window.apply_button, Qt.LeftButton)
 
-    assert "Formato de log inválido" in gui_window.status_label.text()
+    assert gui_window.apply_button.isEnabled() is False
+    assert gui_window.format_error_label.text()
 
 
 def test_to_environment_reflects_changes(gui_window):
@@ -66,3 +70,16 @@ def test_to_environment_reflects_changes(gui_window):
     assert env["BLENDER_MCP_LOG_FORMAT"] == "%(message)s"
     assert env["BLENDER_MCP_LOG_HANDLER"] == "console"
     assert env["BLENDER_MCP_LOG_FILE"] == "custom.log"
+
+
+def test_handler_uses_canonical_value_when_label_changes(gui_window):
+    gui_window.handler_combo.setItemText(0, "Console traduzido")
+    gui_window.handler_combo.setCurrentIndex(0)
+    gui_window.host_edit.setText("localhost")
+    gui_window.format_edit.setText("%(message)s")
+    gui_window.log_file_edit.setText("custom.log")
+
+    gui_window._sync_config_from_widgets(allow_defaults=False)
+    env = gui_window.config.to_environment()
+
+    assert env["BLENDER_MCP_LOG_HANDLER"] == "console"

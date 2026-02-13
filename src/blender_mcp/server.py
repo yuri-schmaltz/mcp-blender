@@ -56,7 +56,6 @@ def _is_transient_socket_error(error: Exception) -> bool:
         return True
 
     return False
-    import time
 
 @dataclass
 class BlenderConnection:
@@ -449,6 +448,7 @@ def get_viewport_screenshot(ctx: Context, max_size: int = 800) -> Image:
     
     Returns the screenshot as an Image.
     """
+    t0 = time.time()
     temp_path = _prepare_temp_file_path()
     try:
         blender = get_blender_connection()
@@ -460,15 +460,18 @@ def get_viewport_screenshot(ctx: Context, max_size: int = 800) -> Image:
         })
 
         if "error" in result:
-                t0 = time.time()
             raise Exception(result["error"])
 
         image_bytes = _read_file_with_retry(temp_path)
 
+        perf_metrics.inc("viewport_screenshot_success")
+        perf_metrics.observe("viewport_screenshot_latency", time.time() - t0)
         return Image(data=image_bytes, format="png")
 
     except Exception as e:
         logger.error(f"Error capturing screenshot: {str(e)}")
+        perf_metrics.inc("viewport_screenshot_error")
+        perf_metrics.observe("viewport_screenshot_latency", time.time() - t0)
         guidance = (
             "Screenshot failed: "
             f"{str(e)}. Check that Blender can write to {temp_path.parent} "
@@ -734,8 +737,6 @@ def set_texture(
         logger.error(f"Error applying texture: {str(e)}")
         return tool_error("Error applying texture", data={"detail": str(e), "texture_id": texture_id})
 
-                    perf_metrics.inc("connection_fail")
-                    perf_metrics.observe("connection_latency", time.time() - t0)
 @mcp.tool()
 def get_polyhaven_status(ctx: Context) -> str:
     """
@@ -792,6 +793,33 @@ def get_sketchfab_status(ctx: Context) -> str:
         logger.error(f"Error checking Sketchfab status: {str(e)}")
         return tool_error("Error checking Sketchfab status", data={"detail": str(e)})
 
+
+@mcp.tool()
+def get_mcp_diagnostics(ctx: Context) -> str:
+    """Return MCP server diagnostics (metrics + Blender connectivity probe)."""
+    diagnostics: Dict[str, Any] = {
+        "perf_metrics": perf_metrics.report(),
+        "connection": {
+            "host": os.getenv("BLENDER_HOST", DEFAULT_HOST),
+            "port": int(os.getenv("BLENDER_PORT", DEFAULT_PORT)),
+            "reachable": False,
+        },
+    }
+
+    try:
+        blender = get_blender_connection()
+        scene_info = blender.send_command("get_scene_info")
+        diagnostics["connection"]["reachable"] = True
+        diagnostics["scene_probe"] = {
+            "name": scene_info.get("name"),
+            "object_count": scene_info.get("object_count"),
+            "materials_count": scene_info.get("materials_count"),
+        }
+    except Exception as exc:
+        diagnostics["connection"]["error"] = str(exc)
+
+    return json.dumps(diagnostics, indent=2)
+
 @mcp.tool()
 def search_sketchfab_models(
     ctx: Context,
@@ -824,9 +852,8 @@ def search_sketchfab_models(
             data={"detail": "Count must be between 1 and 100", "count": count}
         )
     
+    t0 = time.time()
     try:
-                t0 = time.time()
-        
         blender = get_blender_connection()
         logger.info(f"Searching Sketchfab models with query: {query}, categories: {categories}, count: {count}, downloadable: {downloadable}")
         result = blender.send_command("search_sketchfab_models", {
@@ -838,60 +865,59 @@ def search_sketchfab_models(
 
         if "error" in result:
             logger.error(f"Error from Sketchfab search: {result['error']}")
+            perf_metrics.inc("sketchfab_search_error")
+            perf_metrics.observe("sketchfab_search_latency", time.time() - t0)
             return tool_error("Sketchfab search failed", data={"detail": result["error"], "query": query})
         
         # Safely get results with fallbacks for None
         if result is None:
             logger.error("Received None result from Sketchfab search")
+            perf_metrics.inc("sketchfab_search_error")
+            perf_metrics.observe("sketchfab_search_latency", time.time() - t0)
             return tool_error("Sketchfab search returned no data", data={"query": query})
-            
-                                perf_metrics.inc("response_timeout")
-                                perf_metrics.observe("response_latency", time.time() - t0)
+
         # Format the results
         models = result.get("results", []) or []
-                                perf_metrics.inc("response_error")
-                                perf_metrics.observe("response_latency", time.time() - t0)
         if not models:
+            perf_metrics.inc("sketchfab_search_empty")
+            perf_metrics.observe("sketchfab_search_latency", time.time() - t0)
             return f"No models found matching '{query}'"
-                    perf_metrics.inc("response_success")
-                    perf_metrics.observe("response_latency", time.time() - t0)
-            
+
         formatted_output = f"Found {len(models)} models matching '{query}':\n\n"
-        
+
         for model in models:
-                    t0 = time.time()
             if model is None:
                 continue
-                
+
             model_name = model.get("name", "Unnamed model")
             model_uid = model.get("uid", "Unknown ID")
             formatted_output += f"- {model_name} (UID: {model_uid})\n"
-            
+
             # Get user info with safety checks
             user = model.get("user") or {}
             username = user.get("username", "Unknown author") if isinstance(user, dict) else "Unknown author"
             formatted_output += f"  Author: {username}\n"
-                            perf_metrics.inc("command_success")
-                            perf_metrics.observe("command_latency", time.time() - t0)
-            
+
             # Get license info with safety checks
             license_data = model.get("license") or {}
             license_label = license_data.get("label", "Unknown") if isinstance(license_data, dict) else "Unknown"
             formatted_output += f"  License: {license_label}\n"
-            
+
             # Add face count and downloadable status
             face_count = model.get("faceCount", "Unknown")
             is_downloadable = "Yes" if model.get("isDownloadable") else "No"
             formatted_output += f"  Face count: {face_count}\n"
             formatted_output += f"  Downloadable: {is_downloadable}\n\n"
-                                perf_metrics.inc("command_fail")
-                                perf_metrics.observe("command_latency", time.time() - t0)
-        
+
+        perf_metrics.inc("sketchfab_search_success")
+        perf_metrics.observe("sketchfab_search_latency", time.time() - t0)
         return formatted_output
     except Exception as e:
         logger.error(f"Error searching Sketchfab models: {str(e)}")
         import traceback
         logger.error(traceback.format_exc())
+        perf_metrics.inc("sketchfab_search_error")
+        perf_metrics.observe("sketchfab_search_latency", time.time() - t0)
         return tool_error("Error searching Sketchfab models", data={"detail": str(e), "query": query})
 
 @mcp.tool()
@@ -1200,8 +1226,12 @@ def asset_creation_strategy() -> str:
 
 from .logging_config import configure_logging
     
-def main():
+def main(host: str | None = None, port: int | None = None):
     """Run the MCP server"""
+    if host:
+        os.environ["BLENDER_HOST"] = host
+    if port:
+        os.environ["BLENDER_PORT"] = str(port)
     configure_logging()
     mcp.run()
 

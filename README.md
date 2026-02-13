@@ -547,6 +547,32 @@ If not set, the addon will use the embedded free trial key.
 
 ### Advanced Troubleshooting
 
+#### Validation smoke tests
+
+Use these commands to validate the critical path incrementally:
+
+```bash
+# Real Blender + addon socket smoke test (Windows default path: C:\Blender\blender.exe)
+pytest tests/test_e2e_addon_server.py -q
+
+# MCP server diagnostics unit tests
+pytest tests/test_server.py -q
+
+# GUI validation tests (requires PySide6)
+pytest tests/test_gui.py -q
+
+# Visual regression (requires PySide6 + baseline image)
+pytest tests/visual/test_gui_visual_regression.py -q
+```
+
+To create/update visual baseline intentionally:
+
+```bash
+set BLENDER_MCP_UPDATE_BASELINE=1
+pytest tests/visual/test_gui_visual_regression.py -q
+set BLENDER_MCP_UPDATE_BASELINE=
+```
+
 #### Enable debug logging
 
 ```bash

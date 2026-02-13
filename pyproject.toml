@@ -66,6 +66,10 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --strict-markers --tb=short"
+markers = [
+    "e2e: end-to-end tests that use real external processes (e.g., Blender)",
+    "visual: visual regression tests based on screenshot baseline",
+]
 
 [tool.coverage.run]
 source = ["src/blender_mcp"]
