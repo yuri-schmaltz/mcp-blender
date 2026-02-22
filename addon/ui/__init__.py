@@ -1,21 +1,9 @@
-"""Blender UI components (panels and operators)."""
+"""BlenderMCP UI package - panels and operators."""
 
-from .operators import MCP_OT_Executar
-from .panel import MCP_PT_MainPanel
+from .operators import OPERATOR_CLASSES
+from .panel import PANEL_CLASSES
 
+# All UI classes for Blender registration
+UI_CLASSES = PANEL_CLASSES + OPERATOR_CLASSES
 
-def register():
-    import bpy
-
-    bpy.utils.register_class(MCP_PT_MainPanel)
-    bpy.utils.register_class(MCP_OT_Executar)
-
-
-def unregister():
-    import bpy
-
-    bpy.utils.unregister_class(MCP_PT_MainPanel)
-    bpy.utils.unregister_class(MCP_OT_Executar)
-
-
-__all__ = ["panel", "operators", "register", "unregister"]
+__all__ = ["UI_CLASSES", "OPERATOR_CLASSES", "PANEL_CLASSES"]
