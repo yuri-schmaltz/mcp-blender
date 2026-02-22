@@ -2,6 +2,8 @@
 
 import bpy
 import os
+import math
+import mathutils
 
 
 def set_exact_dimensions(scene, object_name, size_x=None, size_y=None, size_z=None):
@@ -189,3 +191,185 @@ def export_for_printing(scene, object_names=None, filepath=None):
 
     except Exception as e:
         return {"error": f"Failed to export for printing: {str(e)}"}
+
+
+def assign_print_color(scene, object_name, hex_color):
+    """Assign a base color to an object for multi-color 3D printing (stored in material base color)."""
+    try:
+        if object_name not in scene.objects:
+            return {"error": f"Object '{object_name}' not found."}
+            
+        obj = scene.objects[object_name]
+        if obj.type != 'MESH':
+            return {"error": f"Object '{object_name}' is not a MESH."}
+
+        # Validate and convert hex to RGBA
+        hex_color = hex_color.lstrip('#')
+        if len(hex_color) == 3:
+            hex_color = ''.join([c*2 for c in hex_color])
+        if len(hex_color) != 6:
+            return {"error": f"Invalid hex color '{hex_color}'. Use 6-character hex (e.g. FF0000)."}
+            
+        # Convert hex to linear RGB (Blender uses linear internally)
+        # Standard sRGB to Linear conversion
+        srgb = tuple(int(hex_color[i:i+2], 16) / 255.0 for i in (0, 2, 4))
+        linear_rgb = [(c / 12.92) if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in srgb]
+        rgba = (*linear_rgb, 1.0)
+        
+        # Create or update material
+        mat_name = f"PrintColor_{hex_color}"
+        mat = bpy.data.materials.get(mat_name)
+        
+        if not mat:
+            mat = bpy.data.materials.new(name=mat_name)
+            mat.use_nodes = True
+            principled = mat.node_tree.nodes.get("Principled BSDF")
+            if principled:
+                principled.inputs["Base Color"].default_value = rgba
+                # Make it look somewhat like plastic in viewport
+                principled.inputs["Roughness"].default_value = 0.5
+                principled.inputs["Specular IOR Level"].default_value = 0.5
+
+        # Assign material to object
+        if len(obj.data.materials) == 0:
+            obj.data.materials.append(mat)
+        else:
+            obj.data.materials[0] = mat
+
+        return {
+            "success": True,
+            "message": f"Color #{hex_color} assigned to '{object_name}' for multi-color printing.",
+            "material": mat_name
+        }
+    except Exception as e:
+        return {"error": f"Failed to assign print color: {str(e)}"}
+
+
+def auto_layout_for_printing(scene, bed_size_x=256, bed_size_y=256, padding_mm=5):
+    """Automatically layout all mesh objects flat on the virtual print bed (Z=0) with spacing."""
+    try:
+        meshes = [obj for obj in scene.objects if obj.type == 'MESH' and not obj.hide_get()]
+        
+        if not meshes:
+             return {"error": "No visible meshes found to layout."}
+             
+        padding_m = padding_mm / 1000.0
+        
+        # First, ensure all objects are resting on Z=0
+        for obj in meshes:
+            bpy.context.view_layer.update()
+            # Get the lowest point of the bounding box relative to world
+            bbox_corners = [obj.matrix_world @ mathutils.Vector(corner) for corner in obj.bound_box]
+            lowest_z = min(corner.z for corner in bbox_corners)
+            # Move the object up by the negative of its lowest Z point
+            obj.location.z -= lowest_z
+            
+        # Very simple grid layout strategy (O(N^2) bounding box check if advanced, but we do simple grid)
+        # We sort objects by their largest dimension purely for aesthetic/packing heuristics
+        def get_max_dim(obj):
+            return max(obj.dimensions.x, obj.dimensions.y)
+            
+        meshes.sort(key=get_max_dim, reverse=True)
+        
+        current_x = 0.0
+        current_y = 0.0
+        row_height = 0.0
+        
+        # Bed origin logic (center of bed is usually 0,0 in Bambu/Prusa)
+        # So bed ranges from -bed/2 to +bed/2.
+        # We start packing from bottom left:
+        start_x = - (bed_size_x / 2000.0) + padding_m
+        start_y = - (bed_size_y / 2000.0) + padding_m
+        
+        current_x = start_x
+        current_y = start_y
+        
+        for obj in meshes:
+            bpy.context.view_layer.update()
+            width = obj.dimensions.x
+            height = obj.dimensions.y
+            
+            # Check if it fits in current row
+            if current_x + width > (bed_size_x / 2000.0):
+                # Move to next row
+                current_x = start_x
+                current_y += row_height + padding_m
+                row_height = 0.0
+                
+            # Place object (object origin might not be bounding box center, so adjust)
+            # Find vector from origin to bottom-left corner of bounding box
+            bbox_corners = [obj.matrix_world @ mathutils.Vector(corner) for corner in obj.bound_box]
+            min_x = min(corner.x for corner in bbox_corners)
+            min_y = min(corner.y for corner in bbox_corners)
+            
+            offset_x = obj.location.x - min_x
+            offset_y = obj.location.y - min_y
+            
+            obj.location.x = current_x + offset_x
+            obj.location.y = current_y + offset_y
+            
+            current_x += width + padding_m
+            row_height = max(row_height, height)
+
+        bpy.context.view_layer.update()
+        return {
+            "success": True,
+            "message": f"Successfully laid out {len(meshes)} objects on the bed (Z=0).",
+            "objects_arranged": len(meshes)
+        }
+    except Exception as e:
+        return {"error": f"Failed to auto-layout objects: {str(e)}"}
+
+
+def export_3mf_for_multicolor(scene, filepath=None):
+    """Export the scene to a .3mf file, preserving materials for Bambu Studio/PrusaSlicer."""
+    try:
+        # Check if 3MF addon is enabled
+        if not hasattr(bpy.ops.export_mesh, "threemf") and not hasattr(bpy.ops.export_scene, "threemf"):
+            try:
+                # Try to enable the built-in 3mf addon
+                import addon_utils
+                addon_utils.enable("io_scene_3mf")
+            except Exception as e:
+                return {"error": f"The io_scene_3mf addon is not enabled and couldn't be loaded: {str(e)}"}
+                
+        if not filepath:
+            filepath = os.path.join(os.path.expanduser("~"), "blender_mcp_export.3mf")
+            
+        if not filepath.lower().endswith(".3mf"):
+            filepath += ".3mf"
+            
+        # Ensure all visible meshes are selected
+        bpy.ops.object.select_all(action='DESELECT')
+        export_count = 0
+        for obj in scene.objects:
+            if obj.type == 'MESH' and not obj.hide_get():
+                obj.select_set(True)
+                export_count += 1
+                
+        if export_count == 0:
+            return {"error": "No visible mesh objects to export to 3MF."}
+            
+        # Export settings (may vary slightly between Blender versions)
+        # Try new and old namespaces
+        try:
+            bpy.ops.export_mesh.threemf(
+                filepath=filepath,
+                use_selection=True
+            )
+        except AttributeError:
+            try:
+                bpy.ops.export_scene.threemf(
+                    filepath=filepath,
+                    use_selection=True
+                )
+            except AttributeError as e:
+                 return {"error": f"Failed to find 3MF export operator. Ensure the 3MF add-on is active. ({str(e)})"}
+
+        return {
+            "success": True,
+            "message": f"Exported {export_count} objects to {filepath} in 3MF format, preserving colors.",
+            "filepath": filepath
+        }
+    except Exception as e:
+        return {"error": f"Failed to export 3MF: {str(e)}"}
