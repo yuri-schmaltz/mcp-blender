@@ -39,8 +39,23 @@ def _run_command(command: list[str], cwd: str) -> tuple[int, str]:
 def _uv_command_prefixes() -> list[list[str]]:
     """Return candidate command prefixes to invoke uv across environments."""
     candidates = [["uv"], [sys.executable, "-m", "uv"]]
+    # Common install locations not in Blender's PATH
+    home = os.path.expanduser("~")
+    for bindir in [
+        os.path.join(home, ".local", "bin"),
+        os.path.join(home, ".cargo", "bin"),
+        "/usr/local/bin",
+    ]:
+        uv_path = os.path.join(bindir, "uv")
+        if os.path.isfile(uv_path):
+            candidates.append([uv_path])
     if os.name == "nt":
         candidates.append(["py", "-m", "uv"])
+        appdata = os.environ.get("LOCALAPPDATA", "")
+        if appdata:
+            win_uv = os.path.join(appdata, "uv", "uv.exe")
+            if os.path.isfile(win_uv):
+                candidates.append([win_uv])
     return candidates
 
 
@@ -91,15 +106,26 @@ def _install_runtime_dependencies_with_pip(cwd: str) -> tuple[int, str]:
 
 
 def _mcp_client_config_snippet(client: str, host: str, port: int) -> str:
-    """Generate stdio config snippets for MCP-compatible clients."""
-    args = ["run", "blender-mcp", "--host", host, "--port", str(port)]
-    config = {"mcpServers": {"blender": {"command": "uv", "args": args}}}
-    if client == "claude":
-        return json.dumps(config, indent=2)
-    if client == "cursor":
-        return json.dumps(config, indent=2)
-    if client == "lm_studio":
-        return json.dumps(config, indent=2)
+    """Generate stdio config snippets for MCP-compatible clients.
+
+    Uses the resolved absolute path to uv/uvx when available, so that
+    desktop apps (LM Studio, etc.) that don't inherit the user's shell
+    PATH can still find the binary.
+    """
+    # Try to find the real uvx path for desktop app compatibility
+    home = os.path.expanduser("~")
+    uvx_cmd = "uvx"  # fallback
+    for bindir in [
+        os.path.join(home, ".local", "bin"),
+        os.path.join(home, ".cargo", "bin"),
+        "/usr/local/bin",
+    ]:
+        candidate = os.path.join(bindir, "uvx")
+        if os.path.isfile(candidate):
+            uvx_cmd = candidate
+            break
+
+    config = {"mcpServers": {"blender": {"command": uvx_cmd, "args": ["blender-mcp"]}}}
     if client == "ollama":
         return (
             "Use this in your MCP-capable Ollama client (Continue/Open WebUI/etc):\n"
