@@ -53,7 +53,7 @@ except Exception:
 bl_info = {
     "name": "Blender MCP",
     "author": "BlenderMCP",
-    "version": (1, 6, 0),
+    "version": (1, 8, 0),
     "blender": (3, 0, 0),
     "location": "View3D > Sidebar > BlenderMCP",
     "description": "Connect Blender to local LLM clients via MCP",
@@ -318,6 +318,8 @@ class BlenderMCPServer(SocketBlenderMCPServer):
             "assign_print_color": self.assign_print_color,
             "auto_layout_for_printing": self.auto_layout_for_printing,
             "export_3mf_for_multicolor": self.export_3mf_for_multicolor,
+            "separate_loose_parts": self.separate_loose_parts,
+            "create_axle_joint": self.create_axle_joint,
         }
 
         # Add Polyhaven handlers only if enabled
@@ -1717,6 +1719,26 @@ class BlenderMCPServer(SocketBlenderMCPServer):
             return _export3mf(bpy.context.scene, filepath)
         except Exception as e:
             return {"error": f"Failed to export 3MF: {str(e)}"}
+    # endregion
+
+    # region Mesh Tools
+    def separate_loose_parts(self, object_name, smart_rename=True):
+        """Separate a mesh into loose parts with smart renaming"""
+        try:
+            from addon.handlers.mesh_tools import separate_loose_parts as _separate
+            return _separate(bpy.context.scene, object_name, smart_rename)
+        except Exception as e:
+            return {"error": f"Failed to separate mesh: {str(e)}"}
+    # endregion
+
+    # region Mechanical Tools
+    def create_axle_joint(self, chassis_name, wheel_name, axle_diameter=None, clearance=0.2, hole_depth=None):
+        """Create a mechanical axle joint between chassis and wheel"""
+        try:
+            from addon.handlers.mechanical_tools import create_axle_joint as _axle
+            return _axle(bpy.context.scene, chassis_name, wheel_name, axle_diameter, clearance, hole_depth)
+        except Exception as e:
+            return {"error": f"Failed to create axle joint: {str(e)}"}
     # endregion
 
 
