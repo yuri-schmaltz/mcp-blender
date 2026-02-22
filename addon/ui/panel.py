@@ -1,6 +1,22 @@
 """BlenderMCP UI Panel - extracted from addon.py for modularity."""
 
+import os
+import sys
+
 import bpy
+import importlib.util as _iu
+
+
+def _get_addon_module():
+    """Load addon.py via filesystem (works in any Blender loading mode)."""
+    addon_py = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "addon.py")
+    for mod in sys.modules.values():
+        if hasattr(mod, "__file__") and mod.__file__ and os.path.abspath(mod.__file__) == os.path.abspath(addon_py):
+            return mod
+    spec = _iu.spec_from_file_location("_blendermcp_addon_ref_panel", addon_py)
+    mod = _iu.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
 class BLENDERMCP_PT_Panel(bpy.types.Panel):
@@ -88,10 +104,8 @@ class BLENDERMCP_PT_Panel(bpy.types.Panel):
         cache_box = layout.box()
         cache_box.label(text="Asset Cache", icon="FILE_CACHE")
 
-        # Lazy import to get asset cache instance
-        import importlib
         try:
-            addon_mod = importlib.import_module("addon")
+            addon_mod = _get_addon_module()
             cache_size, file_count = addon_mod._asset_cache.get_cache_size()
         except Exception:
             cache_size, file_count = 0, 0
