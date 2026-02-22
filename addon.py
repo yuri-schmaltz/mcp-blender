@@ -53,7 +53,7 @@ except Exception:
 bl_info = {
     "name": "Blender MCP",
     "author": "BlenderMCP",
-    "version": (1, 5, 0),
+    "version": (1, 6, 0),
     "blender": (3, 0, 0),
     "location": "View3D > Sidebar > BlenderMCP",
     "description": "Connect Blender to local LLM clients via MCP",
@@ -315,6 +315,9 @@ class BlenderMCPServer(SocketBlenderMCPServer):
             "apply_print_thickness": self.apply_print_thickness,
             "apply_boolean_operation": self.apply_boolean_operation,
             "export_for_printing": self.export_for_printing,
+            "assign_print_color": self.assign_print_color,
+            "auto_layout_for_printing": self.auto_layout_for_printing,
+            "export_3mf_for_multicolor": self.export_3mf_for_multicolor,
         }
 
         # Add Polyhaven handlers only if enabled
@@ -1690,6 +1693,30 @@ class BlenderMCPServer(SocketBlenderMCPServer):
             return _export(bpy.context.scene, object_names, filepath)
         except Exception as e:
             return {"error": f"Failed to execute export_for_printing: {str(e)}"}
+            
+    def assign_print_color(self, object_name, hex_color):
+        """Assign base color to object for 3D printing (stored in material)"""
+        try:
+            from addon.handlers.printing3d import assign_print_color as _color
+            return _color(bpy.context.scene, object_name, hex_color)
+        except Exception as e:
+            return {"error": f"Failed to assign print color: {str(e)}"}
+            
+    def auto_layout_for_printing(self, bed_size_x=256, bed_size_y=256, padding_mm=5):
+        """Auto layout all meshes flat on the Z=0 bed with spacing"""
+        try:
+            from addon.handlers.printing3d import auto_layout_for_printing as _layout
+            return _layout(bpy.context.scene, bed_size_x, bed_size_y, padding_mm)
+        except Exception as e:
+            return {"error": f"Failed to auto layout for printing: {str(e)}"}
+            
+    def export_3mf_for_multicolor(self, filepath=None):
+        """Export the scene to .3mf, preserving colors/materials for BambuStudio"""
+        try:
+            from addon.handlers.printing3d import export_3mf_for_multicolor as _export3mf
+            return _export3mf(bpy.context.scene, filepath)
+        except Exception as e:
+            return {"error": f"Failed to export 3MF: {str(e)}"}
     # endregion
 
 
