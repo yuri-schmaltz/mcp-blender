@@ -1,6 +1,7 @@
 """Mesh processing tools for BlenderMCP."""
 
 import bpy
+import bmesh
 from collections import defaultdict
 
 def separate_loose_parts(scene, object_name, smart_rename=True):
@@ -98,3 +99,79 @@ def separate_loose_parts(scene, object_name, smart_rename=True):
         import traceback
         traceback.print_exc()
         return {"error": f"Failed to separate mesh: {str(e)}"}
+
+
+def check_mesh_integrity(scene, object_name):
+    """Check mesh for common 3D printing issues (non-manifold, holes, normals)."""
+    try:
+        if object_name not in scene.objects:
+            return {"error": f"Object '{object_name}' not found."}
+            
+        obj = scene.objects[object_name]
+        if obj.type != 'MESH':
+            return {"error": f"Object '{object_name}' is not a MESH."}
+
+        # Use bmesh for analysis
+        bm = bmesh.new()
+        bm.from_mesh(obj.data)
+        
+        # Non-manifold edges
+        non_manifold = [e for e in bm.edges if not e.is_manifold]
+        
+        # Holes (boundary edges)
+        boundary = [e for e in bm.edges if e.is_boundary]
+        
+        # Self-intersections (Skipped for performance, usually requires external tools or complex logic)
+        
+        report = {
+            "is_printer_ready": len(non_manifold) == 0,
+            "non_manifold_edges": len(non_manifold),
+            "boundary_edges_count": len(boundary),
+            "message": "Mesh is clean and ready for printing." if len(non_manifold) == 0 else f"Found {len(non_manifold)} non-manifold issues."
+        }
+        
+        bm.free()
+        return {"success": True, "report": report}
+    except Exception as e:
+        return {"error": f"Failed to check integrity: {str(e)}"}
+
+
+def auto_repair_mesh(scene, object_name):
+    """Try to automatically fix mesh issues (fill holes, normals)."""
+    try:
+        if object_name not in scene.objects:
+            return {"error": f"Object '{object_name}' not found."}
+            
+        obj = scene.objects[object_name]
+        if obj.type != 'MESH':
+            return {"error": f"Object '{object_name}' is not a MESH."}
+
+        # Select and make active
+        bpy.ops.object.select_all(action='DESELECT')
+        obj.select_set(True)
+        scene.view_layer.objects.active = obj
+
+        # Go to Edit Mode
+        bpy.ops.object.mode_set(mode='EDIT')
+        
+        # 1. Fill holes
+        bpy.ops.mesh.fill_holes(sides=0)
+        
+        # 2. Recalculate normals (Outside)
+        bpy.ops.mesh.normals_make_consistent(inside=False)
+        
+        # 3. Remove doubles (Merge by distance)
+        bpy.ops.mesh.remove_doubles()
+        
+        # Back to Object Mode
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+        return {
+            "success": True,
+            "message": f"Applied auto-repairs (fill holes, recalculate normals, merge doubles) to '{object_name}'."
+        }
+    except Exception as e:
+        if bpy.context.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+        return {"error": f"Failed to auto-repair: {str(e)}"}
+

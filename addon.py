@@ -53,7 +53,7 @@ except Exception:
 bl_info = {
     "name": "Blender MCP",
     "author": "BlenderMCP",
-    "version": (1, 8, 0),
+    "version": (2, 0, 0),
     "blender": (3, 0, 0),
     "location": "View3D > Sidebar > BlenderMCP",
     "description": "Connect Blender to local LLM clients via MCP",
@@ -320,6 +320,14 @@ class BlenderMCPServer(SocketBlenderMCPServer):
             "export_3mf_for_multicolor": self.export_3mf_for_multicolor,
             "separate_loose_parts": self.separate_loose_parts,
             "create_axle_joint": self.create_axle_joint,
+            "check_mesh_integrity": self.check_mesh_integrity,
+            "auto_repair_mesh": self.auto_repair_mesh,
+            "generate_tire_treads": self.generate_tire_treads,
+            "setup_simple_vehicle_rig": self.setup_simple_vehicle_rig,
+            "setup_product_studio": self.setup_product_studio,
+            "render_catalog_angles": self.render_catalog_angles,
+            "generate_print_report": self.generate_print_report,
+            "batch_export_all_formats": self.batch_export_all_formats,
         }
 
         # Add Polyhaven handlers only if enabled
@@ -1729,6 +1737,42 @@ class BlenderMCPServer(SocketBlenderMCPServer):
             return _separate(bpy.context.scene, object_name, smart_rename)
         except Exception as e:
             return {"error": f"Failed to separate mesh: {str(e)}"}
+            
+    def check_mesh_integrity(self, object_name):
+        """Check mesh for non-manifold issues and holes"""
+        try:
+            from addon.handlers.mesh_tools import check_mesh_integrity as _check
+            return _check(bpy.context.scene, object_name)
+        except Exception as e:
+            return {"error": f"Failed to check mesh integrity: {str(e)}"}
+            
+    def auto_repair_mesh(self, object_name):
+        """Try to auto-repair common mesh issues"""
+        try:
+            from addon.handlers.mesh_tools import auto_repair_mesh as _repair
+            return _repair(bpy.context.scene, object_name)
+        except Exception as e:
+            return {"error": f"Failed to auto-repair mesh: {str(e)}"}
+    # endregion
+
+    # region Procedural Tools
+    def generate_tire_treads(self, wheel_name, pattern='OFFROAD'):
+        """Generate procedural treads on a wheel"""
+        try:
+            from addon.handlers.procedural_tools import generate_tire_treads as _treads
+            return _treads(bpy.context.scene, wheel_name, pattern)
+        except Exception as e:
+            return {"error": f"Failed to generate treads: {str(e)}"}
+    # endregion
+
+    # region Vehicle Tools
+    def setup_simple_vehicle_rig(self, chassis_name, wheel_names):
+        """Setup a basic rig for a vehicle"""
+        try:
+            from addon.handlers.vehicle_rigging import setup_simple_vehicle_rig as _rig
+            return _rig(bpy.context.scene, chassis_name, wheel_names)
+        except Exception as e:
+            return {"error": f"Failed to setup vehicle rig: {str(e)}"}
     # endregion
 
     # region Mechanical Tools
@@ -1739,6 +1783,44 @@ class BlenderMCPServer(SocketBlenderMCPServer):
             return _axle(bpy.context.scene, chassis_name, wheel_name, axle_diameter, clearance, hole_depth)
         except Exception as e:
             return {"error": f"Failed to create axle joint: {str(e)}"}
+    # endregion
+
+    # region Studio Tools
+    def setup_product_studio(self, theme='CLEAN'):
+        """Setup a professional studio environment"""
+        try:
+            from addon.handlers.studio_tools import setup_product_studio as _studio
+            return _studio(bpy.context.scene, theme)
+        except Exception as e:
+            return {"error": f"Failed to setup studio: {str(e)}"}
+            
+    def render_catalog_angles(self, output_dir=None):
+        """Render catalog angles"""
+        try:
+            from addon.handlers.studio_tools import render_catalog_angles as _render
+            return _render(bpy.context.scene, output_dir)
+        except Exception as e:
+            return {"error": f"Failed to render catalog: {str(e)}"}
+    # endregion
+
+    # region Reporting Tools
+    def generate_print_report(self, filepath=None):
+        """Generate a technical print report"""
+        try:
+            from addon.handlers.reporting_tools import generate_print_report as _report
+            return _report(bpy.context.scene, filepath)
+        except Exception as e:
+            return {"error": f"Failed to generate report: {str(e)}"}
+    # endregion
+
+    # region Export Tools
+    def batch_export_all_formats(self, base_path=None):
+        """One-click batch export for all formats"""
+        try:
+            from addon.handlers.printing3d import batch_export_all_formats as _batch
+            return _batch(bpy.context.scene, base_path)
+        except Exception as e:
+            return {"error": f"Failed batch export: {str(e)}"}
     # endregion
 
 
