@@ -1587,19 +1587,14 @@ class BlenderMCPServer(SocketBlenderMCPServer):
 
 
 # Blender UI Panel and Operators are now in addon/ui/ package.
-# Import them for registration.
-try:
-    from addon.ui import UI_CLASSES as _UI_CLASSES
-except ImportError:
-    # Fallback: direct import for extension mode
-    import importlib.util as _iu
-    import os as _os
+# Load via filesystem to work in all Blender loading modes (repo, extension, legacy).
+import importlib.util as _iu
 
-    _ui_init = _os.path.join(_os.path.dirname(__file__), "addon", "ui", "__init__.py")
-    _spec = _iu.spec_from_file_location("addon.ui", _ui_init)
-    _mod = _iu.module_from_spec(_spec)
-    _spec.loader.exec_module(_mod)
-    _UI_CLASSES = _mod.UI_CLASSES
+_ui_init = os.path.join(os.path.dirname(os.path.abspath(__file__)), "addon", "ui", "__init__.py")
+_spec = _iu.spec_from_file_location("_blendermcp_ui", _ui_init)
+_mod = _iu.module_from_spec(_spec)
+_spec.loader.exec_module(_mod)
+_UI_CLASSES = _mod.UI_CLASSES
 
 
 # Registration functions

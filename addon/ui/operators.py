@@ -2,20 +2,40 @@
 
 import os
 import subprocess
+import sys
 
 import bpy
 
-from ..utils.helpers import (
-    _install_runtime_dependencies_with_pip,
-    _logs_path,
-    _mcp_client_config_snippet,
-    _open_in_system,
-    _project_root,
-    _resolve_uv_command,
-    _run_command,
-    _update_action_status,
-    _uv_blender_mcp_command,
-)
+# Load helpers via filesystem to work in both repo and Blender extension mode.
+import importlib.util as _iu
+
+_helpers_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "utils", "helpers.py")
+_spec = _iu.spec_from_file_location("_blendermcp_helpers", _helpers_path)
+_helpers = _iu.module_from_spec(_spec)
+_spec.loader.exec_module(_helpers)
+
+_project_root = _helpers._project_root
+_run_command = _helpers._run_command
+_resolve_uv_command = _helpers._resolve_uv_command
+_uv_blender_mcp_command = _helpers._uv_blender_mcp_command
+_install_runtime_dependencies_with_pip = _helpers._install_runtime_dependencies_with_pip
+_mcp_client_config_snippet = _helpers._mcp_client_config_snippet
+_update_action_status = _helpers._update_action_status
+_logs_path = _helpers._logs_path
+_open_in_system = _helpers._open_in_system
+
+
+def _get_addon_module():
+    """Load addon.py via filesystem (works in any Blender loading mode)."""
+    addon_py = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "addon.py")
+    spec = _iu.spec_from_file_location("_blendermcp_addon_ref", addon_py)
+    # Check if already loaded to avoid re-executing
+    for mod in sys.modules.values():
+        if hasattr(mod, "__file__") and mod.__file__ and os.path.abspath(mod.__file__) == os.path.abspath(addon_py):
+            return mod
+    mod = _iu.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
 # ---------------------------------------------------------------------------
@@ -27,9 +47,7 @@ class BLENDERMCP_OT_StartServer(bpy.types.Operator):
     bl_description = "Start the BlenderMCP server to connect with your LLM client"
 
     def execute(self, context):
-        # Import lazily to avoid circular imports
-        import importlib
-        addon_mod = importlib.import_module("addon")
+        addon_mod = _get_addon_module()
         server_cls = addon_mod.BlenderMCPServer
 
         scene = context.scene
@@ -213,9 +231,7 @@ class BLENDERMCP_OT_ClearCache(bpy.types.Operator):
     bl_description = "Clear all cached downloaded assets from Poly Haven and Sketchfab"
 
     def execute(self, context):
-        # Import lazily to get the global cache instance
-        import importlib
-        addon_mod = importlib.import_module("addon")
+        addon_mod = _get_addon_module()
         deleted = addon_mod._asset_cache.clear()
         self.report({"INFO"}, f"Cleared {deleted} cached files")
         _update_action_status(context.scene, "Clear Cache", True, f"Deleted files: {deleted}")
@@ -254,10 +270,9 @@ class BLENDERMCP_OT_DownloadProgress(bpy.types.Operator):
     _last_progress = 0
 
     def _get_progress_tracker(self):
-        """Lazy import of progress tracker to avoid circular deps."""
+        """Lazy load progress tracker from addon module."""
         try:
-            import importlib
-            addon_mod = importlib.import_module("addon")
+            addon_mod = _get_addon_module()
             if addon_mod.PROGRESS_AVAILABLE:
                 return addon_mod.get_progress_tracker()
         except Exception:
