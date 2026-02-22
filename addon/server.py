@@ -14,7 +14,13 @@ import bpy
 try:
     from .utils.metrics import metrics
 except ImportError:  # pragma: no cover - fallback for legacy direct module loading
-    from utils.metrics import metrics
+    import os
+    import importlib.util as _iu
+    _metrics_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "utils", "metrics.py")
+    _metrics_spec = _iu.spec_from_file_location("_blendermcp_metrics", _metrics_path)
+    _metrics_mod = _iu.module_from_spec(_metrics_spec)
+    _metrics_spec.loader.exec_module(_metrics_mod)
+    metrics = _metrics_mod.metrics
 
 
 class BlenderMCPServer:

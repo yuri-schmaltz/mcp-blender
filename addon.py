@@ -23,8 +23,6 @@ from bpy.props import IntProperty
 def _load_socket_server_class():
     """Load addon/server.py robustly in both legacy addon and extension modes."""
     addon_pkg_dir = os.path.join(os.path.dirname(__file__), "addon")
-    if addon_pkg_dir not in sys.path:
-        sys.path.insert(0, addon_pkg_dir)
 
     server_path = os.path.join(addon_pkg_dir, "server.py")
     spec = importlib.util.spec_from_file_location("blender_mcp_socket_server", server_path)
@@ -37,13 +35,15 @@ def _load_socket_server_class():
 
 SocketBlenderMCPServer = _load_socket_server_class()
 
-# Import progress tracking for MP-02
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
+# Import progress tracking for MP-02 (filesystem-based, no sys.path mutation)
 try:
-    from blender_mcp.progress import get_progress_tracker
-
+    _progress_path = os.path.join(os.path.dirname(__file__), "src", "blender_mcp", "progress.py")
+    _progress_spec = importlib.util.spec_from_file_location("_blendermcp_progress", _progress_path)
+    _progress_mod = importlib.util.module_from_spec(_progress_spec)
+    _progress_spec.loader.exec_module(_progress_mod)
+    get_progress_tracker = _progress_mod.get_progress_tracker
     PROGRESS_AVAILABLE = True
-except ImportError:
+except Exception:
     PROGRESS_AVAILABLE = False
 
     def get_progress_tracker():
