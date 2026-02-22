@@ -53,7 +53,7 @@ except Exception:
 bl_info = {
     "name": "Blender MCP",
     "author": "BlenderMCP",
-    "version": (1, 3, 5),
+    "version": (1, 4, 0),
     "blender": (3, 0, 0),
     "location": "View3D > Sidebar > BlenderMCP",
     "description": "Connect Blender to local LLM clients via MCP",
@@ -63,6 +63,20 @@ bl_info = {
 # Add User-Agent as required by Poly Haven API
 REQ_HEADERS = requests.utils.default_headers()
 REQ_HEADERS.update({"User-Agent": "blender-mcp"})
+
+# Load network utilities (retry, fallback, logging)
+try:
+    from addon.utils.network import robust_get, resolve_polyhaven_resolution, friendly_error, log_asset_download, validate_sketchfab_key
+except ImportError:
+    _net_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "addon", "utils", "network.py")
+    _net_spec = importlib.util.spec_from_file_location("_blendermcp_network", _net_path)
+    _net_mod = importlib.util.module_from_spec(_net_spec)
+    _net_spec.loader.exec_module(_net_mod)
+    robust_get = _net_mod.robust_get
+    resolve_polyhaven_resolution = _net_mod.resolve_polyhaven_resolution
+    friendly_error = _net_mod.friendly_error
+    log_asset_download = _net_mod.log_asset_download
+    validate_sketchfab_key = _net_mod.validate_sketchfab_key
 
 # MP-05: Asset cache configuration
 CACHE_DIR = os.path.join(os.path.expanduser("~"), ".blender_mcp", "cache")
@@ -292,8 +306,11 @@ class BlenderMCPServer(SocketBlenderMCPServer):
             "get_object_info": self.get_object_info,
             "get_viewport_screenshot": self.get_viewport_screenshot,
             "execute_code": self.execute_code,
+            "configure_render_settings": self.configure_render_settings,
+            "setup_camera": self.setup_camera,
             "get_polyhaven_status": self.get_polyhaven_status,
             "get_sketchfab_status": self.get_sketchfab_status,
+            "get_ambientcg_status": self.get_ambientcg_status,
         }
 
         # Add Polyhaven handlers only if enabled
@@ -314,6 +331,14 @@ class BlenderMCPServer(SocketBlenderMCPServer):
             }
             handlers.update(sketchfab_handlers)
 
+        # Add AmbientCG handlers only if enabled
+        if bpy.context.scene.blendermcp_use_ambientcg:
+            ambientcg_handlers = {
+                "search_ambientcg_materials": self.search_ambientcg_materials,
+                "download_ambientcg_material": self.download_ambientcg_material,
+            }
+            handlers.update(ambientcg_handlers)
+
         handler = handlers.get(cmd_type)
         if handler:
             try:
@@ -324,8 +349,8 @@ class BlenderMCPServer(SocketBlenderMCPServer):
                 # Push Undo state for commands that likely modify the scene
                 read_only_cmds = (
                     "get_scene_info", "get_object_info", "get_polyhaven_categories",
-                    "search_polyhaven_assets", "search_sketchfab_models",
-                    "get_polyhaven_status", "get_sketchfab_status", "get_viewport_screenshot"
+                    "search_polyhaven_assets", "search_sketchfab_models", "search_ambientcg_materials",
+                    "get_polyhaven_status", "get_sketchfab_status", "get_ambientcg_status", "get_viewport_screenshot"
                 )
                 if cmd_type not in read_only_cmds:
                     try:
@@ -527,15 +552,15 @@ class BlenderMCPServer(SocketBlenderMCPServer):
                     "error": f"Invalid asset type: {asset_type}. Must be one of: hdris, textures, models, all"
                 }
 
-            response = requests.get(
+            response = robust_get(
                 f"https://api.polyhaven.com/categories/{asset_type}", headers=REQ_HEADERS
             )
             if response.status_code == 200:
                 return {"categories": response.json()}
             else:
-                return {"error": f"API request failed with status code {response.status_code}"}
+                return {"error": f"Poly Haven API returned status {response.status_code}. Try again later."}
         except Exception as e:
-            return {"error": str(e)}
+            return friendly_error("Poly Haven categories", e)
 
     def search_polyhaven_assets(self, asset_type=None, categories=None):
         """Search for assets from Polyhaven with optional filtering"""
@@ -553,14 +578,12 @@ class BlenderMCPServer(SocketBlenderMCPServer):
             if categories:
                 params["categories"] = categories
 
-            response = requests.get(url, params=params, headers=REQ_HEADERS)
+            response = robust_get(url, params=params, headers=REQ_HEADERS)
             if response.status_code == 200:
-                # Limit the response size to avoid overwhelming Blender
                 assets = response.json()
-                # Return only the first 20 assets to keep response size manageable
                 limited_assets = {}
                 for i, (key, value) in enumerate(assets.items()):
-                    if i >= 20:  # Limit to 20 assets
+                    if i >= 20:
                         break
                     limited_assets[key] = value
 
@@ -570,18 +593,18 @@ class BlenderMCPServer(SocketBlenderMCPServer):
                     "returned_count": len(limited_assets),
                 }
             else:
-                return {"error": f"API request failed with status code {response.status_code}"}
+                return {"error": f"Poly Haven search returned status {response.status_code}. Try again later."}
         except Exception as e:
-            return {"error": str(e)}
+            return friendly_error("Poly Haven search", e)
 
     def download_polyhaven_asset(self, asset_id, asset_type, resolution="1k", file_format=None):
         try:
             # First get the files information
-            files_response = requests.get(
+            files_response = robust_get(
                 f"https://api.polyhaven.com/files/{asset_id}", headers=REQ_HEADERS
             )
             if files_response.status_code != 200:
-                return {"error": f"Failed to get asset files: {files_response.status_code}"}
+                return {"error": f"Could not fetch asset '{asset_id}' from Poly Haven (status {files_response.status_code})."}
 
             files_data = files_response.json()
 
@@ -589,129 +612,126 @@ class BlenderMCPServer(SocketBlenderMCPServer):
             if asset_type == "hdris":
                 # For HDRIs, download the .hdr or .exr file
                 if not file_format:
-                    file_format = "hdr"  # Default format for HDRIs
+                    file_format = "hdr"
 
-                if (
-                    "hdri" in files_data
-                    and resolution in files_data["hdri"]
-                    and file_format in files_data["hdri"][resolution]
-                ):
-                    file_info = files_data["hdri"][resolution][file_format]
-                    file_url = file_info["url"]
+                # Use resolution fallback (4k -> 2k -> 1k)
+                actual_res, file_info = resolve_polyhaven_resolution(files_data, "hdri", resolution, file_format)
+                if file_info is None:
+                    return {"error": f"HDRI '{asset_id}' not available in {resolution} ({file_format}). Try a different resolution or format."}
 
-                    # For HDRIs, we need to save to a temporary file first
-                    # since Blender can't properly load HDR data directly from memory
-                    tmp_file = tempfile.NamedTemporaryFile(suffix=f".{file_format}", delete=False)
-                    tmp_path = tmp_file.name
-                    tmp_file.close()
+                file_url = file_info["url"]
 
-                    try:
-                        # Download the file with progress tracking (MP-02)
-                        operation_id = f"polyhaven_hdri_{asset_id}_{resolution}"
+                tmp_file = tempfile.NamedTemporaryFile(suffix=f".{file_format}", delete=False)
+                tmp_path = tmp_file.name
+                tmp_file.close()
 
-                        response = requests.get(file_url, headers=REQ_HEADERS, stream=True)
-                        if response.status_code != 200:
-                            return {"error": f"Failed to download HDRI: {response.status_code}"}
+                try:
+                    operation_id = f"polyhaven_hdri_{asset_id}_{actual_res}"
 
-                        # Get total size and start progress tracking
-                        total_size = int(response.headers.get("content-length", 0))
-                        downloaded = 0
+                    response = robust_get(file_url, headers=REQ_HEADERS, stream=True)
+                    if response.status_code != 200:
+                        return {"error": f"Failed to download HDRI: {response.status_code}"}
 
-                        if PROGRESS_AVAILABLE:
-                            tracker = get_progress_tracker()
-                            if tracker:
-                                tracker.start_operation(operation_id, total_size)
+                    # Get total size and start progress tracking
+                    total_size = int(response.headers.get("content-length", 0))
+                    downloaded = 0
 
-                        # Download with streaming and progress updates
-                        with open(tmp_path, "wb") as f:
-                            for chunk in response.iter_content(chunk_size=8192):
-                                if chunk:
-                                    f.write(chunk)
-                                    downloaded += len(chunk)
-                                    if PROGRESS_AVAILABLE and tracker:
-                                        tracker.update_progress(operation_id, downloaded)
+                    if PROGRESS_AVAILABLE:
+                        tracker = get_progress_tracker()
+                        if tracker:
+                            tracker.start_operation(operation_id, total_size)
 
-                        if PROGRESS_AVAILABLE and tracker:
-                            tracker.complete_operation(operation_id)
+                    # Download with streaming and progress updates
+                    with open(tmp_path, "wb") as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            if chunk:
+                                f.write(chunk)
+                                downloaded += len(chunk)
+                                if PROGRESS_AVAILABLE and tracker:
+                                    tracker.update_progress(operation_id, downloaded)
 
-                        # Create a new world if none exists
-                        if not bpy.data.worlds:
-                            bpy.data.worlds.new("World")
+                    if PROGRESS_AVAILABLE and tracker:
+                        tracker.complete_operation(operation_id)
 
-                        world = bpy.data.worlds[0]
-                        world.use_nodes = True
-                        node_tree = world.node_tree
+                    # Create a new world if none exists
+                    if not bpy.data.worlds:
+                        bpy.data.worlds.new("World")
 
-                        # Clear existing nodes
-                        for node in node_tree.nodes:
-                            node_tree.nodes.remove(node)
+                    world = bpy.data.worlds[0]
+                    world.use_nodes = True
+                    node_tree = world.node_tree
 
-                        # Create nodes
-                        tex_coord = node_tree.nodes.new(type="ShaderNodeTexCoord")
-                        tex_coord.location = (-800, 0)
+                    # Clear existing nodes
+                    for node in node_tree.nodes:
+                        node_tree.nodes.remove(node)
 
-                        mapping = node_tree.nodes.new(type="ShaderNodeMapping")
-                        mapping.location = (-600, 0)
+                    # Create nodes
+                    tex_coord = node_tree.nodes.new(type="ShaderNodeTexCoord")
+                    tex_coord.location = (-800, 0)
 
-                        # Load the image from the temporary file
-                        env_tex = node_tree.nodes.new(type="ShaderNodeTexEnvironment")
-                        env_tex.location = (-400, 0)
-                        env_tex.image = bpy.data.images.load(tmp_path)
+                    mapping = node_tree.nodes.new(type="ShaderNodeMapping")
+                    mapping.location = (-600, 0)
 
-                        # Use a color space that exists in all Blender versions
-                        if file_format.lower() == "exr":
-                            # Try to use Linear color space for EXR files
-                            try:
-                                env_tex.image.colorspace_settings.name = "Linear"
-                            except Exception:
-                                # Fallback to Non-Color if Linear isn't available
-                                env_tex.image.colorspace_settings.name = "Non-Color"
-                        else:  # hdr
-                            # For HDR files, try these options in order
-                            for color_space in ["Linear", "Linear Rec.709", "Non-Color"]:
-                                try:
-                                    env_tex.image.colorspace_settings.name = color_space
-                                    break  # Stop if we successfully set a color space
-                                except Exception:
-                                    continue
+                    # Load the image from the temporary file
+                    env_tex = node_tree.nodes.new(type="ShaderNodeTexEnvironment")
+                    env_tex.location = (-400, 0)
+                    env_tex.image = bpy.data.images.load(tmp_path)
 
-                        background = node_tree.nodes.new(type="ShaderNodeBackground")
-                        background.location = (-200, 0)
-
-                        output = node_tree.nodes.new(type="ShaderNodeOutputWorld")
-                        output.location = (0, 0)
-
-                        # Connect nodes
-                        node_tree.links.new(
-                            tex_coord.outputs["Generated"], mapping.inputs["Vector"]
-                        )
-                        node_tree.links.new(mapping.outputs["Vector"], env_tex.inputs["Vector"])
-                        node_tree.links.new(env_tex.outputs["Color"], background.inputs["Color"])
-                        node_tree.links.new(
-                            background.outputs["Background"], output.inputs["Surface"]
-                        )
-
-                        # Set as active world
-                        bpy.context.scene.world = world
-
-                        return {
-                            "success": True,
-                            "message": f"HDRI {asset_id} imported successfully",
-                            "image_name": env_tex.image.name,
-                        }
-                    except Exception as e:
-                        return {"error": f"Failed to set up HDRI in Blender: {str(e)}"}
-                    finally:
-                        # CRITICAL: Always cleanup temporary file, even if there was an error
+                    # Use a color space that exists in all Blender versions
+                    if file_format.lower() == "exr":
                         try:
-                            if os.path.exists(tmp_path):
-                                os.unlink(tmp_path)
-                        except Exception as cleanup_error:
-                            print(
-                                f"Warning: Failed to cleanup temp file {tmp_path}: {cleanup_error}"
-                            )
-                else:
-                    return {"error": "Requested resolution or format not available for this HDRI"}
+                            env_tex.image.colorspace_settings.name = "Linear"
+                        except Exception:
+                            env_tex.image.colorspace_settings.name = "Non-Color"
+                    else:  # hdr
+                        for color_space in ["Linear", "Linear Rec.709", "Non-Color"]:
+                            try:
+                                env_tex.image.colorspace_settings.name = color_space
+                                break
+                            except Exception:
+                                continue
+
+                    background = node_tree.nodes.new(type="ShaderNodeBackground")
+                    background.location = (-200, 0)
+
+                    output = node_tree.nodes.new(type="ShaderNodeOutputWorld")
+                    output.location = (0, 0)
+
+                    # Connect nodes
+                    node_tree.links.new(
+                        tex_coord.outputs["Generated"], mapping.inputs["Vector"]
+                    )
+                    node_tree.links.new(mapping.outputs["Vector"], env_tex.inputs["Vector"])
+                    node_tree.links.new(env_tex.outputs["Color"], background.inputs["Color"])
+                    node_tree.links.new(
+                        background.outputs["Background"], output.inputs["Surface"]
+                    )
+
+                    # Set as active world
+                    bpy.context.scene.world = world
+
+                    # Log the download
+                    log_asset_download("polyhaven", asset_id, "hdri", actual_res)
+
+                    msg = f"HDRI {asset_id} imported successfully"
+                    if actual_res != resolution:
+                        msg += f" (used {actual_res} instead of {resolution})"
+
+                    return {
+                        "success": True,
+                        "message": msg,
+                        "image_name": env_tex.image.name,
+                    }
+                except Exception as e:
+                    return {"error": f"Failed to set up HDRI in Blender: {str(e)}"}
+                finally:
+                    try:
+                        if os.path.exists(tmp_path):
+                            os.unlink(tmp_path)
+                    except Exception as cleanup_error:
+                        print(
+                            f"Warning: Failed to cleanup temp file {tmp_path}: {cleanup_error}"
+                        )
 
             elif asset_type == "textures":
                 if not file_format:
@@ -742,7 +762,7 @@ class BlenderMCPServer(SocketBlenderMCPServer):
                                         f"polyhaven_tex_{asset_id}_{map_type}_{resolution}"
                                     )
 
-                                    response = requests.get(
+                                    response = robust_get(
                                         file_url, headers=REQ_HEADERS, stream=True
                                     )
                                     if response.status_code == 200:
@@ -908,7 +928,7 @@ class BlenderMCPServer(SocketBlenderMCPServer):
                         main_file_name = file_url.split("/")[-1]
                         main_file_path = os.path.join(temp_dir, main_file_name)
 
-                        response = requests.get(file_url, headers=REQ_HEADERS)
+                        response = robust_get(file_url, headers=REQ_HEADERS)
                         if response.status_code != 200:
                             return {"error": f"Failed to download model: {response.status_code}"}
 
@@ -926,7 +946,7 @@ class BlenderMCPServer(SocketBlenderMCPServer):
                                 os.makedirs(os.path.dirname(include_file_path), exist_ok=True)
 
                                 # Download the included file
-                                include_response = requests.get(include_url, headers=REQ_HEADERS)
+                                include_response = robust_get(include_url, headers=REQ_HEADERS)
                                 if include_response.status_code == 200:
                                     with open(include_file_path, "wb") as f:
                                         f.write(include_response.content)
@@ -1326,7 +1346,7 @@ class BlenderMCPServer(SocketBlenderMCPServer):
             try:
                 headers = {"Authorization": f"Token {api_key}"}
 
-                response = requests.get(
+                response = robust_get(
                     "https://api.sketchfab.com/v3/me",
                     headers=headers,
                     timeout=30,  # Add timeout of 30 seconds
@@ -1400,7 +1420,7 @@ class BlenderMCPServer(SocketBlenderMCPServer):
             headers = {"Authorization": f"Token {api_key}"}
 
             # Use the search endpoint as specified in the API documentation
-            response = requests.get(
+            response = robust_get(
                 "https://api.sketchfab.com/v3/search",
                 headers=headers,
                 params=params,
@@ -1449,7 +1469,7 @@ class BlenderMCPServer(SocketBlenderMCPServer):
             # Request download URL using the exact endpoint from the documentation
             download_endpoint = f"https://api.sketchfab.com/v3/models/{uid}/download"
 
-            response = requests.get(
+            response = robust_get(
                 download_endpoint, headers=headers, timeout=30  # Add timeout of 30 seconds
             )
 
@@ -1481,7 +1501,7 @@ class BlenderMCPServer(SocketBlenderMCPServer):
             # Download the model with progress tracking (MP-02)
             operation_id = f"sketchfab_{uid}"
 
-            model_response = requests.get(download_url, timeout=60, stream=True)
+            model_response = robust_get(download_url, timeout=60, stream=True)
 
             if model_response.status_code != 200:
                 return {
@@ -1585,6 +1605,55 @@ class BlenderMCPServer(SocketBlenderMCPServer):
             traceback.print_exc()
             return {"error": f"Failed to download model: {str(e)}"}
 
+    # region AmbientCG API
+    def search_ambientcg_materials(self, query="", limit=20):
+        """Search for materials on AmbientCG"""
+        try:
+            from addon.handlers.ambientcg import search_ambientcg_materials as _search
+            return _search(bpy.context.scene, query=query, limit=limit)
+        except Exception as e:
+            return {"error": f"Failed to load AmbientCG handler: {str(e)}"}
+
+    def download_ambientcg_material(self, asset_id, resolution="2K", file_format="JPG"):
+        """Download and import an AmbientCG material"""
+        try:
+            from addon.handlers.ambientcg import download_ambientcg_material as _download
+            tracker = None
+            if PROGRESS_AVAILABLE:
+                tracker = get_progress_tracker()
+            return _download(bpy.context.scene, asset_id, resolution, file_format, progress_tracker=tracker)
+        except Exception as e:
+            return {"error": f"Failed to load AmbientCG handler: {str(e)}"}
+    
+    def get_ambientcg_status(self):
+        """Get the status of AmbientCG integration"""
+        try:
+            from addon.handlers.ambientcg import get_ambientcg_status as _status
+            return _status(bpy.context.scene)
+        except Exception as e:
+            return {"error": f"Failed to load AmbientCG handler: {str(e)}"}
+    # endregion
+
+    # region Scene Tools
+    def configure_render_settings(self, engine="BLENDER_EEVEE", resolution_x=1920, resolution_y=1080, samples=64, use_gpu=True, transparent_background=False):
+        """Configure render engine and settings"""
+        try:
+            from addon.handlers.scene_tools import configure_render_settings as _config
+            return _config(bpy.context.scene, engine, resolution_x, resolution_y, samples, use_gpu, transparent_background)
+        except Exception as e:
+            return {"error": f"Failed to access scene tools: {str(e)}"}
+
+    def setup_camera(self, focus_object_name=None, location=(0, -10, 5), create_new=False):
+        """Setup main camera to point at an object"""
+        try:
+            from addon.handlers.scene_tools import setup_camera as _setup
+            # Ensure location is passed as a tuple/list to match API
+            loc_tuple = tuple(location) if isinstance(location, (list, tuple)) else (0, -10, 5)
+            return _setup(bpy.context.scene, focus_object_name, loc_tuple, create_new)
+        except Exception as e:
+            return {"error": f"Failed to setup camera: {str(e)}"}
+    # endregion
+
 
 # Blender UI Panel and Operators are now in addon/ui/ package.
 # Load via filesystem to work in all Blender loading modes (repo, extension, legacy).
@@ -1621,6 +1690,12 @@ def register():
     bpy.types.Scene.blendermcp_use_polyhaven = bpy.props.BoolProperty(
         name="Use Poly Haven",
         description="Enable Poly Haven asset integration. Allows downloading HDRIs, textures, and 3D models from Poly Haven API. Requires internet connection.",
+        default=False,
+    )
+
+    bpy.types.Scene.blendermcp_use_ambientcg = bpy.props.BoolProperty(
+        name="Use AmbientCG",
+        description="Enable AmbientCG asset integration. Search and download PBR textures from AmbientCG API.",
         default=False,
     )
 
@@ -1682,6 +1757,7 @@ def unregister():
     del bpy.types.Scene.blendermcp_port
     del bpy.types.Scene.blendermcp_server_running
     del bpy.types.Scene.blendermcp_use_polyhaven
+    del bpy.types.Scene.blendermcp_use_ambientcg
     del bpy.types.Scene.blendermcp_use_sketchfab
     del bpy.types.Scene.blendermcp_sketchfab_api_key
     del bpy.types.Scene.blendermcp_client_target
