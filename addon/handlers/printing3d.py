@@ -373,3 +373,41 @@ def export_3mf_for_multicolor(scene, filepath=None):
         }
     except Exception as e:
         return {"error": f"Failed to export 3MF: {str(e)}"}
+
+
+def batch_export_all_formats(scene, base_path=None):
+    """One-click batch export for all formats (STL, 3MF, Report, Studio)."""
+    try:
+        import os
+        if not base_path:
+            base_path = os.path.join(os.path.expanduser("~"), "blender_mcp_release")
+            
+        if not os.path.exists(base_path):
+            os.makedirs(base_path)
+            
+        # 1. Export STL
+        stl_path = os.path.join(base_path, "model.stl")
+        export_for_printing(scene, filepath=stl_path)
+        
+        # 2. Export 3MF
+        threemf_path = os.path.join(base_path, "model.3mf")
+        export_3mf_for_multicolor(scene, filepath=threemf_path)
+        
+        # 3. Generate Report
+        from addon.handlers.reporting_tools import generate_print_report
+        report_path = os.path.join(base_path, "print_report.txt")
+        generate_print_report(scene, filepath=report_path)
+        
+        # 4. Render Catalog (if studio exists)
+        from addon.handlers.studio_tools import render_catalog_angles
+        catalog_dir = os.path.join(base_path, "catalog")
+        render_catalog_angles(scene, output_dir=catalog_dir)
+        
+        return {
+            "success": True,
+            "message": f"Successfully completed batch export to {base_path}",
+            "files": ["model.stl", "model.3mf", "print_report.txt", "catalog/"]
+        }
+    except Exception as e:
+        return {"error": f"Failed batch export: {str(e)}"}
+
