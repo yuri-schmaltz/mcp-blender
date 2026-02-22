@@ -3,18 +3,12 @@
 
 from __future__ import annotations
 
-import importlib
 import importlib.util
 from pathlib import Path
 
 
 def _load_addon_module():
-    try:
-        if __package__:
-            return importlib.import_module(".addon", package=__package__)
-    except Exception:
-        pass
-
+    """Always load addon.py via filesystem to avoid collision with addon/ directory."""
     addon_path = Path(__file__).with_name("addon.py")
     spec = importlib.util.spec_from_file_location("blender_mcp_addon_entry", addon_path)
     if spec is None or spec.loader is None:
@@ -34,13 +28,22 @@ bl_info = {
     "category": "Interface",
 }
 
+# Cache the loaded module to avoid re-executing on unregister
+_addon_mod = None
+
 
 def register():
-    _load_addon_module().register()
+    global _addon_mod
+    _addon_mod = _load_addon_module()
+    _addon_mod.register()
 
 
 def unregister():
-    _load_addon_module().unregister()
+    global _addon_mod
+    if _addon_mod is None:
+        _addon_mod = _load_addon_module()
+    _addon_mod.unregister()
+
 
 __all__ = ["bl_info", "register", "unregister"]
 
