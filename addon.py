@@ -320,6 +320,19 @@ class BlenderMCPServer(SocketBlenderMCPServer):
                 print(f"Executing handler for {cmd_type}")
                 result = handler(**params)
                 print("Handler execution complete")
+
+                # Push Undo state for commands that likely modify the scene
+                read_only_cmds = (
+                    "get_scene_info", "get_object_info", "get_polyhaven_categories",
+                    "search_polyhaven_assets", "search_sketchfab_models",
+                    "get_polyhaven_status", "get_sketchfab_status", "get_viewport_screenshot"
+                )
+                if cmd_type not in read_only_cmds:
+                    try:
+                        bpy.ops.ed.undo_push(message=f"MCP: {cmd_type}")
+                    except Exception as undo_err:
+                        print(f"Failed to push undo state: {undo_err}")
+
                 return {"status": "success", "result": result}
             except Exception as e:
                 print(f"Error in handler: {str(e)}")
@@ -475,6 +488,24 @@ class BlenderMCPServer(SocketBlenderMCPServer):
         """Execute arbitrary Blender Python code"""
         # This is powerful but potentially dangerous - use with caution
         try:
+            # Check scene permission first
+            if not bpy.context.scene.blendermcp_allow_code_execution:
+                return {"error": "Remote code execution blocked. Enable 'Allow Remote Code Execution' in BlenderMCP UI."}
+
+            import ast
+            try:
+                tree = ast.parse(code)
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.Import):
+                        for alias in node.names:
+                            if alias.name in ("os", "sys", "subprocess", "shutil"):
+                                return {"error": f"Security rules block import of '{alias.name}'"}
+                    elif isinstance(node, ast.ImportFrom):
+                        if node.module in ("os", "sys", "subprocess", "shutil"):
+                            return {"error": f"Security rules block import from '{node.module}'"}
+            except SyntaxError as e:
+                return {"error": f"Syntax error in code: {e}"}
+
             # Create a local namespace for execution
             namespace = {"bpy": bpy}
 
@@ -1554,387 +1585,21 @@ class BlenderMCPServer(SocketBlenderMCPServer):
             traceback.print_exc()
             return {"error": f"Failed to download model: {str(e)}"}
 
-    # endregion
 
-
-# Blender UI Panel
-class BLENDERMCP_PT_Panel(bpy.types.Panel):
-    bl_label = "Blender MCP"
-    bl_idname = "BLENDERMCP_PT_Panel"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"
-    bl_category = "BlenderMCP"
-
-    def draw(self, context):
-        layout = self.layout
-        scene = context.scene
-
-        layout.prop(scene, "blendermcp_port")
-        layout.prop(scene, "blendermcp_use_polyhaven", text="Use assets from Poly Haven")
-
-        layout.prop(scene, "blendermcp_use_sketchfab", text="Use assets from Sketchfab")
-        if scene.blendermcp_use_sketchfab:
-            self._draw_api_key_warning(layout)
-            layout.prop(scene, "blendermcp_sketchfab_api_key", text="API Key")
-
-        if not scene.blendermcp_server_running:
-            layout.operator("blendermcp.start_server", text="Connect to MCP server")
-        else:
-            layout.operator("blendermcp.stop_server", text="Disconnect from MCP server")
-            layout.label(text=f"Running on port {scene.blendermcp_port}")
-
-        setup_box = layout.box()
-        setup_box.label(text="Local Setup", icon="CONSOLE")
-        setup_box.operator(
-            "blendermcp.install_dependencies",
-            text="Check/Install Dependencies",
-            icon="IMPORT",
-        )
-        setup_box.operator(
-            "blendermcp.run_mcp_terminal_server",
-            text="Run MCP Server in Terminal",
-            icon="PLAY",
-        )
-        setup_box.prop(scene, "blendermcp_client_target", text="Client")
-        setup_box.operator(
-            "blendermcp.copy_mcp_client_config",
-            text="Copy MCP Client Config",
-            icon="COPYDOWN",
-        )
-        setup_box.operator(
-            "blendermcp.health_check",
-            text="Health Check",
-            icon="CHECKMARK",
-        )
-        setup_box.operator(
-            "blendermcp.open_logs",
-            text="Open Logs",
-            icon="TEXT",
-        )
-
-        status_box = layout.box()
-        status_box.label(text="Last Action", icon="INFO")
-        if scene.blendermcp_last_action:
-            status = "OK" if scene.blendermcp_last_action_ok else "ERROR"
-            status_box.label(text=f"{status}: {scene.blendermcp_last_action}")
-            status_box.label(text=f"When: {scene.blendermcp_last_action_at}")
-            if scene.blendermcp_last_action_details:
-                status_box.label(text=scene.blendermcp_last_action_details[:80])
-        else:
-            status_box.label(text="No action recorded yet.")
-
-        # MP-05: Asset cache management
-        layout.separator()
-        cache_box = layout.box()
-        cache_box.label(text="Asset Cache", icon="FILE_CACHE")
-        cache_size, file_count = _asset_cache.get_cache_size()
-        size_mb = cache_size / (1024 * 1024)
-        cache_box.label(text=f"Files: {file_count}, Size: {size_mb:.1f} MB")
-        cache_box.operator("blendermcp.clear_cache", text="Clear Cache", icon="TRASH")
-
-    @staticmethod
-    def _draw_api_key_warning(layout):
-        """Draw security warning box for API keys."""
-        box = layout.box()
-        box.alert = True
-        box.label(text="⚠️ API keys are saved in .blend file", icon="ERROR")
-        box.label(text="Do not share this file publicly", icon="BLANK1")
-
-
-# Operator to start the server
-class BLENDERMCP_OT_StartServer(bpy.types.Operator):
-    bl_idname = "blendermcp.start_server"
-    bl_label = "Connect to LLM client"
-    bl_description = "Start the BlenderMCP server to connect with your LLM client"
-
-    def execute(self, context):
-        scene = context.scene
-
-        # Create a new server instance
-        if not hasattr(bpy.types, "blendermcp_server") or not bpy.types.blendermcp_server:
-            bpy.types.blendermcp_server = BlenderMCPServer(port=scene.blendermcp_port)
-
-        # Start the server
-        bpy.types.blendermcp_server.start()
-        scene.blendermcp_server_running = True
-        _update_action_status(scene, "Connect to MCP server", True, f"Listening on port {scene.blendermcp_port}")
-
-        return {"FINISHED"}
-
-
-class BLENDERMCP_OT_InstallDependencies(bpy.types.Operator):
-    bl_idname = "blendermcp.install_dependencies"
-    bl_label = "Check/Install Dependencies"
-    bl_description = "Install dependencies via uv sync (repo) or pip fallback (installed addon)"
-
-    def execute(self, context):
-        root = _project_root()
-        pyproject_path = os.path.join(root, "pyproject.toml")
-
-        if os.path.exists(pyproject_path):
-            uv_prefix = _resolve_uv_command(root)
-            if uv_prefix is None:
-                self.report(
-                    {"ERROR"},
-                    "uv not found. Install uv or run from a shell where uv is available.",
-                )
-                _update_action_status(context.scene, "Check/Install Dependencies", False, "uv not found")
-                return {"CANCELLED"}
-
-            code, output = _run_command(
-                [*uv_prefix, "sync", "--extra", "gui", "--extra", "test"],
-                cwd=root,
-            )
-            if code != 0:
-                self.report({"ERROR"}, "Dependency sync failed. See Blender console for details.")
-                if output:
-                    print("[blender-mcp] uv sync output:")
-                    print(output)
-                _update_action_status(context.scene, "Check/Install Dependencies", False, "uv sync failed")
-                return {"CANCELLED"}
-
-            self.report({"INFO"}, "Dependencies are ready (uv sync completed).")
-            _update_action_status(context.scene, "Check/Install Dependencies", True, "uv sync completed")
-            return {"FINISHED"}
-
-        code, output = _install_runtime_dependencies_with_pip(root)
-        if code != 0:
-            self.report({"ERROR"}, "Fallback install failed. See Blender console for details.")
-            if output:
-                print("[blender-mcp] pip install output:")
-                print(output)
-            _update_action_status(context.scene, "Check/Install Dependencies", False, "pip fallback failed")
-            return {"CANCELLED"}
-
-        self.report({"INFO"}, "Runtime dependencies installed via Blender Python (pip).")
-        _update_action_status(context.scene, "Check/Install Dependencies", True, "pip fallback completed")
-        return {"FINISHED"}
-
-
-class BLENDERMCP_OT_RunMCPServerTerminal(bpy.types.Operator):
-    bl_idname = "blendermcp.run_mcp_terminal_server"
-    bl_label = "Run MCP Server in Terminal"
-    bl_description = "Launch uv run blender-mcp --host localhost --port <port> in a new terminal"
-
-    def execute(self, context):
-        port = int(context.scene.blendermcp_port)
-        root = _project_root()
-        host = "localhost"
-        cmd = _uv_blender_mcp_command(root, host=host, port=port, doctor=False)
-        if cmd is None:
-            self.report({"ERROR"}, "uv not found. Install uv first.")
-            _update_action_status(context.scene, "Run MCP Server in Terminal", False, "uv not found")
-            return {"CANCELLED"}
-
-        try:
-            if os.name == "nt":
-                subprocess.Popen(
-                    cmd,
-                    cwd=root,
-                    creationflags=subprocess.CREATE_NEW_CONSOLE,
-                )
-            else:
-                subprocess.Popen(cmd, cwd=root)
-        except Exception as exc:
-            self.report({"ERROR"}, f"Failed to start MCP server terminal: {exc}")
-            _update_action_status(context.scene, "Run MCP Server in Terminal", False, str(exc))
-            return {"CANCELLED"}
-
-        self.report({"INFO"}, f"MCP server terminal launched on {host}:{port}.")
-        _update_action_status(context.scene, "Run MCP Server in Terminal", True, f"Started on {host}:{port}")
-        return {"FINISHED"}
-
-
-class BLENDERMCP_OT_CopyMCPClientConfig(bpy.types.Operator):
-    bl_idname = "blendermcp.copy_mcp_client_config"
-    bl_label = "Copy MCP Client Config"
-    bl_description = "Copy stdio config snippet for Claude/Cursor/Ollama/LM Studio"
-
-    def execute(self, context):
-        scene = context.scene
-        client = scene.blendermcp_client_target
-        snippet = _mcp_client_config_snippet(client, host="localhost", port=int(scene.blendermcp_port))
-        context.window_manager.clipboard = snippet
-        self.report({"INFO"}, f"Copied {client} MCP config to clipboard.")
-        _update_action_status(scene, "Copy MCP Client Config", True, f"Client: {client}")
-        return {"FINISHED"}
-
-
-class BLENDERMCP_OT_HealthCheck(bpy.types.Operator):
-    bl_idname = "blendermcp.health_check"
-    bl_label = "Health Check"
-    bl_description = "Run local diagnostics (uv + blender-mcp --doctor)"
-
-    def execute(self, context):
-        root = _project_root()
-        port = int(context.scene.blendermcp_port)
-        cmd = _uv_blender_mcp_command(root, host="localhost", port=port, doctor=True)
-        if cmd is None:
-            self.report({"ERROR"}, "uv not found in PATH.")
-            _update_action_status(context.scene, "Health Check", False, "uv not found")
-            return {"CANCELLED"}
-
-        code, output = _run_command(cmd, cwd=root)
-        if output:
-            print("[blender-mcp] doctor output:")
-            print(output)
-        if code != 0:
-            self.report({"ERROR"}, "Health check failed. See Blender console.")
-            _update_action_status(context.scene, "Health Check", False, "doctor failed")
-            return {"CANCELLED"}
-
-        self.report({"INFO"}, "Health check passed. See Blender console for details.")
-        _update_action_status(context.scene, "Health Check", True, f"doctor ok for localhost:{port}")
-        return {"FINISHED"}
-
-
-class BLENDERMCP_OT_OpenLogs(bpy.types.Operator):
-    bl_idname = "blendermcp.open_logs"
-    bl_label = "Open Logs"
-    bl_description = "Open Blender MCP log file location"
-
-    def execute(self, context):
-        try:
-            path = _logs_path()
-            if not os.path.exists(path):
-                open(path, "a", encoding="utf-8").close()
-            _open_in_system(path)
-        except Exception as exc:
-            self.report({"ERROR"}, f"Could not open logs: {exc}")
-            _update_action_status(context.scene, "Open Logs", False, str(exc))
-            return {"CANCELLED"}
-
-        self.report({"INFO"}, f"Opened logs: {path}")
-        _update_action_status(context.scene, "Open Logs", True, os.path.basename(path))
-        return {"FINISHED"}
-
-
-# Operator to clear asset cache (MP-05)
-class BLENDERMCP_OT_ClearCache(bpy.types.Operator):
-    bl_idname = "blendermcp.clear_cache"
-    bl_label = "Clear Asset Cache"
-    bl_description = "Clear all cached downloaded assets from Poly Haven and Sketchfab"
-
-    def execute(self, context):
-        deleted = _asset_cache.clear()
-        self.report({"INFO"}, f"Cleared {deleted} cached files")
-        _update_action_status(context.scene, "Clear Cache", True, f"Deleted files: {deleted}")
-        return {"FINISHED"}
-
-
-# Operator to stop the server
-class BLENDERMCP_OT_StopServer(bpy.types.Operator):
-    bl_idname = "blendermcp.stop_server"
-    bl_label = "Stop the LLM connection"
-    bl_description = "Stop the connection to your LLM client"
-
-    def execute(self, context):
-        scene = context.scene
-
-        # Stop the server if it exists
-        if hasattr(bpy.types, "blendermcp_server") and bpy.types.blendermcp_server:
-            bpy.types.blendermcp_server.stop()
-            del bpy.types.blendermcp_server
-
-        scene.blendermcp_server_running = False
-        _update_action_status(scene, "Disconnect from MCP server", True, "Server stopped")
-
-        return {"FINISHED"}
-
-
-# MP-02: Modal operator for download progress display
-class BLENDERMCP_OT_DownloadProgress(bpy.types.Operator):
-    """Display download progress with cancellation support."""
-
-    bl_idname = "blendermcp.download_progress"
-    bl_label = "Download Progress"
-
-    operation_id: bpy.props.StringProperty(default="")
-    _timer = None
-    _last_progress = 0
-
-    def modal(self, context, event):
-        if event.type == "TIMER":
-            if not PROGRESS_AVAILABLE:
-                self.cancel(context)
-                return {"CANCELLED"}
-
-            # Get progress update
-            tracker = get_progress_tracker()
-            if not tracker:
-                self.cancel(context)
-                return {"CANCELLED"}
-
-            progress_info = tracker.get_progress(self.operation_id)
-
-            if progress_info is None:
-                # Operation not found, clean up
-                self.cancel(context)
-                return {"CANCELLED"}
-
-            # Update progress bar
-            progress_pct = int(progress_info.progress_percent)
-            if progress_pct != self._last_progress:
-                context.window_manager.progress_update(progress_pct)
-                self._last_progress = progress_pct
-
-            # Check completion status
-            if progress_info.status == "completed":
-                context.window_manager.progress_end()
-                self.report({"INFO"}, f"Download complete! ({progress_info.format_progress()})")
-                self.cancel(context)
-                return {"FINISHED"}
-            elif progress_info.status == "error":
-                context.window_manager.progress_end()
-                self.report({"ERROR"}, f"Download failed: {progress_info.error_message}")
-                self.cancel(context)
-                return {"CANCELLED"}
-            elif progress_info.status == "cancelled":
-                context.window_manager.progress_end()
-                self.report({"WARNING"}, "Download cancelled by user")
-                self.cancel(context)
-                return {"CANCELLED"}
-
-            # Update area to show progress
-            context.area.tag_redraw() if hasattr(context, "area") and context.area else None
-
-        # Allow cancellation with ESC key
-        elif event.type == "ESC":
-            if PROGRESS_AVAILABLE:
-                tracker = get_progress_tracker()
-                if tracker:
-                    tracker.cancel_operation(self.operation_id)
-            context.window_manager.progress_end()
-            self.report({"WARNING"}, "Download cancelled (ESC pressed)")
-            self.cancel(context)
-            return {"CANCELLED"}
-
-        return {"RUNNING_MODAL"}
-
-    def execute(self, context):
-        if not PROGRESS_AVAILABLE:
-            self.report({"ERROR"}, "Progress tracking not available")
-            return {"CANCELLED"}
-
-        if not self.operation_id:
-            self.report({"ERROR"}, "No operation ID provided")
-            return {"CANCELLED"}
-
-        # Start progress bar
-        context.window_manager.progress_begin(0, 100)
-
-        # Register timer (update every 0.1 seconds)
-        wm = context.window_manager
-        self._timer = wm.event_timer_add(0.1, window=context.window)
-        wm.modal_handler_add(self)
-
-        return {"RUNNING_MODAL"}
-
-    def cancel(self, context):
-        if self._timer:
-            wm = context.window_manager
-            wm.event_timer_remove(self._timer)
-            self._timer = None
+# Blender UI Panel and Operators are now in addon/ui/ package.
+# Import them for registration.
+try:
+    from addon.ui import UI_CLASSES as _UI_CLASSES
+except ImportError:
+    # Fallback: direct import for extension mode
+    import importlib.util as _iu
+    import os as _os
+
+    _ui_init = _os.path.join(_os.path.dirname(__file__), "addon", "ui", "__init__.py")
+    _spec = _iu.spec_from_file_location("addon.ui", _ui_init)
+    _mod = _iu.module_from_spec(_spec)
+    _spec.loader.exec_module(_mod)
+    _UI_CLASSES = _mod.UI_CLASSES
 
 
 # Registration functions
@@ -1945,6 +1610,11 @@ def register():
         default=9876,
         min=1024,
         max=65535,
+    )
+    bpy.types.Scene.blendermcp_allow_code_execution = bpy.props.BoolProperty(
+        name="Allow Remote Code Execution",
+        description="WARNING: Allows the LLM to execute arbitrary Python code. Enable only if you trust the requests",
+        default=False,
     )
 
     bpy.types.Scene.blendermcp_server_running = bpy.props.BoolProperty(
@@ -1999,16 +1669,8 @@ def register():
         default=True,
     )
 
-    bpy.utils.register_class(BLENDERMCP_PT_Panel)
-    bpy.utils.register_class(BLENDERMCP_OT_StartServer)
-    bpy.utils.register_class(BLENDERMCP_OT_StopServer)
-    bpy.utils.register_class(BLENDERMCP_OT_InstallDependencies)
-    bpy.utils.register_class(BLENDERMCP_OT_RunMCPServerTerminal)
-    bpy.utils.register_class(BLENDERMCP_OT_CopyMCPClientConfig)
-    bpy.utils.register_class(BLENDERMCP_OT_HealthCheck)
-    bpy.utils.register_class(BLENDERMCP_OT_OpenLogs)
-    bpy.utils.register_class(BLENDERMCP_OT_ClearCache)
-    bpy.utils.register_class(BLENDERMCP_OT_DownloadProgress)
+    for cls in _UI_CLASSES:
+        bpy.utils.register_class(cls)
 
     print("BlenderMCP addon registered")
 
@@ -2019,16 +1681,8 @@ def unregister():
         bpy.types.blendermcp_server.stop()
         del bpy.types.blendermcp_server
 
-    bpy.utils.unregister_class(BLENDERMCP_PT_Panel)
-    bpy.utils.unregister_class(BLENDERMCP_OT_StartServer)
-    bpy.utils.unregister_class(BLENDERMCP_OT_StopServer)
-    bpy.utils.unregister_class(BLENDERMCP_OT_InstallDependencies)
-    bpy.utils.unregister_class(BLENDERMCP_OT_RunMCPServerTerminal)
-    bpy.utils.unregister_class(BLENDERMCP_OT_CopyMCPClientConfig)
-    bpy.utils.unregister_class(BLENDERMCP_OT_HealthCheck)
-    bpy.utils.unregister_class(BLENDERMCP_OT_OpenLogs)
-    bpy.utils.unregister_class(BLENDERMCP_OT_ClearCache)
-    bpy.utils.unregister_class(BLENDERMCP_OT_DownloadProgress)
+    for cls in reversed(_UI_CLASSES):
+        bpy.utils.unregister_class(cls)
 
     del bpy.types.Scene.blendermcp_port
     del bpy.types.Scene.blendermcp_server_running
