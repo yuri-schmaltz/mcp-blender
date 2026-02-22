@@ -53,7 +53,7 @@ except Exception:
 bl_info = {
     "name": "Blender MCP",
     "author": "BlenderMCP",
-    "version": (1, 4, 0),
+    "version": (1, 5, 0),
     "blender": (3, 0, 0),
     "location": "View3D > Sidebar > BlenderMCP",
     "description": "Connect Blender to local LLM clients via MCP",
@@ -311,6 +311,10 @@ class BlenderMCPServer(SocketBlenderMCPServer):
             "get_polyhaven_status": self.get_polyhaven_status,
             "get_sketchfab_status": self.get_sketchfab_status,
             "get_ambientcg_status": self.get_ambientcg_status,
+            "set_exact_dimensions": self.set_exact_dimensions,
+            "apply_print_thickness": self.apply_print_thickness,
+            "apply_boolean_operation": self.apply_boolean_operation,
+            "export_for_printing": self.export_for_printing,
         }
 
         # Add Polyhaven handlers only if enabled
@@ -1652,6 +1656,40 @@ class BlenderMCPServer(SocketBlenderMCPServer):
             return _setup(bpy.context.scene, focus_object_name, loc_tuple, create_new)
         except Exception as e:
             return {"error": f"Failed to setup camera: {str(e)}"}
+    # endregion
+
+    # region 3D Printing Tools
+    def set_exact_dimensions(self, object_name, size_x=None, size_y=None, size_z=None):
+        """Set exact dimensions for precise 3D printing"""
+        try:
+            from addon.handlers.printing3d import set_exact_dimensions as _set_dims
+            return _set_dims(bpy.context.scene, object_name, size_x, size_y, size_z)
+        except Exception as e:
+            return {"error": f"Failed to execute set_exact_dimensions: {str(e)}"}
+            
+    def apply_print_thickness(self, object_name, thickness_mm, offset=0.0):
+        """Apply Solidify modifier to create printer-friendly shells"""
+        try:
+            from addon.handlers.printing3d import apply_print_thickness as _apply_thick
+            return _apply_thick(bpy.context.scene, object_name, thickness_mm, offset)
+        except Exception as e:
+            return {"error": f"Failed to execute apply_print_thickness: {str(e)}"}
+
+    def apply_boolean_operation(self, target_name, tool_name, operation="DIFFERENCE"):
+        """Use boolean operations to cut or union parts"""
+        try:
+            from addon.handlers.printing3d import apply_boolean_operation as _bool_op
+            return _bool_op(bpy.context.scene, target_name, tool_name, operation)
+        except Exception as e:
+            return {"error": f"Failed to execute apply_boolean_operation: {str(e)}"}
+
+    def export_for_printing(self, object_names=None, filepath=None):
+        """Export objects to STL format"""
+        try:
+            from addon.handlers.printing3d import export_for_printing as _export
+            return _export(bpy.context.scene, object_names, filepath)
+        except Exception as e:
+            return {"error": f"Failed to execute export_for_printing: {str(e)}"}
     # endregion
 
 
