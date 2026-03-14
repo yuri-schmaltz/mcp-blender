@@ -175,11 +175,11 @@ class BLENDERMCP_PT_Tools(bpy.types.Panel):
 
 
 # =============================================================================
-# Sub-Panel: Status (last action + cache)
+# Sub-Panel: Status & Cache (last action + asset info)
 # =============================================================================
-class BLENDERMCP_PT_Status(bpy.types.Panel):
-    bl_label = "Status"
-    bl_idname = "BLENDERMCP_PT_Status"
+class BLENDERMCP_PT_StatusAndCache(bpy.types.Panel):
+    bl_label = "Status & Cache"
+    bl_idname = "BLENDERMCP_PT_StatusAndCache"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "BlenderMCP"
@@ -190,22 +190,32 @@ class BLENDERMCP_PT_Status(bpy.types.Panel):
         layout = self.layout
         scene = context.scene
 
-        # Last action
+        # --- Section 1: Last Action ---
+        box = layout.box()
+        box.label(text="Last Action", icon="INFO")
+        
         if scene.blendermcp_last_action:
             icon = "CHECKMARK" if scene.blendermcp_last_action_ok else "ERROR"
-            row = layout.row()
+            row = box.row()
             row.alert = not scene.blendermcp_last_action_ok
             row.label(text=scene.blendermcp_last_action, icon=icon)
-            layout.label(text=scene.blendermcp_last_action_at, icon="TIME")
+            
+            row = box.row()
+            row.label(text=scene.blendermcp_last_action_at, icon="TIME")
+            
             if scene.blendermcp_last_action_details:
-                layout.label(text=scene.blendermcp_last_action_details[:60])
+                # Wrap long details
+                row = box.row()
+                row.label(text=scene.blendermcp_last_action_details[:60])
         else:
-            layout.label(text="No actions yet", icon="INFO")
+            box.label(text="No actions yet", icon="DOT")
 
         layout.separator(factor=0.5)
 
-        # Cache info
-        layout.label(text="Asset Cache", icon="FILE_CACHE")
+        # --- Section 2: Asset Cache ---
+        box = layout.box()
+        box.label(text="Asset Cache", icon="FILE_CACHE")
+        
         try:
             addon_mod = _get_addon_module()
             cache_size, file_count = addon_mod._asset_cache.get_cache_size()
@@ -213,9 +223,13 @@ class BLENDERMCP_PT_Status(bpy.types.Panel):
             cache_size, file_count = 0, 0
 
         size_mb = cache_size / (1024 * 1024)
-        row = layout.row(align=True)
+        
+        row = box.row(align=True)
         row.label(text=f"{file_count} files  ·  {size_mb:.1f} MB")
-        row.operator("blendermcp.clear_cache", text="Clear", icon="TRASH")
+        
+        row = box.row()
+        row.scale_y = 1.2
+        row.operator("blendermcp.clear_cache", text="Clear Cache", icon="TRASH")
 
 
 # All panel classes in registration order (parent first, then children)
@@ -224,5 +238,5 @@ PANEL_CLASSES = [
     BLENDERMCP_PT_Integrations,
     BLENDERMCP_PT_ClientSetup,
     BLENDERMCP_PT_Tools,
-    BLENDERMCP_PT_Status,
+    BLENDERMCP_PT_StatusAndCache,
 ]

@@ -1,11 +1,117 @@
 """Shared helper functions for BlenderMCP addon UI and operators."""
 
+import collections.abc
 import json
 import os
 import platform
+import shutil
 import subprocess
 import sys
 import time
+
+
+# ── Client auto-detection ───────────────────────────────────────────────
+
+# Full static list used as fallback when nothing is detected.
+_ALL_CLIENTS: list[tuple[str, str, str]] = [
+    ("claude", "Claude Desktop", "Copy config snippet for Claude Desktop"),
+    ("cursor", "Cursor", "Copy config snippet for Cursor"),
+    ("ollama", "Ollama", "Copy config snippet for an MCP-capable Ollama client"),
+    ("lm_studio", "LM Studio", "Copy config snippet for LM Studio"),
+]
+
+
+def _is_ollama_installed() -> bool:
+    """Check if Ollama is available on the system."""
+    if shutil.which("ollama"):
+        return True
+    # Common install locations not in PATH
+    home = os.path.expanduser("~")
+    for candidate in [
+        os.path.join(home, ".local", "bin", "ollama"),
+        "/usr/local/bin/ollama",
+        "/usr/bin/ollama",
+    ]:
+        if os.path.isfile(candidate):
+            return True
+    if os.name == "nt":
+        appdata = os.environ.get("LOCALAPPDATA", "")
+        if appdata and os.path.isfile(os.path.join(appdata, "Ollama", "ollama.exe")):
+            return True
+    return False
+
+
+def _is_claude_installed() -> bool:
+    """Check if Claude Desktop config directory exists."""
+    home = os.path.expanduser("~")
+    plat = platform.system()
+    if plat == "Linux":
+        return os.path.isdir(os.path.join(home, ".config", "Claude"))
+    if plat == "Darwin":
+        return os.path.isdir(os.path.join(home, "Library", "Application Support", "Claude"))
+    if plat == "Windows":
+        appdata = os.environ.get("APPDATA", "")
+        return bool(appdata) and os.path.isdir(os.path.join(appdata, "Claude"))
+    return False
+
+
+def _is_cursor_installed() -> bool:
+    """Check if Cursor config directory exists."""
+    home = os.path.expanduser("~")
+    plat = platform.system()
+    if plat == "Linux":
+        return os.path.isdir(os.path.join(home, ".config", "Cursor"))
+    if plat == "Darwin":
+        return os.path.isdir(os.path.join(home, "Library", "Application Support", "Cursor"))
+    if plat == "Windows":
+        appdata = os.environ.get("APPDATA", "")
+        return bool(appdata) and os.path.isdir(os.path.join(appdata, "Cursor"))
+    return False
+
+
+def _is_lm_studio_installed() -> bool:
+    """Check if LM Studio is available on the system."""
+    if shutil.which("lms"):
+        return True
+    home = os.path.expanduser("~")
+    plat = platform.system()
+    if plat == "Linux":
+        return os.path.isdir(os.path.join(home, ".cache", "lm-studio"))
+    if plat == "Darwin":
+        return os.path.isdir(os.path.join(home, "Library", "Application Support", "LM Studio"))
+    if plat == "Windows":
+        appdata = os.environ.get("LOCALAPPDATA", "")
+        return bool(appdata) and os.path.isdir(os.path.join(appdata, "LM Studio"))
+    return False
+
+
+def detect_installed_clients() -> list[tuple[str, str, str]]:
+    """Return Blender EnumProperty items for detected clients.
+
+    Ollama is placed first when detected so it becomes the default.
+    If no client is detected, the full static list is returned as fallback.
+    """
+    detected: list[tuple[str, str, str]] = []
+    
+    # We check each one and map to our static list
+    # _ALL_CLIENTS indices: 0:claude, 1:cursor, 2:ollama, 3:lm_studio
+    if _is_ollama_installed():
+        detected.append(_ALL_CLIENTS[2])
+    if _is_claude_installed():
+        detected.append(_ALL_CLIENTS[0])
+    if _is_cursor_installed():
+        detected.append(_ALL_CLIENTS[1])
+    if _is_lm_studio_installed():
+        detected.append(_ALL_CLIENTS[3])
+
+    if not detected:
+        return list(_ALL_CLIENTS)
+
+    # Ensure Ollama is first (= Blender default) when present
+    # (It's already first because we appended it first, but let's be explicit)
+    ollama_items = [c for c in detected if c[0] == "ollama"]
+    others = [c for c in detected if c[0] != "ollama"]
+    return ollama_items + others
 
 
 def _project_root() -> str:
