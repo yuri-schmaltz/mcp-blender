@@ -1880,16 +1880,16 @@ def register():
         description="Your Sketchfab API key. Get it from sketchfab.com/settings/password. Only models you have download access to will work. WARNING: Saved in .blend file in plain text.",
         default="",
     )
+    # Dynamic client detection – import via filesystem for Blender compat
+    from addon.utils.helpers import detect_installed_clients as _detect_clients
+
+    def _client_items_callback(self, context):  # noqa: ARG001
+        return _detect_clients()
+
     bpy.types.Scene.blendermcp_client_target = bpy.props.EnumProperty(
         name="MCP Client",
-        description="Client target for config snippet",
-        items=[
-            ("claude", "Claude Desktop", "Copy config snippet for Claude Desktop"),
-            ("cursor", "Cursor", "Copy config snippet for Cursor"),
-            ("ollama", "Ollama", "Copy config snippet for an MCP-capable Ollama client"),
-            ("lm_studio", "LM Studio", "Copy config snippet for LM Studio"),
-        ],
-        default="claude",
+        description="Client target for config snippet (auto-detected)",
+        items=_client_items_callback,
     )
     bpy.types.Scene.blendermcp_last_action = bpy.props.StringProperty(
         name="Last Action",
