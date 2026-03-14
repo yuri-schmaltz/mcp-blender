@@ -23,12 +23,23 @@ from bpy.props import IntProperty
 def _load_socket_server_class():
     """Load addon/server.py robustly in both legacy addon and extension modes."""
     addon_pkg_dir = os.path.join(os.path.dirname(__file__), "addon")
-
     server_path = os.path.join(addon_pkg_dir, "server.py")
+    
+    # Try relative import first if in a package
+    if __package__:
+        try:
+            from .addon.server import BlenderMCPServer
+            return BlenderMCPServer
+        except (ImportError, ValueError):
+            pass
+
     spec = importlib.util.spec_from_file_location("blender_mcp_socket_server", server_path)
     if spec is None or spec.loader is None:
         raise ImportError(f"Could not load socket server module from {server_path}")
     module = importlib.util.module_from_spec(spec)
+    # Carry over package if possible
+    if __package__:
+        module.__package__ = __package__
     spec.loader.exec_module(module)
     return module.BlenderMCPServer
 
@@ -37,11 +48,16 @@ SocketBlenderMCPServer = _load_socket_server_class()
 
 # Import progress tracking for MP-02 (filesystem-based, no sys.path mutation)
 try:
-    _progress_path = os.path.join(os.path.dirname(__file__), "src", "blender_mcp", "progress.py")
-    _progress_spec = importlib.util.spec_from_file_location("_blendermcp_progress", _progress_path)
-    _progress_mod = importlib.util.module_from_spec(_progress_spec)
-    _progress_spec.loader.exec_module(_progress_mod)
-    get_progress_tracker = _progress_mod.get_progress_tracker
+    if __package__:
+        from .src.blender_mcp.progress import get_progress_tracker
+    else:
+        _progress_path = os.path.join(os.path.dirname(__file__), "src", "blender_mcp", "progress.py")
+        _progress_spec = importlib.util.spec_from_file_location("_blendermcp_progress", _progress_path)
+        _progress_mod = importlib.util.module_from_spec(_progress_spec)
+        if __package__:
+            _progress_mod.__package__ = __package__
+        _progress_spec.loader.exec_module(_progress_mod)
+        get_progress_tracker = _progress_mod.get_progress_tracker
     PROGRESS_AVAILABLE = True
 except Exception:
     PROGRESS_AVAILABLE = False
@@ -66,11 +82,16 @@ REQ_HEADERS.update({"User-Agent": "blender-mcp"})
 
 # Load network utilities (retry, fallback, logging)
 try:
-    from addon.utils.network import robust_get, resolve_polyhaven_resolution, friendly_error, log_asset_download, validate_sketchfab_key
-except ImportError:
+    if __package__:
+        from .addon.utils.network import robust_get, resolve_polyhaven_resolution, friendly_error, log_asset_download, validate_sketchfab_key
+    else:
+        from addon.utils.network import robust_get, resolve_polyhaven_resolution, friendly_error, log_asset_download, validate_sketchfab_key
+except (ImportError, ValueError):
     _net_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "addon", "utils", "network.py")
     _net_spec = importlib.util.spec_from_file_location("_blendermcp_network", _net_path)
     _net_mod = importlib.util.module_from_spec(_net_spec)
+    if __package__:
+        _net_mod.__package__ = __package__
     _net_spec.loader.exec_module(_net_mod)
     robust_get = _net_mod.robust_get
     resolve_polyhaven_resolution = _net_mod.resolve_polyhaven_resolution
@@ -1626,7 +1647,10 @@ class BlenderMCPServer(SocketBlenderMCPServer):
     def search_ambientcg_materials(self, query="", limit=20):
         """Search for materials on AmbientCG"""
         try:
-            from addon.handlers.ambientcg import search_ambientcg_materials as _search
+            if __package__:
+                from .addon.handlers.ambientcg import search_ambientcg_materials as _search
+            else:
+                from addon.handlers.ambientcg import search_ambientcg_materials as _search
             return _search(bpy.context.scene, query=query, limit=limit)
         except Exception as e:
             return {"error": f"Failed to load AmbientCG handler: {str(e)}"}
@@ -1645,7 +1669,10 @@ class BlenderMCPServer(SocketBlenderMCPServer):
     def get_ambientcg_status(self):
         """Get the status of AmbientCG integration"""
         try:
-            from addon.handlers.ambientcg import get_ambientcg_status as _status
+            if __package__:
+                from .addon.handlers.ambientcg import get_ambientcg_status as _status
+            else:
+                from addon.handlers.ambientcg import get_ambientcg_status as _status
             return _status(bpy.context.scene)
         except Exception as e:
             return {"error": f"Failed to load AmbientCG handler: {str(e)}"}
@@ -1655,7 +1682,10 @@ class BlenderMCPServer(SocketBlenderMCPServer):
     def configure_render_settings(self, engine="BLENDER_EEVEE", resolution_x=1920, resolution_y=1080, samples=64, use_gpu=True, transparent_background=False):
         """Configure render engine and settings"""
         try:
-            from addon.handlers.scene_tools import configure_render_settings as _config
+            if __package__:
+                from .addon.handlers.scene_tools import configure_render_settings as _config
+            else:
+                from addon.handlers.scene_tools import configure_render_settings as _config
             return _config(bpy.context.scene, engine, resolution_x, resolution_y, samples, use_gpu, transparent_background)
         except Exception as e:
             return {"error": f"Failed to access scene tools: {str(e)}"}
@@ -1663,7 +1693,10 @@ class BlenderMCPServer(SocketBlenderMCPServer):
     def setup_camera(self, focus_object_name=None, location=(0, -10, 5), create_new=False):
         """Setup main camera to point at an object"""
         try:
-            from addon.handlers.scene_tools import setup_camera as _setup
+            if __package__:
+                from .addon.handlers.scene_tools import setup_camera as _setup
+            else:
+                from addon.handlers.scene_tools import setup_camera as _setup
             # Ensure location is passed as a tuple/list to match API
             loc_tuple = tuple(location) if isinstance(location, (list, tuple)) else (0, -10, 5)
             return _setup(bpy.context.scene, focus_object_name, loc_tuple, create_new)
@@ -1675,7 +1708,10 @@ class BlenderMCPServer(SocketBlenderMCPServer):
     def set_exact_dimensions(self, object_name, size_x=None, size_y=None, size_z=None):
         """Set exact dimensions for precise 3D printing"""
         try:
-            from addon.handlers.printing3d import set_exact_dimensions as _set_dims
+            if __package__:
+                from .addon.handlers.printing3d import set_exact_dimensions as _set_dims
+            else:
+                from addon.handlers.printing3d import set_exact_dimensions as _set_dims
             return _set_dims(bpy.context.scene, object_name, size_x, size_y, size_z)
         except Exception as e:
             return {"error": f"Failed to execute set_exact_dimensions: {str(e)}"}
@@ -1683,7 +1719,10 @@ class BlenderMCPServer(SocketBlenderMCPServer):
     def apply_print_thickness(self, object_name, thickness_mm, offset=0.0):
         """Apply Solidify modifier to create printer-friendly shells"""
         try:
-            from addon.handlers.printing3d import apply_print_thickness as _apply_thick
+            if __package__:
+                from .addon.handlers.printing3d import apply_print_thickness as _apply_thick
+            else:
+                from addon.handlers.printing3d import apply_print_thickness as _apply_thick
             return _apply_thick(bpy.context.scene, object_name, thickness_mm, offset)
         except Exception as e:
             return {"error": f"Failed to execute apply_print_thickness: {str(e)}"}
@@ -1691,7 +1730,10 @@ class BlenderMCPServer(SocketBlenderMCPServer):
     def apply_boolean_operation(self, target_name, tool_name, operation="DIFFERENCE"):
         """Use boolean operations to cut or union parts"""
         try:
-            from addon.handlers.printing3d import apply_boolean_operation as _bool_op
+            if __package__:
+                from .addon.handlers.printing3d import apply_boolean_operation as _bool_op
+            else:
+                from addon.handlers.printing3d import apply_boolean_operation as _bool_op
             return _bool_op(bpy.context.scene, target_name, tool_name, operation)
         except Exception as e:
             return {"error": f"Failed to execute apply_boolean_operation: {str(e)}"}
@@ -1699,7 +1741,10 @@ class BlenderMCPServer(SocketBlenderMCPServer):
     def export_for_printing(self, object_names=None, filepath=None):
         """Export objects to STL format"""
         try:
-            from addon.handlers.printing3d import export_for_printing as _export
+            if __package__:
+                from .addon.handlers.printing3d import export_for_printing as _export
+            else:
+                from addon.handlers.printing3d import export_for_printing as _export
             return _export(bpy.context.scene, object_names, filepath)
         except Exception as e:
             return {"error": f"Failed to execute export_for_printing: {str(e)}"}
@@ -1707,7 +1752,10 @@ class BlenderMCPServer(SocketBlenderMCPServer):
     def assign_print_color(self, object_name, hex_color):
         """Assign base color to object for 3D printing (stored in material)"""
         try:
-            from addon.handlers.printing3d import assign_print_color as _color
+            if __package__:
+                from .addon.handlers.printing3d import assign_print_color as _color
+            else:
+                from addon.handlers.printing3d import assign_print_color as _color
             return _color(bpy.context.scene, object_name, hex_color)
         except Exception as e:
             return {"error": f"Failed to assign print color: {str(e)}"}
@@ -1715,7 +1763,10 @@ class BlenderMCPServer(SocketBlenderMCPServer):
     def auto_layout_for_printing(self, bed_size_x=256, bed_size_y=256, padding_mm=5):
         """Auto layout all meshes flat on the Z=0 bed with spacing"""
         try:
-            from addon.handlers.printing3d import auto_layout_for_printing as _layout
+            if __package__:
+                from .addon.handlers.printing3d import auto_layout_for_printing as _layout
+            else:
+                from addon.handlers.printing3d import auto_layout_for_printing as _layout
             return _layout(bpy.context.scene, bed_size_x, bed_size_y, padding_mm)
         except Exception as e:
             return {"error": f"Failed to auto layout for printing: {str(e)}"}
@@ -1723,7 +1774,10 @@ class BlenderMCPServer(SocketBlenderMCPServer):
     def export_3mf_for_multicolor(self, filepath=None):
         """Export the scene to .3mf, preserving colors/materials for BambuStudio"""
         try:
-            from addon.handlers.printing3d import export_3mf_for_multicolor as _export3mf
+            if __package__:
+                from .addon.handlers.printing3d import export_3mf_for_multicolor as _export3mf
+            else:
+                from addon.handlers.printing3d import export_3mf_for_multicolor as _export3mf
             return _export3mf(bpy.context.scene, filepath)
         except Exception as e:
             return {"error": f"Failed to export 3MF: {str(e)}"}
@@ -1733,7 +1787,10 @@ class BlenderMCPServer(SocketBlenderMCPServer):
     def separate_loose_parts(self, object_name, smart_rename=True):
         """Separate a mesh into loose parts with smart renaming"""
         try:
-            from addon.handlers.mesh_tools import separate_loose_parts as _separate
+            if __package__:
+                from .addon.handlers.mesh_tools import separate_loose_parts as _separate
+            else:
+                from addon.handlers.mesh_tools import separate_loose_parts as _separate
             return _separate(bpy.context.scene, object_name, smart_rename)
         except Exception as e:
             return {"error": f"Failed to separate mesh: {str(e)}"}
@@ -1741,7 +1798,10 @@ class BlenderMCPServer(SocketBlenderMCPServer):
     def check_mesh_integrity(self, object_name):
         """Check mesh for non-manifold issues and holes"""
         try:
-            from addon.handlers.mesh_tools import check_mesh_integrity as _check
+            if __package__:
+                from .addon.handlers.mesh_tools import check_mesh_integrity as _check
+            else:
+                from addon.handlers.mesh_tools import check_mesh_integrity as _check
             return _check(bpy.context.scene, object_name)
         except Exception as e:
             return {"error": f"Failed to check mesh integrity: {str(e)}"}
@@ -1749,7 +1809,10 @@ class BlenderMCPServer(SocketBlenderMCPServer):
     def auto_repair_mesh(self, object_name):
         """Try to auto-repair common mesh issues"""
         try:
-            from addon.handlers.mesh_tools import auto_repair_mesh as _repair
+            if __package__:
+                from .addon.handlers.mesh_tools import auto_repair_mesh as _repair
+            else:
+                from addon.handlers.mesh_tools import auto_repair_mesh as _repair
             return _repair(bpy.context.scene, object_name)
         except Exception as e:
             return {"error": f"Failed to auto-repair mesh: {str(e)}"}
@@ -1759,7 +1822,10 @@ class BlenderMCPServer(SocketBlenderMCPServer):
     def generate_tire_treads(self, wheel_name, pattern='OFFROAD'):
         """Generate procedural treads on a wheel"""
         try:
-            from addon.handlers.procedural_tools import generate_tire_treads as _treads
+            if __package__:
+                from .addon.handlers.procedural_tools import generate_tire_treads as _treads
+            else:
+                from addon.handlers.procedural_tools import generate_tire_treads as _treads
             return _treads(bpy.context.scene, wheel_name, pattern)
         except Exception as e:
             return {"error": f"Failed to generate treads: {str(e)}"}
@@ -1769,7 +1835,10 @@ class BlenderMCPServer(SocketBlenderMCPServer):
     def setup_simple_vehicle_rig(self, chassis_name, wheel_names):
         """Setup a basic rig for a vehicle"""
         try:
-            from addon.handlers.vehicle_rigging import setup_simple_vehicle_rig as _rig
+            if __package__:
+                from .addon.handlers.vehicle_rigging import setup_simple_vehicle_rig as _rig
+            else:
+                from addon.handlers.vehicle_rigging import setup_simple_vehicle_rig as _rig
             return _rig(bpy.context.scene, chassis_name, wheel_names)
         except Exception as e:
             return {"error": f"Failed to setup vehicle rig: {str(e)}"}
@@ -1779,7 +1848,10 @@ class BlenderMCPServer(SocketBlenderMCPServer):
     def create_axle_joint(self, chassis_name, wheel_name, axle_diameter=None, clearance=0.2, hole_depth=None):
         """Create a mechanical axle joint between chassis and wheel"""
         try:
-            from addon.handlers.mechanical_tools import create_axle_joint as _axle
+            if __package__:
+                from .addon.handlers.mechanical_tools import create_axle_joint as _axle
+            else:
+                from addon.handlers.mechanical_tools import create_axle_joint as _axle
             return _axle(bpy.context.scene, chassis_name, wheel_name, axle_diameter, clearance, hole_depth)
         except Exception as e:
             return {"error": f"Failed to create axle joint: {str(e)}"}
@@ -1789,7 +1861,10 @@ class BlenderMCPServer(SocketBlenderMCPServer):
     def setup_product_studio(self, theme='CLEAN'):
         """Setup a professional studio environment"""
         try:
-            from addon.handlers.studio_tools import setup_product_studio as _studio
+            if __package__:
+                from .addon.handlers.studio_tools import setup_product_studio as _studio
+            else:
+                from addon.handlers.studio_tools import setup_product_studio as _studio
             return _studio(bpy.context.scene, theme)
         except Exception as e:
             return {"error": f"Failed to setup studio: {str(e)}"}
@@ -1797,7 +1872,10 @@ class BlenderMCPServer(SocketBlenderMCPServer):
     def render_catalog_angles(self, output_dir=None):
         """Render catalog angles"""
         try:
-            from addon.handlers.studio_tools import render_catalog_angles as _render
+            if __package__:
+                from .addon.handlers.studio_tools import render_catalog_angles as _render
+            else:
+                from addon.handlers.studio_tools import render_catalog_angles as _render
             return _render(bpy.context.scene, output_dir)
         except Exception as e:
             return {"error": f"Failed to render catalog: {str(e)}"}
@@ -1807,7 +1885,10 @@ class BlenderMCPServer(SocketBlenderMCPServer):
     def generate_print_report(self, filepath=None):
         """Generate a technical print report"""
         try:
-            from addon.handlers.reporting_tools import generate_print_report as _report
+            if __package__:
+                from .addon.handlers.reporting_tools import generate_print_report as _report
+            else:
+                from addon.handlers.reporting_tools import generate_print_report as _report
             return _report(bpy.context.scene, filepath)
         except Exception as e:
             return {"error": f"Failed to generate report: {str(e)}"}
@@ -1817,7 +1898,10 @@ class BlenderMCPServer(SocketBlenderMCPServer):
     def batch_export_all_formats(self, base_path=None):
         """One-click batch export for all formats"""
         try:
-            from addon.handlers.printing3d import batch_export_all_formats as _batch
+            if __package__:
+                from .addon.handlers.printing3d import batch_export_all_formats as _batch
+            else:
+                from addon.handlers.printing3d import batch_export_all_formats as _batch
             return _batch(bpy.context.scene, base_path)
         except Exception as e:
             return {"error": f"Failed batch export: {str(e)}"}
@@ -1831,6 +1915,8 @@ import importlib.util as _iu
 _ui_init = os.path.join(os.path.dirname(os.path.abspath(__file__)), "addon", "ui", "__init__.py")
 _spec = _iu.spec_from_file_location("_blendermcp_ui", _ui_init)
 _mod = _iu.module_from_spec(_spec)
+if __package__:
+    _mod.__package__ = __package__
 _spec.loader.exec_module(_mod)
 _UI_CLASSES = _mod.UI_CLASSES
 
@@ -1881,7 +1967,10 @@ def register():
         default="",
     )
     # Dynamic client detection – import via filesystem for Blender compat
-    from addon.utils.helpers import detect_installed_clients as _detect_clients
+    if __package__:
+        from .addon.utils.helpers import detect_installed_clients as _detect_clients
+    else:
+        from addon.utils.helpers import detect_installed_clients as _detect_clients
 
     def _client_items_callback(self, context):  # noqa: ARG001
         return _detect_clients()
@@ -1921,7 +2010,11 @@ def unregister():
         del bpy.types.blendermcp_server
 
     for cls in reversed(_UI_CLASSES):
-        bpy.utils.unregister_class(cls)
+        try:
+            if hasattr(cls, "bl_rna"):
+                bpy.utils.unregister_class(cls)
+        except Exception:
+            pass
 
     del bpy.types.Scene.blendermcp_port
     del bpy.types.Scene.blendermcp_server_running
