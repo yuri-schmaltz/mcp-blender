@@ -18,6 +18,7 @@ _ALL_CLIENTS: list[tuple[str, str, str]] = [
     ("cursor", "Cursor", "Copy config snippet for Cursor"),
     ("ollama", "Ollama", "Copy config snippet for an MCP-capable Ollama client"),
     ("lm_studio", "LM Studio", "Copy config snippet for LM Studio"),
+    ("cherry_studio", "Cherry Studio", "Copy config snippet for Cherry Studio"),
 ]
 
 
@@ -82,7 +83,27 @@ def _is_lm_studio_installed() -> bool:
     if plat == "Windows":
         appdata = os.environ.get("LOCALAPPDATA", "")
         return bool(appdata) and os.path.isdir(os.path.join(appdata, "LM Studio"))
+
     return False
+
+
+def _is_cherry_studio_installed() -> bool:
+    """Check if Cherry Studio is installed (based on config dir)."""
+    system = platform.system()
+    if system == "Windows":
+        path = os.path.expandvars(r"%APPDATA%\cherry-studio")
+        if not os.path.isdir(path):
+            path = os.path.expandvars(r"%USERPROFILE%\.cherrystudio")
+    elif system == "Darwin":
+        path = os.path.expanduser("~/Library/Application Support/cherry-studio")
+        if not os.path.isdir(path):
+            path = os.path.expanduser("~/.cherrystudio")
+    else:  # Linux
+        path = os.path.expanduser("~/.config/cherry-studio")
+        if not os.path.isdir(path):
+            path = os.path.expanduser("~/.cherrystudio")
+
+    return os.path.isdir(path)
 
 
 def detect_installed_clients() -> list[tuple[str, str, str]]:
@@ -103,6 +124,8 @@ def detect_installed_clients() -> list[tuple[str, str, str]]:
         detected.append(_ALL_CLIENTS[1])
     if _is_lm_studio_installed():
         detected.append(_ALL_CLIENTS[3])
+    if _is_cherry_studio_installed():
+        detected.append(_ALL_CLIENTS[4])
 
     if not detected:
         return list(_ALL_CLIENTS)

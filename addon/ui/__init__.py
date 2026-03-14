@@ -11,6 +11,9 @@ def _load_module(name, filename):
     path = os.path.join(_ui_dir, filename)
     spec = importlib.util.spec_from_file_location(f"_blendermcp_ui_{name}", path)
     mod = importlib.util.module_from_spec(spec)
+    # Propagate the package context if it exists (crucial for extension mode)
+    if "__package__" in globals() and globals()["__package__"]:
+        mod.__package__ = globals()["__package__"]
     spec.loader.exec_module(mod)
     return mod
 

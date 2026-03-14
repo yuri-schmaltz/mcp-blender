@@ -10,9 +10,11 @@ import bpy
 import importlib.util as _iu
 
 _helpers_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "utils", "helpers.py")
-_spec = _iu.spec_from_file_location("_blendermcp_helpers", _helpers_path)
-_helpers = _iu.module_from_spec(_spec)
-_spec.loader.exec_module(_helpers)
+_helpers_spec = _iu.spec_from_file_location("_blendermcp_addon_helpers", _helpers_path)
+_helpers = _iu.module_from_spec(_helpers_spec)
+if __package__:
+   _helpers.__package__ = __package__
+_helpers_spec.loader.exec_module(_helpers)
 
 _project_root = _helpers._project_root
 _run_command = _helpers._run_command
@@ -27,13 +29,24 @@ _open_in_system = _helpers._open_in_system
 
 def _get_addon_module():
     """Load addon.py via filesystem (works in any Blender loading mode)."""
+    # Try relative import first if in a package
+    if __package__ and "." in __package__:
+        try:
+            # We are in mcp_blender.addon.ui, addon_entry is in mcp_blender
+            from ... import addon_entry
+            return addon_entry
+        except (ImportError, ValueError):
+            pass
+
     addon_py = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "addon.py")
-    spec = _iu.spec_from_file_location("_blendermcp_addon_ref", addon_py)
     # Check if already loaded to avoid re-executing
     for mod in sys.modules.values():
         if hasattr(mod, "__file__") and mod.__file__ and os.path.abspath(mod.__file__) == os.path.abspath(addon_py):
             return mod
+    spec = _iu.spec_from_file_location("blender_mcp_addon_ui_core", addon_py)
     mod = _iu.module_from_spec(spec)
+    if __package__:
+        mod.__package__ = __package__
     spec.loader.exec_module(mod)
     return mod
 

@@ -8,12 +8,18 @@ from pathlib import Path
 
 
 def _load_addon_module():
-    """Always load addon.py via filesystem to avoid collision with addon/ directory."""
+    """Load addon.py and ensure it has the correct package context for relative imports."""
     addon_path = Path(__file__).with_name("addon.py")
-    spec = importlib.util.spec_from_file_location("blender_mcp_addon_entry", addon_path)
+    # Use the current package name if available (Blender 4.2+ Extension mode)
+    pkg = __package__ if __package__ else "blender_mcp"
+    
+    spec = importlib.util.spec_from_file_location(f"{pkg}.addon_entry", addon_path)
     if spec is None or spec.loader is None:
         raise ImportError(f"Could not load addon module from {addon_path}")
+    
     module = importlib.util.module_from_spec(spec)
+    # Crucial: set __package__ so relative imports like 'from .addon import ...' work
+    module.__package__ = pkg
     spec.loader.exec_module(module)
     return module
 
@@ -22,7 +28,7 @@ bl_info = {
     "name": "Blender MCP",
     "author": "BlenderMCP",
     "version": (2, 0, 0),
-    "blender": (3, 0, 0),
+    "blender": (4, 2, 0),
     "location": "View3D > Sidebar > BlenderMCP",
     "description": "Connect Blender to local LLM clients via MCP",
     "category": "Interface",
