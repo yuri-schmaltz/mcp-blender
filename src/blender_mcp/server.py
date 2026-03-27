@@ -427,6 +427,30 @@ def _read_file_with_retry(path: Path, attempts: int = 3, delay: float = 0.2) -> 
     raise last_error
 
 
+def _validate_positive_int(value: int, field_name: str, minimum: int = 1) -> int:
+    """Validate that a numeric input is an integer greater than or equal to minimum."""
+    if not isinstance(value, int):
+        raise ValueError(f"{field_name} must be an integer")
+    if value < minimum:
+        raise ValueError(f"{field_name} must be at least {minimum}")
+    return value
+
+
+def _validate_camera_location(location: list[float] | tuple[float, float, float] | None) -> list[float]:
+    """Validate camera location payload for MCP transport."""
+    if location is None:
+        return [0.0, -10.0, 5.0]
+    if not isinstance(location, (list, tuple)) or len(location) != 3:
+        raise ValueError("location must contain exactly 3 numeric values")
+
+    validated: list[float] = []
+    for axis_value in location:
+        if not isinstance(axis_value, (int, float)):
+            raise ValueError("location must contain only numbers")
+        validated.append(float(axis_value))
+    return validated
+
+
 @mcp.tool()
 def get_scene_info(ctx: Context) -> str:
     """Get detailed information about the current Blender scene"""
@@ -815,6 +839,141 @@ def get_sketchfab_status(ctx: Context) -> str:
 
 
 @mcp.tool()
+def get_ambientcg_status(ctx: Context) -> str:
+    """
+    Check if AmbientCG integration is enabled in Blender.
+    Returns a message indicating whether AmbientCG features are available.
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("get_ambientcg_status")
+        return result.get("message", "AmbientCG status unavailable")
+    except Exception as e:
+        logger.error(f"Error checking AmbientCG status: {str(e)}")
+        return tool_error("Error checking AmbientCG status", data={"detail": str(e)})
+
+
+@mcp.tool()
+def search_ambientcg_materials(ctx: Context, query: str = "", limit: int = 20) -> str:
+    """
+    Search AmbientCG for downloadable PBR materials.
+
+    Parameters:
+    - query: Optional search text
+    - limit: Maximum number of materials to return (1-100)
+    """
+    if not isinstance(query, str):
+        return tool_error("Invalid query", data={"detail": "Query must be a string"})
+
+    try:
+        limit = _validate_positive_int(limit, "limit")
+    except ValueError as e:
+        return tool_error("Invalid limit", data={"detail": str(e), "limit": limit})
+
+    if limit > 100:
+        return tool_error("Invalid limit", data={"detail": "limit must be 100 or less", "limit": limit})
+
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command(
+            "search_ambientcg_materials",
+            {"query": query.strip(), "limit": limit},
+        )
+
+        if "error" in result:
+            return tool_error("AmbientCG search failed", data={"detail": result["error"], "query": query})
+
+        materials = result.get("results", []) or []
+        if not materials:
+            if query.strip():
+                return f"No AmbientCG materials found matching '{query.strip()}'."
+            return "No AmbientCG materials found."
+
+        formatted_output = f"Found {len(materials)} AmbientCG materials"
+        if query.strip():
+            formatted_output += f" matching '{query.strip()}'"
+        formatted_output += ":\n\n"
+
+        for material in materials:
+            material_id = material.get("assetId", "unknown")
+            tags = ", ".join(material.get("tags", [])[:8]) or "No tags"
+            resolutions = ", ".join(material.get("available_resolutions", [])) or "Unknown"
+            formatted_output += f"- {material_id}\n"
+            formatted_output += f"  Tags: {tags}\n"
+            formatted_output += f"  Resolutions: {resolutions}\n\n"
+
+        return formatted_output
+    except Exception as e:
+        logger.error(f"Error searching AmbientCG materials: {str(e)}")
+        return tool_error("Error searching AmbientCG materials", data={"detail": str(e), "query": query})
+
+
+@mcp.tool()
+def download_ambientcg_material(
+    ctx: Context, asset_id: str, resolution: str = "2K", file_format: str = "JPG"
+) -> str:
+    """
+    Download and create an AmbientCG PBR material in Blender.
+
+    Parameters:
+    - asset_id: AmbientCG material identifier
+    - resolution: Material resolution (e.g. 1K, 2K, 4K, 8K)
+    - file_format: Texture archive format (typically JPG or PNG)
+    """
+    from blender_mcp.shared.validators import ValidationError, validate_asset_id
+
+    try:
+        asset_id = validate_asset_id(asset_id)
+    except ValidationError as e:
+        return tool_error("Invalid asset ID", data={"detail": str(e), "asset_id": asset_id})
+
+    valid_resolutions = {"1K", "2K", "4K", "8K"}
+    resolution = resolution.upper()
+    if resolution not in valid_resolutions:
+        return tool_error(
+            "Invalid resolution",
+            data={"detail": f"Must be one of: {', '.join(sorted(valid_resolutions))}", "resolution": resolution},
+        )
+
+    valid_formats = {"JPG", "PNG"}
+    file_format = file_format.upper()
+    if file_format not in valid_formats:
+        return tool_error(
+            "Invalid file format",
+            data={"detail": f"Must be one of: {', '.join(sorted(valid_formats))}", "file_format": file_format},
+        )
+
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command(
+            "download_ambientcg_material",
+            {"asset_id": asset_id, "resolution": resolution, "file_format": file_format},
+        )
+
+        if "error" in result:
+            return tool_error(
+                "AmbientCG download failed",
+                data={"detail": result["error"], "asset_id": asset_id},
+            )
+
+        if result.get("success"):
+            material_name = result.get("material_name", asset_id)
+            maps_loaded = ", ".join(result.get("maps_loaded", [])) or "unknown maps"
+            message = result.get("message", "Material imported successfully")
+            return f"{message} Material '{material_name}' includes maps: {maps_loaded}."
+
+        return tool_error(
+            "Failed to import AmbientCG material",
+            data={"detail": result.get("message", "Unknown error"), "asset_id": asset_id},
+        )
+    except Exception as e:
+        logger.error(f"Error downloading AmbientCG material: {str(e)}")
+        return tool_error(
+            "Error downloading AmbientCG material", data={"detail": str(e), "asset_id": asset_id}
+        )
+
+
+@mcp.tool()
 def get_mcp_diagnostics(ctx: Context) -> str:
     """Return MCP server diagnostics (metrics + Blender connectivity probe)."""
     diagnostics: dict[str, Any] = {
@@ -1010,6 +1169,148 @@ def download_sketchfab_model(ctx: Context, uid: str) -> str:
         return tool_error("Error downloading Sketchfab model", data={"detail": str(e), "uid": uid})
 
 
+@mcp.tool()
+def configure_render_settings(
+    ctx: Context,
+    engine: str = "BLENDER_EEVEE",
+    resolution_x: int = 1920,
+    resolution_y: int = 1080,
+    samples: int = 64,
+    use_gpu: bool = True,
+    transparent_background: bool = False,
+) -> str:
+    """
+    Configure render quality and engine settings for the active Blender scene.
+    """
+    valid_engines = {"BLENDER_EEVEE", "EEVEE", "CYCLES"}
+    normalized_engine = engine.upper()
+    if normalized_engine not in valid_engines:
+        return tool_error(
+            "Invalid render engine",
+            data={"detail": f"Must be one of: {', '.join(sorted(valid_engines))}", "engine": engine},
+        )
+
+    try:
+        resolution_x = _validate_positive_int(resolution_x, "resolution_x")
+        resolution_y = _validate_positive_int(resolution_y, "resolution_y")
+        samples = _validate_positive_int(samples, "samples")
+    except ValueError as e:
+        return tool_error("Invalid render settings", data={"detail": str(e)})
+
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command(
+            "configure_render_settings",
+            {
+                "engine": normalized_engine,
+                "resolution_x": resolution_x,
+                "resolution_y": resolution_y,
+                "samples": samples,
+                "use_gpu": use_gpu,
+                "transparent_background": transparent_background,
+            },
+        )
+
+        if "error" in result:
+            return tool_error("Render configuration failed", data={"detail": result["error"]})
+
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        logger.error(f"Error configuring render settings: {str(e)}")
+        return tool_error("Error configuring render settings", data={"detail": str(e)})
+
+
+@mcp.tool()
+def setup_camera(
+    ctx: Context,
+    focus_object_name: str | None = None,
+    location: list[float] | None = None,
+    create_new: bool = False,
+) -> str:
+    """
+    Position the active camera or create a new one aimed at an optional focus object.
+    """
+    try:
+        validated_location = _validate_camera_location(location)
+    except ValueError as e:
+        return tool_error("Invalid camera location", data={"detail": str(e), "location": location})
+
+    if focus_object_name is not None and (
+        not isinstance(focus_object_name, str) or not focus_object_name.strip()
+    ):
+        return tool_error(
+            "Invalid focus object",
+            data={"detail": "focus_object_name must be a non-empty string when provided"},
+        )
+
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command(
+            "setup_camera",
+            {
+                "focus_object_name": focus_object_name.strip() if focus_object_name else None,
+                "location": validated_location,
+                "create_new": create_new,
+            },
+        )
+
+        if "error" in result:
+            return tool_error("Camera setup failed", data={"detail": result["error"]})
+
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        logger.error(f"Error setting up camera: {str(e)}")
+        return tool_error("Error setting up camera", data={"detail": str(e)})
+
+
+@mcp.tool()
+def setup_product_studio(ctx: Context, theme: str = "CLEAN") -> str:
+    """
+    Build a simple studio scene with lighting and a dedicated camera for product renders.
+    """
+    if not isinstance(theme, str) or not theme.strip():
+        return tool_error("Invalid theme", data={"detail": "theme must be a non-empty string"})
+
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("setup_product_studio", {"theme": theme.strip().upper()})
+
+        if "error" in result:
+            return tool_error("Studio setup failed", data={"detail": result["error"], "theme": theme})
+
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        logger.error(f"Error setting up product studio: {str(e)}")
+        return tool_error("Error setting up product studio", data={"detail": str(e), "theme": theme})
+
+
+@mcp.tool()
+def render_catalog_angles(ctx: Context, output_dir: str | None = None) -> str:
+    """
+    Render the current scene from standard catalog angles after studio setup.
+    """
+    from blender_mcp.shared.validators import ValidationError, validate_file_path
+
+    validated_output_dir = None
+    if output_dir:
+        try:
+            validated_output_dir = str(validate_file_path(output_dir, must_exist=False))
+        except ValidationError as e:
+            return tool_error("Invalid output directory", data={"detail": str(e), "output_dir": output_dir})
+
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("render_catalog_angles", {"output_dir": validated_output_dir})
+
+        if "error" in result:
+            return tool_error("Catalog render failed", data={"detail": result["error"]})
+
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        logger.error(f"Error rendering catalog angles: {str(e)}")
+        return tool_error("Error rendering catalog angles", data={"detail": str(e)})
+
+
 @mcp.prompt()
 def asset_creation_strategy() -> str:
     """Defines the preferred strategy for creating assets in Blender"""
@@ -1036,17 +1337,29 @@ def asset_creation_strategy() -> str:
         - Ensure that all objects that should not be clipping are not clipping.
         - Items have right spatial relationship.
 
-    3. Recommended asset source priority:
+    3. For materials, also check AmbientCG:
+        - Use get_ambientcg_status() to verify its status
+        - If AmbientCG is enabled:
+            - Use search_ambientcg_materials() to find PBR materials
+            - Use download_ambientcg_material() to create and optionally apply them
+
+    4. Recommended asset source priority:
         - For specific existing objects: First try Sketchfab, then PolyHaven
         - For generic objects/furniture: First try PolyHaven, then Sketchfab
         - For environment lighting: Use PolyHaven HDRIs
-        - For materials/textures: Use PolyHaven textures
+        - For materials/textures: Try AmbientCG first, then PolyHaven textures
+
+    5. When the scene starts to take shape:
+        - Use setup_camera() to establish a clear main view
+        - Use configure_render_settings() before any final render
+        - Use setup_product_studio() and render_catalog_angles() for product-style outputs
 
     Only fall back to scripting when:
-    - PolyHaven and Sketchfab are disabled
-    - A simple primitive is explicitly requested
-    - No suitable asset exists in any of the libraries
-    - The task specifically requires a basic material/color
+        - PolyHaven and Sketchfab are disabled
+        - AmbientCG is disabled for materials
+        - A simple primitive is explicitly requested
+        - No suitable asset exists in any of the libraries
+        - The task specifically requires a basic material/color
     """
 # Main execution
 

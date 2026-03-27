@@ -219,3 +219,66 @@ def test_get_mcp_diagnostics_reports_scene_probe(monkeypatch):
 
     assert payload["connection"]["reachable"] is True
     assert payload["scene_probe"]["object_count"] == 3
+
+
+def test_search_ambientcg_materials_formats_results(monkeypatch):
+    mock_blender = MagicMock()
+    mock_blender.send_command.return_value = {
+        "results": [
+            {
+                "assetId": "WoodFloor001",
+                "tags": ["wood", "floor"],
+                "available_resolutions": ["1K", "2K"],
+            }
+        ]
+    }
+    monkeypatch.setattr(server, "get_blender_connection", lambda: mock_blender)
+
+    result = server.search_ambientcg_materials(ctx=None, query="wood", limit=5)
+
+    assert "WoodFloor001" in result
+    assert "wood, floor" in result
+    mock_blender.send_command.assert_called_once_with(
+        "search_ambientcg_materials", {"query": "wood", "limit": 5}
+    )
+
+
+def test_setup_camera_validates_location_before_sending(monkeypatch):
+    mock_blender = MagicMock()
+    mock_blender.send_command.return_value = {
+        "success": True,
+        "camera_name": "Camera_MCP",
+        "is_active": True,
+    }
+    monkeypatch.setattr(server, "get_blender_connection", lambda: mock_blender)
+
+    result = server.setup_camera(
+        ctx=None, focus_object_name="Cube", location=[1, 2, 3], create_new=True
+    )
+
+    payload = json.loads(result)
+    assert payload["camera_name"] == "Camera_MCP"
+    mock_blender.send_command.assert_called_once_with(
+        "setup_camera",
+        {
+            "focus_object_name": "Cube",
+            "location": [1.0, 2.0, 3.0],
+            "create_new": True,
+        },
+    )
+
+
+def test_setup_camera_rejects_invalid_location(monkeypatch):
+    monkeypatch.setattr(server, "get_blender_connection", lambda: pytest.fail("Should not connect"))
+
+    result = server.setup_camera(ctx=None, location=[1, 2])
+
+    assert result["error"]["message"] == "Invalid camera location"
+
+
+def test_render_catalog_angles_rejects_relative_output_dir(monkeypatch):
+    monkeypatch.setattr(server, "get_blender_connection", lambda: pytest.fail("Should not connect"))
+
+    result = server.render_catalog_angles(ctx=None, output_dir="renders")
+
+    assert result["error"]["message"] == "Invalid output directory"
