@@ -39,10 +39,22 @@ class AddonI18n:
         return "en"
 
     def _get_translations_path(self):
-        """Find the translations directory."""
-        # addon/utils/i18n.py -> addon/utils -> addon -> root -> translations
-        root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        return os.path.join(root, "translations")
+        """Find the translations directory, supporting both local dev and packaged extension."""
+        # 1. Try local dev structure: addon/utils/i18n.py -> addon/utils -> addon -> root -> translations
+        this_dir = os.path.dirname(os.path.abspath(__file__))
+        root_dev = os.path.dirname(os.path.dirname(os.path.dirname(this_dir)))
+        path_dev = os.path.join(root_dev, "translations")
+        if os.path.exists(path_dev):
+            return path_dev
+
+        # 2. Try packaged structure: utils/i18n.py -> utils -> root -> translations
+        root_pkg = os.path.dirname(os.path.dirname(this_dir))
+        path_pkg = os.path.join(root_pkg, "translations")
+        if os.path.exists(path_pkg):
+            return path_pkg
+
+        # Fallback to dev path if nothing else found
+        return path_dev
 
     def _load_translations(self):
         """Load JSON files for current and default locales."""

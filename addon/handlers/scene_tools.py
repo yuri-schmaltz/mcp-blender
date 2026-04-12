@@ -1,6 +1,10 @@
 """Scene and render control tools for BlenderMCP."""
 
 import math
+import mathutils
+import traceback
+import io
+from contextlib import redirect_stdout
 
 import bpy
 
@@ -116,5 +120,131 @@ def setup_camera(scene, focus_object_name=None, location=(0, -10, 5), create_new
             "is_active": (scene.camera == cam_obj)
         }
 
+def get_scene_info(scene):
+    """Get information about the current Blender scene"""
+    try:
+        # Simplify the scene info to reduce data size
+        scene_info = {
+            "name": scene.name,
+            "object_count": len(scene.objects),
+            "objects": [],
+            "materials_count": len(bpy.data.materials),
+        }
+
+        # Collect minimal object information (limit to first 10 objects)
+        for i, obj in enumerate(scene.objects):
+            if i >= 10:
+                break
+
+            obj_info = {
+                "name": obj.name,
+                "type": obj.type,
+                "location": [
+                    round(float(obj.location.x), 2),
+                    round(float(obj.location.y), 2),
+                    round(float(obj.location.z), 2),
+                ],
+            }
+            scene_info["objects"].append(obj_info)
+        return scene_info
     except Exception as e:
-        return {"error": f"Failed to setup camera: {str(e)}"}
+        traceback.print_exc()
+        return {"error": str(e)}
+
+
+def _get_aabb(obj):
+    """Returns the world-space axis-aligned bounding box (AABB) of an object."""
+    if obj.type != "MESH":
+        raise TypeError("Object must be a mesh")
+
+    # Get the bounding box corners in local space
+    local_bbox_corners = [mathutils.Vector(corner) for corner in obj.bound_box]
+
+    # Convert to world coordinates
+    world_bbox_corners = [obj.matrix_world @ corner for corner in local_bbox_corners]
+
+    # Compute axis-aligned min/max coordinates
+    min_corner = mathutils.Vector(map(min, zip(*world_bbox_corners)))
+    max_corner = mathutils.Vector(map(max, zip(*world_bbox_corners)))
+
+    return [[*min_corner], [*max_corner]]
+
+
+def get_object_info(scene, name):
+    """Get detailed information about a specific object"""
+    obj = bpy.data.objects.get(name)
+    if not obj:
+        raise ValueError(f"Object not found: {name}")
+
+    # Basic object info
+    obj_info = {
+        "name": obj.name,
+        "type": obj.type,
+        "location": [obj.location.x, obj.location.y, obj.location.z],
+        "rotation": [obj.rotation_euler.x, obj.rotation_euler.y, obj.rotation_euler.z],
+        "scale": [obj.scale.x, obj.scale.y, obj.scale.z],
+        "visible": obj.visible_get(),
+        "materials": [],
+    }
+
+    if obj.type == "MESH":
+        obj_info["world_bounding_box"] = _get_aabb(obj)
+
+    # Add material slots
+    for slot in obj.material_slots:
+        if slot.material:
+            obj_info["materials"].append(slot.material.name)
+
+    # Add mesh data if applicable
+    if obj.type == "MESH" and obj.data:
+        mesh = obj.data
+        obj_info["mesh"] = {
+            "vertices": len(mesh.vertices),
+            "edges": len(mesh.edges),
+            "polygons": len(mesh.polygons),
+        }
+
+def get_viewport_screenshot(scene, max_size=800, filepath=None, format="png"):
+    """
+    Capture a screenshot of the current 3D viewport and save it to the specified path.
+    """
+    try:
+        if not filepath:
+            return {"error": "No filepath provided"}
+
+        # Find the active 3D viewport
+        area = None
+        for a in bpy.context.screen.areas:
+            if a.type == "VIEW_3D":
+                area = a
+                break
+
+        if not area:
+            return {"error": "No 3D viewport found"}
+
+        # Take screenshot with proper context override
+        with bpy.context.temp_override(area=area):
+            bpy.ops.screen.screenshot_area(filepath=filepath)
+
+        # Load and resize if needed
+        img = bpy.data.images.load(filepath)
+        width, height = img.size
+
+        if max(width, height) > max_size:
+            scale = max_size / max(width, height)
+            new_width = int(width * scale)
+            new_height = int(height * scale)
+            img.scale(new_width, new_height)
+
+            # Set format and save
+            img.file_format = format.upper()
+            img.save()
+            width, height = new_width, new_height
+
+        # Cleanup Blender image data
+        bpy.data.images.remove(img)
+
+        return {"success": True, "width": width, "height": height, "filepath": filepath}
+
+    except Exception as e:
+        return {"error": str(e)}
