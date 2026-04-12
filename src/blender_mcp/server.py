@@ -1236,6 +1236,245 @@ def setup_camera(
         return tool_error("Error setting up camera", data={"detail": str(e)})
 
 
+@mcp.tool()
+def create_axle_joint(
+    ctx: Context,
+    chassis_name: str,
+    wheel_name: str,
+    axle_diameter: float = None,
+    clearance: float = 0.2,
+) -> str:
+    """
+    Create a mechanical axle joint (hole in chassis, pin on wheel).
+    
+    Parameters:
+    - chassis_name: Name of the object acting as the chassis
+    - wheel_name: Name of the object acting as the wheel
+    - axle_diameter: Diameter of the axle in mm (optional)
+    - clearance: Side clearance in mm (default 0.2)
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command(
+            "create_axle_joint",
+            {
+                "chassis_name": chassis_name,
+                "wheel_name": wheel_name,
+                "axle_diameter": axle_diameter,
+                "clearance": clearance,
+            },
+        )
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return tool_error("Error creating axle joint", data={"detail": str(e)})
+
+
+@mcp.tool()
+def create_hinge_joint(
+    ctx: Context,
+    part1_name: str,
+    part2_name: str,
+    diameter: float = 3.0,
+    clearance: float = 0.2,
+) -> str:
+    """
+    Create a hinge joint (pivot holes) between two parts.
+    
+    Parameters:
+    - part1_name: Name of the first part
+    - part2_name: Name of the second part
+    - diameter: Diameter of the hinge pin in mm (default 3.0)
+    - clearance: Hole clearance in mm (default 0.2)
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command(
+            "create_hinge_joint",
+            {"part1_name": part1_name, "part2_name": part2_name, "diameter": diameter, "clearance": clearance},
+        )
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return tool_error("Error creating hinge", data={"detail": str(e)})
+
+
+@mcp.tool()
+def create_snap_fit(
+    ctx: Context,
+    female_part_name: str,
+    male_part_name: str,
+    width: float = 10.0,
+    height: float = 15.0,
+    thickness: float = 2.0,
+) -> str:
+    """
+    Create a cantilever snap-fit joint between two parts.
+    
+    Parameters:
+    - female_part_name: Part that will have the receiving hole
+    - male_part_name: Part that will have the hook/tab
+    - width: Width of the snap tab in mm (default 10)
+    - height: Height of the snap tab in mm (default 15)
+    - thickness: Thickness of the tab in mm (default 2)
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command(
+            "create_snap_fit",
+            {
+                "female_part_name": female_part_name,
+                "male_part_name": male_part_name,
+                "width": width,
+                "height": height,
+                "thickness": thickness,
+            },
+        )
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return tool_error("Error creating snap-fit", data={"detail": str(e)})
+
+
+@mcp.tool()
+def snap_objects_by_proximity(
+    ctx: Context, source_name: str, target_name: str, padding_mm: float = 0.0
+) -> str:
+    """
+    Snap a source object to the closest surface of a target object.
+    
+    Parameters:
+    - source_name: Object to be moved
+    - target_name: Object to snap against
+    - padding_mm: Distance to maintain from the surface in mm (default 0)
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command(
+            "snap_objects_by_proximity",
+            {"source_name": source_name, "target_name": target_name, "padding_mm": padding_mm},
+        )
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return tool_error("Error snapping objects", data={"detail": str(e)})
+
+
+@mcp.tool()
+def mark_as_functional_part(
+    ctx: Context, object_name: str, role: str = "Generic", metadata: dict = None
+) -> str:
+    """
+    Tag an object as a functional part and store metadata for management.
+    
+    Parameters:
+    - object_name: Name of the object to tag
+    - role: Descriptive role (e.g., 'Chassis', 'Gear', 'Enclosure')
+    - metadata: Optional dictionary of additional properties (e.g., {'material': 'PETG'})
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command(
+            "mark_as_functional_part",
+            {"object_name": object_name, "role": role, "metadata": metadata},
+        )
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return tool_error("Error marking part", data={"detail": str(e)})
+
+
+@mcp.tool()
+def list_functional_parts(ctx: Context) -> str:
+    """List all objects tagged as functional parts in the scene with their metadata."""
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("list_functional_parts")
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return tool_error("Error listing parts", data={"detail": str(e)})
+
+
+@mcp.tool()
+def create_ball_joint(
+    ctx: Context,
+    socket_part_name: str,
+    ball_part_name: str,
+    diameter: float = 10.0,
+    clearance: float = 0.2,
+) -> str:
+    """
+    Create a ball-and-socket joint between two parts.
+    
+    Parameters:
+    - socket_part_name: Name of the part that will have the socket
+    - ball_part_name: Name of the part that will have the ball
+    - diameter: Diameter of the ball in mm (default 10)
+    - clearance: Clearance between ball and socket in mm (default 0.2)
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command(
+            "create_ball_joint",
+            {
+                "socket_part_name": socket_part_name,
+                "ball_part_name": ball_part_name,
+                "diameter": diameter,
+                "clearance": clearance,
+            },
+        )
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return tool_error("Error creating ball joint", data={"detail": str(e)})
+
+
+@mcp.tool()
+def create_screw_hole(
+    ctx: Context,
+    part1_name: str,
+    part2_name: str = None,
+    screw_type: str = "M3",
+    countersink: bool = True,
+) -> str:
+    """
+    Create aligned screw holes for standard metric screws (M2 to M5).
+    
+    Parameters:
+    - part1_name: Part that will receive the screw (with optional countersink)
+    - part2_name: Optional second part to also receive the aligned hole
+    - screw_type: Metric size (Options: M2, M2.5, M3, M4, M5). Default is M3.
+    - countersink: Whether to create a recess for the screw head (default True)
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command(
+            "create_screw_hole",
+            {
+                "part1_name": part1_name,
+                "part2_name": part2_name,
+                "screw_type": screw_type,
+                "countersink": countersink,
+            },
+        )
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return tool_error("Error creating screw hole", data={"detail": str(e)})
+
+
+@mcp.tool()
+def set_clearance_tolerance(ctx: Context, object_name: str, tolerance_mm: float = 0.2) -> str:
+    """
+    Apply a shell offset/tolerance to a mesh to ensure precise fit.
+    
+    Parameters:
+    - object_name: Name of the object to adjust
+    - tolerance_mm: Offset distance in mm (positive expands, negative contracts, default 0.2)
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command(
+            "set_clearance_tolerance", {"object_name": object_name, "tolerance_mm": tolerance_mm}
+        )
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return tool_error("Error setting tolerance", data={"detail": str(e)})
+
+
 @mcp.prompt()
 def asset_creation_strategy() -> str:
     """Defines the preferred strategy for creating assets in Blender v2.0."""

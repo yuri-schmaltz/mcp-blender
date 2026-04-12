@@ -414,3 +414,73 @@ def batch_export_all_formats(scene, base_path=None):
     except Exception as e:
         return {"error": f"Failed batch export: {str(e)}"}
 
+
+def snap_objects_by_proximity(scene, source_name, target_name, padding_mm=0.0):
+    """Align and move source object to the closest face of target object."""
+    try:
+        if source_name not in scene.objects or target_name not in scene.objects:
+            return {"error": "One or both objects not found."}
+
+        obj_s = scene.objects[source_name]
+        obj_t = scene.objects[target_name]
+
+        bpy.context.view_layer.update()
+        
+        # Get bounding box centers
+        center_s = obj_s.matrix_world.translation
+        center_t = obj_t.matrix_world.translation
+
+        # Simple snapping: Move source to target surface along the vector between them
+        direction = (center_t - center_s).normalized()
+        
+        # Raycast from source to target
+        origin = center_s
+        hit, loc, norm, index, obj, matrix = scene.ray_cast(bpy.context.view_layer.depsgraph, origin, direction)
+
+        if hit:
+            # Move source to hit location plus its half-dimension along normal
+            half_dim = obj_s.dimensions.z / 2 # Simple assumption for now
+            target_loc = loc + norm * (half_dim + (padding_mm/1000.0))
+            obj_s.location = target_loc
+            
+            # Align source Z axis to target normal
+            rotation_diff = mathutils.Vector((0, 0, 1)).rotation_difference(norm)
+            obj_s.rotation_euler = rotation_diff.to_euler()
+
+            return {
+                "success": True,
+                "message": f"Snapped '{source_name}' to '{target_name}' surface.",
+                "hit_location": list(loc)
+            }
+        else:
+            return {"error": "Could not find a clear path to snap objects. Try moving them closer manually."}
+
+    except Exception as e:
+        return {"error": f"Failed to snap objects: {str(e)}"}
+
+
+def set_clearance_tolerance(scene, object_name, tolerance_mm=0.2):
+    """Apply a small offset to a mesh to ensure it fits into another (positive expands, negative contracts)."""
+    try:
+        if object_name not in scene.objects:
+            return {"error": f"Object '{object_name}' not found."}
+
+        obj = scene.objects[object_name]
+        if obj.type != 'MESH':
+            return {"error": "Object must be a mesh."}
+
+        # Use Displace modifier for uniform surface offset
+        mod_name = "MCP_Tolerance"
+        mod = obj.modifiers.get(mod_name) or obj.modifiers.new(name=mod_name, type='DISPLACE')
+        
+        mod.strength = tolerance_mm / 1000.0 # Convert mm to m
+        mod.mid_level = 0.0 # Offset from base surface
+
+        return {
+            "success": True,
+            "message": f"Applied {tolerance_mm}mm tolerance offset to '{object_name}'.",
+            "modifier": mod.name
+        }
+    except Exception as e:
+        return {"error": f"Failed to set tolerance: {str(e)}"}
+

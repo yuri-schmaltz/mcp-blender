@@ -291,6 +291,14 @@ class BlenderMCPServer(SocketBlenderMCPServer):
             "export_3mf_for_multicolor": self.export_3mf_for_multicolor,
             "separate_loose_parts": self.separate_loose_parts,
             "create_axle_joint": self.create_axle_joint,
+            "create_hinge_joint": self.create_hinge_joint,
+            "create_snap_fit": self.create_snap_fit,
+            "create_ball_joint": self.create_ball_joint,
+            "create_screw_hole": self.create_screw_hole,
+            "snap_objects_by_proximity": self.snap_objects_by_proximity,
+            "set_clearance_tolerance": self.set_clearance_tolerance,
+            "mark_as_functional_part": self.mark_as_functional_part,
+            "list_functional_parts": self.list_functional_parts,
             "check_mesh_integrity": self.check_mesh_integrity,
             "auto_repair_mesh": self.auto_repair_mesh,
             "generate_tire_treads": self.generate_tire_treads,
@@ -445,6 +453,30 @@ class BlenderMCPServer(SocketBlenderMCPServer):
 
     def batch_export_all_formats(self, **kwargs):
         return _call_handler("printing3d", "batch_export_all_formats", bpy.context.scene, **kwargs)
+
+    def create_hinge_joint(self, **kwargs):
+        return _call_handler("mechanical_tools", "create_hinge_joint", bpy.context.scene, **kwargs)
+
+    def create_snap_fit(self, **kwargs):
+        return _call_handler("mechanical_tools", "create_snap_fit", bpy.context.scene, **kwargs)
+
+    def create_ball_joint(self, **kwargs):
+        return _call_handler("mechanical_tools", "create_ball_joint", bpy.context.scene, **kwargs)
+
+    def create_screw_hole(self, **kwargs):
+        return _call_handler("mechanical_tools", "create_screw_hole", bpy.context.scene, **kwargs)
+
+    def snap_objects_by_proximity(self, **kwargs):
+        return _call_handler("printing3d", "snap_objects_by_proximity", bpy.context.scene, **kwargs)
+
+    def set_clearance_tolerance(self, **kwargs):
+        return _call_handler("printing3d", "set_clearance_tolerance", bpy.context.scene, **kwargs)
+
+    def mark_as_functional_part(self, **kwargs):
+        return _call_handler("functional_parts", "mark_as_functional_part", bpy.context.scene, **kwargs)
+
+    def list_functional_parts(self, **kwargs):
+        return _call_handler("functional_parts", "list_functional_parts", bpy.context.scene, **kwargs)
 
     # endregion
 
