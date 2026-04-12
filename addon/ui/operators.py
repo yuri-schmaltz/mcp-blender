@@ -38,10 +38,17 @@ def _get_addon_module():
     """Load the main addon module safely in all Blender loading modes."""
     # 1. Try via package if available (standard Extension mode)
     if __package__:
+        parts = __package__.split('.')
         try:
-            root_package = __package__.split('.')[0]
-            if root_package in sys.modules:
-                return sys.modules[root_package]
+            # We look for the root module in sys.modules by going up the namespace levels.
+            # In Blender Extensions, this is typically bl_ext.<repo>.<extension_id>
+            # In legacy addons, it is just <addon_id>
+            for i in range(len(parts), 0, -1):
+                root_maybe = ".".join(parts[:i])
+                if root_maybe in sys.modules:
+                    mod = sys.modules[root_maybe]
+                    if hasattr(mod, "BlenderMCPServer"):
+                        return mod
         except Exception:
             pass
 
