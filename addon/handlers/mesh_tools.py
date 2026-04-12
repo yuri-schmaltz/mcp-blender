@@ -178,3 +178,45 @@ def auto_repair_mesh(scene, object_name):
             bpy.ops.object.mode_set(mode='OBJECT')
         return {"error": f"Failed to auto-repair: {str(e)}"}
 
+
+def resolve_self_intersections(scene, object_name):
+    """Resolve self-intersecting faces within the same mesh using the Exact Boolean solver."""
+    try:
+        if object_name not in scene.objects:
+            return {"error": f"Object '{object_name}' not found."}
+
+        obj = scene.objects[object_name]
+        if obj.type != 'MESH':
+            return {"error": f"Object '{object_name}' is not a MESH."}
+
+        # Select and make active
+        bpy.ops.object.select_all(action='DESELECT')
+        obj.select_set(True)
+        scene.view_layer.objects.active = obj
+
+        # Go to Edit Mode
+        bpy.ops.object.mode_set(mode='EDIT')
+        
+        # Select all faces
+        bpy.ops.mesh.select_all(action='SELECT')
+        
+        # Intersect (Boolean) with Self-Intersect enabled
+        # This resolves overlaps within the same mesh while maintaining original shape
+        bpy.ops.mesh.intersect_boolean(operation='UNION', use_self=True, solver='EXACT', use_swap=True)
+        
+        # Final cleanup: merge by distance and fix normals
+        bpy.ops.mesh.remove_doubles()
+        bpy.ops.mesh.normals_make_consistent(inside=False)
+        
+        # Back to Object Mode
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+        return {
+            "success": True,
+            "message": f"Resolved self-intersections in '{object_name}' while preserving the outer shape."
+        }
+    except Exception as e:
+        if bpy.context.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+        return {"error": f"Failed to resolve self-intersections: {str(e)}"}
+

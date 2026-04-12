@@ -301,6 +301,7 @@ class BlenderMCPServer(SocketBlenderMCPServer):
             "list_functional_parts": self.list_functional_parts,
             "check_mesh_integrity": self.check_mesh_integrity,
             "auto_repair_mesh": self.auto_repair_mesh,
+            "resolve_self_intersections": self.resolve_self_intersections,
             "generate_tire_treads": self.generate_tire_treads,
             "setup_simple_vehicle_rig": self.setup_simple_vehicle_rig,
             "setup_product_studio": self.setup_product_studio,
@@ -435,6 +436,9 @@ class BlenderMCPServer(SocketBlenderMCPServer):
 
     def auto_repair_mesh(self, **kwargs):
         return _call_handler("mesh_tools", "auto_repair_mesh", bpy.context.scene, **kwargs)
+
+    def resolve_self_intersections(self, **kwargs):
+        return _call_handler("mesh_tools", "resolve_self_intersections", bpy.context.scene, **kwargs)
 
     def generate_tire_treads(self, **kwargs):
         return _call_handler("procedural_tools", "generate_tire_treads", bpy.context.scene, **kwargs)

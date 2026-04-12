@@ -1135,6 +1135,20 @@ def auto_repair_mesh(ctx: Context, object_name: str) -> str:
         return tool_error("Error repairing mesh", data={"detail": str(e)})
 
 
+@mcp.tool()
+def resolve_self_intersections(ctx: Context, object_name: str) -> str:
+    """
+    Resolve self-intersecting faces within a mesh while preserving its shape.
+    Useful for making objects watertight for 3D printing without remeshing.
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("resolve_self_intersections", {"object_name": object_name})
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return tool_error("Error resolving self-intersections", data={"detail": str(e)})
+
+
 # Studio & Rigging
 @mcp.tool()
 def setup_product_studio(ctx: Context, theme: str = "CLEAN") -> str:
