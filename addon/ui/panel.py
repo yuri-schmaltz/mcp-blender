@@ -8,15 +8,39 @@ import importlib.util as _iu
 
 
 def _get_addon_module():
-    """Load addon.py via filesystem (works in any Blender loading mode)."""
-    addon_py = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "addon.py")
-    for mod in sys.modules.values():
-        if hasattr(mod, "__file__") and mod.__file__ and os.path.abspath(mod.__file__) == os.path.abspath(addon_py):
+    """Load the main addon module safely in all Blender loading modes."""
+    # 1. Try via package if available (standard Extension mode)
+    if __package__:
+        try:
+            root_package = __package__.split('.')[0]
+            if root_package in sys.modules:
+                return sys.modules[root_package]
+        except Exception:
+            pass
+
+    # 2. Fallback to filesystem detection (Repo mode or non-standard install)
+    # addon/ui/panel.py -> addon/ui -> addon -> project_root
+    ui_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(os.path.dirname(ui_dir))
+    
+    # Candidate files for the main entry point
+    for cand in ["addon.py", "__init__.py"]:
+        addon_py = os.path.join(project_root, cand)
+        if os.path.exists(addon_py):
+            # Check if already loaded by Blender
+            for mod in sys.modules.values():
+                if hasattr(mod, "__file__") and mod.__file__ and os.path.abspath(mod.__file__) == os.path.abspath(addon_py):
+                    return mod
+            
+            # Load dynamic spec if not already in sys.modules
+            spec = _iu.spec_from_file_location("_blendermcp_addon_ref_panel", addon_py)
+            mod = _iu.module_from_spec(spec)
+            if __package__:
+                mod.__package__ = __package__
+            spec.loader.exec_module(mod)
             return mod
-    spec = _iu.spec_from_file_location("_blendermcp_addon_ref_panel", addon_py)
-    mod = _iu.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+            
+    raise ImportError("Could not locate BlenderMCP main module (addon.py or __init__.py)")
 
 # Import i18n
 _i18n_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "utils", "i18n.py")

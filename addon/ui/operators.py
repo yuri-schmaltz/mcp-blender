@@ -297,7 +297,7 @@ class BLENDERMCP_OT_DownloadProgress(bpy.types.Operator):
     bl_idname = "blendermcp.download_progress"
     bl_label = "Download Progress"
 
-    operation_id: bpy.props.StringProperty(default="")
+    operation_id = bpy.props.StringProperty(default="")
     _timer = None
     _last_progress = 0
 
