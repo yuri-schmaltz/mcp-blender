@@ -22,6 +22,21 @@ def run_command(cmd):
     except Exception as e:
         return False, str(e)
 
+def get_blender_command():
+    """Detect blender command, prioritizing native, then flatpak."""
+    # 1. Native blender in PATH
+    if check_command("blender"):
+        return ["blender"], "Native"
+
+    # 2. Flatpak blender
+    if check_command("flatpak"):
+        # Check if org.blender.Blender is installed
+        ok, output = run_command(["flatpak", "list", "--ref"])
+        if ok and "org.blender.Blender" in output:
+            return ["flatpak", "run", "--command=blender", "org.blender.Blender"], "Flatpak"
+
+    return None, None
+
 def main():
     print_header("Blender MCP v2.0.0 - Unified Installer")
 
@@ -35,24 +50,29 @@ def main():
         print("  [WARN] 'uv' not found. We recommend installing it: https://astral.sh/uv")
         print("         Falling back to standard 'pip' checks.")
 
-    blender_available = check_command("blender")
-    if blender_available:
-        _, blender_ver = run_command(["blender", "--version"])
-        print(f"  [OK] 'blender' found ({blender_ver.splitlines()[0]}).")
+    blender_cmd, blender_type = get_blender_command()
+    if blender_cmd:
+        _, blender_ver = run_command(blender_cmd + ["--version"])
+        ver_str = blender_ver.splitlines()[0] if blender_ver else "Unknown"
+        print(f"  [OK] Blender found ({blender_type}): {ver_str}")
     else:
-        print("  [WARN] 'blender' not found in PATH. Ensure you have Blender installed.")
+        print("  [WARN] 'blender' not found in PATH or Flatpak. Ensure you have Blender installed.")
 
     # 2. Blender environment check
     print("\n[2/4] Validating Blender Python environment...")
-    if blender_available:
+    if blender_cmd:
         # Check for 'requests' in Blender
         check_script = "import importlib.util; print('OK' if importlib.util.find_spec('requests') else 'MISSING')"
-        ok, output = run_command(["blender", "--background", "--python-expr", check_script])
+        ok, output = run_command(blender_cmd + ["--background", "--python-expr", check_script])
         if ok and "OK" in output:
             print("  [OK] 'requests' library available in Blender.")
         else:
             print("  [ACTION REQUIRED] 'requests' is missing in Blender.")
-            print("                    Run 'Install Dependencies' inside the Blender MCP panel.")
+            if blender_type == "Flatpak":
+                print("                    Special Note for Flatpak: Run 'Install Dependencies' inside ")
+                print("                    the Blender MCP panel, as the sandbox is restricted.")
+            else:
+                print("                    Run 'Install Dependencies' inside the Blender MCP panel.")
     else:
         print("  [SKIP] Skipping Blender environment check (blender not found).")
 
@@ -103,8 +123,14 @@ def main():
 
     print_header("Installation Complete!")
     print("Next steps:")
-    print("1. Open Blender.")
-    print("2. Install the addon: Edit > Preferences > Addons > Install (select addon/ folder).")
+    if blender_type == "Flatpak":
+        print("1. Open Blender (Flatpak).")
+        print("2. Install the addon: Edit > Preferences > Addons > Install.")
+        print("   Note: For Flatpak, the config path is typically:")
+        print("   ~/.var/app/org.blender.Blender/config/blender/<versao>/scripts/addons/")
+    else:
+        print("1. Open Blender.")
+        print("2. Install the addon: Edit > Preferences > Addons > Install (select addon/ folder).")
     print("3. Connect and start creating!")
 
 if __name__ == "__main__":
