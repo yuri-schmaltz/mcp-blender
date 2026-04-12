@@ -40,20 +40,23 @@ class AddonI18n:
 
     def _get_translations_path(self):
         """Find the translations directory, supporting both local dev and packaged extension."""
-        # 1. Try local dev structure: addon/utils/i18n.py -> addon/utils -> addon -> root -> translations
+        # addon/utils/i18n.py -> addon/utils -> addon -> root (level 2)
         this_dir = os.path.dirname(os.path.abspath(__file__))
-        root_dev = os.path.dirname(os.path.dirname(os.path.dirname(this_dir)))
+        
+        # 1. Try local dev structure (translations at root)
+        root_dev = os.path.dirname(os.path.dirname(this_dir))
         path_dev = os.path.join(root_dev, "translations")
         if os.path.exists(path_dev):
             return path_dev
 
-        # 2. Try packaged structure: utils/i18n.py -> utils -> root -> translations
-        root_pkg = os.path.dirname(os.path.dirname(this_dir))
-        path_pkg = os.path.join(root_pkg, "translations")
+        # 2. Try packaged structure (translations directly inside the zip/folder)
+        # This usually means root_dev/translations as well, but sometimes bundled
+        # alongside addon.py
+        path_pkg = os.path.join(os.path.dirname(this_dir), "translations")
         if os.path.exists(path_pkg):
             return path_pkg
 
-        # Fallback to dev path if nothing else found
+        # Fallback to current project root expectation
         return path_dev
 
     def _load_translations(self):

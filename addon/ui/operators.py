@@ -296,6 +296,23 @@ class BLENDERMCP_OT_StopServer(bpy.types.Operator):
 
 
 # ---------------------------------------------------------------------------
+# Operator: Open URL
+# ---------------------------------------------------------------------------
+class BLENDERMCP_OT_OpenURL(bpy.types.Operator):
+    bl_idname = "blendermcp.open_url"
+    bl_label = "Open URL"
+    bl_description = "Open a specific URL in the system browser"
+    
+    url: bpy.props.StringProperty(name="URL", default="")
+
+    def execute(self, context):
+        if not self.url:
+            return {"CANCELLED"}
+        _open_in_system(self.url)
+        return {"FINISHED"}
+
+
+# ---------------------------------------------------------------------------
 # Modal Operator: Download Progress (MP-02)
 # ---------------------------------------------------------------------------
 class BLENDERMCP_OT_DownloadProgress(bpy.types.Operator):
@@ -387,6 +404,59 @@ class BLENDERMCP_OT_DownloadProgress(bpy.types.Operator):
             self._timer = None
 
 
+# ---------------------------------------------------------------------------
+# Operator: Resolve Self-Intersections
+# ---------------------------------------------------------------------------
+class BLENDERMCP_OT_ResolveSelfIntersections(bpy.types.Operator):
+    bl_idname = "blendermcp.resolve_self_intersections"
+    bl_label = "Resolve Self-Intersections"
+    bl_description = "Merge internal overlapping shells while preserving shape"
+
+    def execute(self, context):
+        if not context.active_object or context.active_object.type != 'MESH':
+            self.report({"ERROR"}, "Select a mesh first")
+            return {"CANCELLED"}
+        
+        addon_mod = _get_addon_module()
+        result = addon_mod._call_handler("mesh_tools", "resolve_self_intersections", bpy.context.scene, context.active_object.name)
+        
+        if "error" in result:
+            self.report({"ERROR"}, result["error"])
+            _update_action_status(context.scene, "Resolve Intersections", False, result["error"])
+            return {"CANCELLED"}
+            
+        self.report({"INFO"}, result["message"])
+        _update_action_status(context.scene, "Resolve Intersections", True, result["message"])
+        return {"FINISHED"}
+
+
+# ---------------------------------------------------------------------------
+# Operator: Mark as Functional Part
+# ---------------------------------------------------------------------------
+class BLENDERMCP_OT_MarkFunctionalPart(bpy.types.Operator):
+    bl_idname = "blendermcp.mark_functional_part"
+    bl_label = "Mark as Functional Part"
+    bl_description = "Add metadata to object for engineering management"
+    
+    role: bpy.props.StringProperty(name="Role", default="Part")
+
+    def execute(self, context):
+        if not context.active_object:
+            self.report({"ERROR"}, "No active object")
+            return {"CANCELLED"}
+        
+        addon_mod = _get_addon_module()
+        result = addon_mod._call_handler("functional_parts", "mark_as_functional_part", bpy.context.scene, context.active_object.name, role=self.role)
+        
+        if "error" in result:
+            self.report({"ERROR"}, result["error"])
+            return {"CANCELLED"}
+            
+        self.report({"INFO"}, result["message"])
+        _update_action_status(context.scene, "Mark Part", True, f"Role: {self.role}")
+        return {"FINISHED"}
+
+
 # All operator classes for registration
 OPERATOR_CLASSES = [
     BLENDERMCP_OT_StartServer,
@@ -398,4 +468,7 @@ OPERATOR_CLASSES = [
     BLENDERMCP_OT_OpenLogs,
     BLENDERMCP_OT_ClearCache,
     BLENDERMCP_OT_DownloadProgress,
+    BLENDERMCP_OT_ResolveSelfIntersections,
+    BLENDERMCP_OT_MarkFunctionalPart,
+    BLENDERMCP_OT_OpenURL,
 ]

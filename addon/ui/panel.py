@@ -58,10 +58,10 @@ t = _i18n.t
 
 
 # =============================================================================
-# Main Panel: Connection status + Connect/Disconnect
+# Main Panel: Connection & Status
 # =============================================================================
 class BLENDERMCP_PT_Panel(bpy.types.Panel):
-    bl_label = "Blender MCP" # This is a static property, hard to localize dynamically in class def
+    bl_label = "Blender MCP"
     bl_idname = "BLENDERMCP_PT_Panel"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
@@ -71,33 +71,62 @@ class BLENDERMCP_PT_Panel(bpy.types.Panel):
         layout = self.layout
         scene = context.scene
 
+        # --- Connection Status ---
         if scene.blendermcp_server_running:
-            # --- Connected state ---
             status_row = layout.row()
-            status_row.alert = False
             status_row.label(text=t("status_connected", port=scene.blendermcp_port), icon="CHECKMARK")
-
-            layout.separator(factor=0.5)
-            disconnect_row = layout.row(align=True)
-            disconnect_row.scale_y = 1.4
-            disconnect_row.operator("blendermcp.stop_server", text=t("btn_disconnect"), icon="CANCEL")
+            layout.operator("blendermcp.stop_server", text=t("btn_disconnect"), icon="CANCEL")
         else:
-            # --- Disconnected state ---
             status_row = layout.row()
             status_row.alert = True
             status_row.label(text=t("status_disconnected"), icon="ERROR")
+            
+            row = layout.row(align=True)
+            row.scale_y = 1.4
+            row.operator("blendermcp.start_server", text=t("btn_connect"), icon="PLAY")
 
-            layout.separator(factor=0.5)
-            layout.prop(scene, "blendermcp_port")
-
-            layout.separator(factor=0.5)
-            connect_row = layout.row(align=True)
-            connect_row.scale_y = 1.6
-            connect_row.operator("blendermcp.start_server", text=t("btn_connect"), icon="PLAY")
+        layout.separator(factor=0.5)
+        
+        # --- Last Action Summary (Previously separate Status & Cache) ---
+        if scene.blendermcp_last_action:
+            box = layout.box()
+            row = box.row()
+            icon = "CHECKMARK" if scene.blendermcp_last_action_ok else "ERROR"
+            row.alert = not scene.blendermcp_last_action_ok
+            row.label(text=f"{scene.blendermcp_last_action}: {scene.blendermcp_last_action_details[:30]}...", icon=icon)
 
 
 # =============================================================================
-# Sub-Panel: Integrations (Poly Haven, Sketchfab, Code Execution)
+# Sub-Panel: 3D Printing & Engineering
+# =============================================================================
+class BLENDERMCP_PT_Engineering(bpy.types.Panel):
+    bl_label = t("panel_engineering_label")
+    bl_idname = "BLENDERMCP_PT_Engineering"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "BlenderMCP"
+    bl_parent_id = "BLENDERMCP_PT_Panel"
+
+    def draw(self, context):
+        layout = self.layout
+        scene = context.scene
+
+        # Mesh Cleanup
+        col = layout.column(align=True)
+        col.label(text=t("label_mesh_cleanup"))
+        col.operator("blendermcp.auto_repair_mesh", text=t("btn_auto_repair"), icon="WRENCH")
+        col.operator("blendermcp.resolve_self_intersections", text=t("btn_resolve_intersections"), icon="MOD_BOOLEAN")
+        
+        layout.separator(factor=0.5)
+
+        # Functional Management
+        col = layout.column(align=True)
+        col.label(text=t("label_functional_mgmt"))
+        col.operator("blendermcp.mark_functional_part", text=t("btn_mark_part"), icon="PROPERTIES")
+
+
+# =============================================================================
+# Sub-Panel: Integrations (Poly Haven, Sketchfab, etc.)
 # =============================================================================
 class BLENDERMCP_PT_Integrations(bpy.types.Panel):
     bl_label = t("panel_integrations_label")
@@ -112,50 +141,54 @@ class BLENDERMCP_PT_Integrations(bpy.types.Panel):
         layout = self.layout
         scene = context.scene
 
+        col = layout.column(align=True)
+        col.label(text=t("label_external_assets"))
+        
         # Poly Haven
-        col = layout.column(align=True)
-        col.prop(scene, "blendermcp_use_polyhaven", text=t("prop_polyhaven_assets"), icon="WORLD")
-        if scene.blendermcp_use_polyhaven:
-            info = col.row()
-            info.label(text=t("info_polyhaven_assets"), icon="INFO")
-
-        layout.separator(factor=0.3)
-
+        row = col.row(align=True)
+        row.prop(scene, "blendermcp_use_polyhaven", text=t("prop_polyhaven_assets"), icon="WORLD")
+        
         # AmbientCG
-        col = layout.column(align=True)
-        col.prop(scene, "blendermcp_use_ambientcg", text=t("prop_ambientcg_assets"), icon="MATERIAL")
-        if scene.blendermcp_use_ambientcg:
-            info = col.row()
-            info.label(text=t("info_ambientcg_assets"), icon="INFO")
-
-        layout.separator(factor=0.3)
+        row = col.row(align=True)
+        row.prop(scene, "blendermcp_use_ambientcg", text=t("prop_ambientcg_assets"), icon="MATERIAL")
 
         # Sketchfab
-        col = layout.column(align=True)
-        col.prop(scene, "blendermcp_use_sketchfab", text=t("prop_sketchfab_assets"), icon="MESH_MONKEY")
+        row = col.row(align=True)
+        row.prop(scene, "blendermcp_use_sketchfab", text=t("prop_sketchfab_assets"), icon="MESH_MONKEY")
+        
         if scene.blendermcp_use_sketchfab:
-            col.prop(scene, "blendermcp_sketchfab_api_key", text=t("prop_api_key"))
-            warn = col.row()
+            box = layout.box()
+            box.prop(scene, "blendermcp_sketchfab_api_key", text=t("prop_api_key"))
+            
+            op = box.operator("blendermcp.open_url", text=t("btn_get_api_key"), icon="URL")
+            op.url = "https://sketchfab.com/settings/password"
+            
+            warn = box.row()
             warn.alert = True
             warn.label(text=t("warn_api_key_saved"), icon="ERROR")
 
-        layout.separator(factor=0.3)
-
-        # Code Execution
-        col = layout.column(align=True)
-        col.prop(scene, "blendermcp_allow_code_execution", text=t("prop_remote_code"), icon="SCRIPT")
-        if scene.blendermcp_allow_code_execution:
-            warn = col.row()
+        # BlenderKit
+        row = col.row(align=True)
+        row.prop(scene, "blendermcp_use_blenderkit", text="BlenderKit Assets", icon="IMAGE_DATA")
+        
+        if scene.blendermcp_use_blenderkit:
+            box = layout.box()
+            box.prop(scene, "blendermcp_blenderkit_api_key", text=t("prop_api_key"))
+            
+            op = box.operator("blendermcp.open_url", text=t("btn_get_token_bk"), icon="URL")
+            op.url = "https://www.blenderkit.com/settings/profile/"
+            
+            warn = box.row()
             warn.alert = True
-            warn.label(text=t("warn_remote_code"), icon="ERROR")
+            warn.label(text=t("warn_api_key_saved"), icon="ERROR")
 
 
 # =============================================================================
-# Sub-Panel: Client Setup (first-time configuration)
+# Sub-Panel: Setup & Maintenance (Consolidated)
 # =============================================================================
-class BLENDERMCP_PT_ClientSetup(bpy.types.Panel):
-    bl_label = t("panel_client_setup_label")
-    bl_idname = "BLENDERMCP_PT_ClientSetup"
+class BLENDERMCP_PT_Setup(bpy.types.Panel):
+    bl_label = t("panel_setup_maint_label")
+    bl_idname = "BLENDERMCP_PT_Setup"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "BlenderMCP"
@@ -166,115 +199,36 @@ class BLENDERMCP_PT_ClientSetup(bpy.types.Panel):
         layout = self.layout
         scene = context.scene
 
-        # Step 1: Choose client
-        layout.label(text=t("step_choose_client"), icon="QUESTION")
-        layout.prop(scene, "blendermcp_client_target", text="")
-
-        layout.separator(factor=0.3)
-
-        # Step 2: Copy config
-        layout.label(text=t("step_copy_config"), icon="COPYDOWN")
-        layout.operator(
-            "blendermcp.copy_mcp_client_config",
-            text=t("btn_copy_config"),
-            icon="COPYDOWN",
-        )
-
-        layout.separator(factor=0.3)
-
-        # Step 3: Run server
-        layout.label(text=t("step_run_server"), icon="PLAY")
-        layout.operator(
-            "blendermcp.run_mcp_terminal_server",
-            text=t("btn_run_server"),
-            icon="CONSOLE",
-        )
-
-
-# =============================================================================
-# Sub-Panel: Tools (diagnostics, logs, deps)
-# =============================================================================
-class BLENDERMCP_PT_Tools(bpy.types.Panel):
-    bl_label = t("panel_tools_label")
-    bl_idname = "BLENDERMCP_PT_Tools"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"
-    bl_category = "BlenderMCP"
-    bl_parent_id = "BLENDERMCP_PT_Panel"
-    bl_options = {"DEFAULT_CLOSED"}
-
-    def draw(self, context):
-        layout = self.layout
-
+        # Main Setup
         col = layout.column(align=True)
         col.operator("blendermcp.install_dependencies", text=t("btn_install_deps"), icon="IMPORT")
         col.operator("blendermcp.health_check", text=t("btn_health_check"), icon="CHECKMARK")
-        col.operator("blendermcp.open_logs", text=t("btn_open_logs"), icon="TEXT")
-
-
-# =============================================================================
-# Sub-Panel: Status & Cache (last action + asset info)
-# =============================================================================
-class BLENDERMCP_PT_StatusAndCache(bpy.types.Panel):
-    bl_label = t("panel_status_cache_label")
-    bl_idname = "BLENDERMCP_PT_StatusAndCache"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"
-    bl_category = "BlenderMCP"
-    bl_parent_id = "BLENDERMCP_PT_Panel"
-    bl_options = {"DEFAULT_CLOSED"}
-
-    def draw(self, context):
-        layout = self.layout
-        scene = context.scene
-
-        # --- Section 1: Last Action ---
-        box = layout.box()
-        box.label(text=t("label_last_action"), icon="INFO")
         
-        if scene.blendermcp_last_action:
-            icon = "CHECKMARK" if scene.blendermcp_last_action_ok else "ERROR"
-            row = box.row()
-            row.alert = not scene.blendermcp_last_action_ok
-            row.label(text=scene.blendermcp_last_action, icon=icon)
-            
-            row = box.row()
-            row.label(text=scene.blendermcp_last_action_at, icon="TIME")
-            
-            if scene.blendermcp_last_action_details:
-                # Wrap long details
-                row = box.row()
-                row.label(text=scene.blendermcp_last_action_details[:60])
-        else:
-            box.label(text=t("label_no_actions"), icon="DOT")
-
         layout.separator(factor=0.5)
 
-        # --- Section 2: Asset Cache ---
-        box = layout.box()
-        box.label(text=t("label_asset_cache"), icon="FILE_CACHE")
+        # Integrations (Security side)
+        layout.prop(scene, "blendermcp_allow_code_execution", text=t("label_remote_code_short"), icon="SCRIPT")
         
-        try:
-            addon_mod = _get_addon_module()
-            cache_size, file_count = addon_mod._asset_cache.get_cache_size()
-        except Exception:
-            cache_size, file_count = 0, 0
-
-        size_mb = cache_size / (1024 * 1024)
+        layout.separator(factor=0.5)
         
-        row = box.row(align=True)
-        row.label(text=t("label_cache_info", count=file_count, size=size_mb))
+        # Advanced Toggle
+        layout.prop(scene, "blendermcp_show_advanced", icon="SETTINGS", toggle=True)
         
-        row = box.row()
-        row.scale_y = 1.2
-        row.operator("blendermcp.clear_cache", text=t("btn_clear_cache"), icon="TRASH")
+        if scene.blendermcp_show_advanced:
+            box = layout.box()
+            box.label(text=t("label_advanced_section"), icon="CONSOLE")
+            box.prop(scene, "blendermcp_client_target")
+            box.operator("blendermcp.copy_mcp_client_config")
+            box.operator("blendermcp.run_mcp_terminal_server")
+            box.separator()
+            box.operator("blendermcp.open_logs", icon="TEXT")
+            box.operator("blendermcp.clear_cache", icon="TRASH")
 
 
-# All panel classes in registration order (parent first, then children)
+# All panel classes in registration order
 PANEL_CLASSES = [
     BLENDERMCP_PT_Panel,
+    BLENDERMCP_PT_Engineering,
     BLENDERMCP_PT_Integrations,
-    BLENDERMCP_PT_ClientSetup,
-    BLENDERMCP_PT_Tools,
-    BLENDERMCP_PT_StatusAndCache,
+    BLENDERMCP_PT_Setup,
 ]

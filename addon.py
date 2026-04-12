@@ -69,7 +69,7 @@ except Exception:
 bl_info = {
     "name": "Blender MCP",
     "author": "BlenderMCP",
-    "version": (2, 0, 0),
+    "version": (2, 3, 0),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > BlenderMCP",
     "description": "Connect Blender to local LLM clients via MCP",
@@ -537,10 +537,23 @@ def register():
         default=False,
     )
 
+    bpy.types.Scene.blendermcp_use_blenderkit = bpy.props.BoolProperty(
+        name="Use BlenderKit",
+        description="Enable BlenderKit asset integration. Search and download models, materials, and textures from BlenderKit API.",
+        default=False,
+    )
+
     bpy.types.Scene.blendermcp_sketchfab_api_key = bpy.props.StringProperty(
         name="Sketchfab API Key",
         subtype="PASSWORD",
         description="Your Sketchfab API key. Get it from sketchfab.com/settings/password. Only models you have download access to will work. WARNING: Saved in .blend file in plain text.",
+        default="",
+    )
+
+    bpy.types.Scene.blendermcp_blenderkit_api_key = bpy.props.StringProperty(
+        name="BlenderKit API Token",
+        subtype="PASSWORD",
+        description="Your BlenderKit API token. Get it from blenderkit.com/settings/profile. WARNING: Saved in .blend file in plain text.",
         default="",
     )
     # Dynamic client detection – import via filesystem for Blender compat
@@ -573,6 +586,11 @@ def register():
         name="Last Action OK",
         default=True,
     )
+    bpy.types.Scene.blendermcp_show_advanced = bpy.props.BoolProperty(
+        name="Show Advanced Settings",
+        description="Show technical configuration and manual server commands",
+        default=False,
+    )
 
     for cls in _UI_CLASSES:
         bpy.utils.register_class(cls)
@@ -599,12 +617,15 @@ def unregister():
     del bpy.types.Scene.blendermcp_use_polyhaven
     del bpy.types.Scene.blendermcp_use_ambientcg
     del bpy.types.Scene.blendermcp_use_sketchfab
+    del bpy.types.Scene.blendermcp_use_blenderkit
     del bpy.types.Scene.blendermcp_sketchfab_api_key
+    del bpy.types.Scene.blendermcp_blenderkit_api_key
     del bpy.types.Scene.blendermcp_client_target
     del bpy.types.Scene.blendermcp_last_action
     del bpy.types.Scene.blendermcp_last_action_at
     del bpy.types.Scene.blendermcp_last_action_details
     del bpy.types.Scene.blendermcp_last_action_ok
+    del bpy.types.Scene.blendermcp_show_advanced
 
     print("BlenderMCP addon unregistered")
 

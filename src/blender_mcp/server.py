@@ -1489,6 +1489,36 @@ def set_clearance_tolerance(ctx: Context, object_name: str, tolerance_mm: float 
         return tool_error("Error setting tolerance", data={"detail": str(e)})
 
 
+@mcp.tool()
+def search_blenderkit(ctx: Context, query: str, asset_type: str = "model", free_only: bool = True) -> str:
+    """
+    Search BlenderKit for assets (models, materials, textures, hdr, brush).
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command(
+            "blenderkit.search_blenderkit", 
+            {"query": query, "asset_type": asset_type, "free_only": free_only}
+        )
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return tool_error("Error searching BlenderKit", data={"detail": str(e)})
+
+
+@mcp.tool()
+def import_blenderkit_asset(ctx: Context, asset_id: str) -> str:
+    """
+    Import a BlenderKit asset by ID into the scene. 
+    Note: Highly complex/paid assets might require the official BlenderKit addon to be logged in.
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("blenderkit.import_blenderkit_asset", {"asset_id": asset_id})
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return tool_error("Error importing from BlenderKit", data={"detail": str(e)})
+
+
 @mcp.prompt()
 def asset_creation_strategy() -> str:
     """Defines the preferred strategy for creating assets in Blender v2.0."""
@@ -1499,10 +1529,11 @@ def asset_creation_strategy() -> str:
        - Use get_viewport_screenshot() para ver visualmente o progresso.
 
     2. AQUISIÇÃO DE ASSETS (Hierarquia):
-       a. PolyHaven: Use para HDRIs de iluminação, texturas de alta qualidade e modelos básicos de ambiente.
-       b. Sketchfab: Use para modelos realistas ou complexos específicos (mais variedade que PolyHaven).
-       c. AmbientCG: Use para buscas extensas de materiais PBR (tijolos, madeira, tecidos).
-       d. Scripting: Apenas se não houver asset pronto adequado.
+       a. BlenderKit: Use primeiro para modelos, materiais e texturas (maior variedade integrada).
+       b. PolyHaven: Use para HDRIs de iluminação e texturas de alta qualidade.
+       c. Sketchfab: Use para modelos realistas específicos.
+       d. AmbientCG: Use para buscas extensas de materiais PBR.
+       e. Scripting: Apenas se não houver asset pronto adequado.
 
     3. WORKFLOW DE IMPRESSÃO 3D:
        - Defina dimensões exatas com set_exact_dimensions().

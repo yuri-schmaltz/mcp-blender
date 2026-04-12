@@ -72,5 +72,18 @@
   "msg_health_check_passed": "Health check passed. See Blender console for details.",
   "msg_opened_logs": "Opened logs: {path}",
   "msg_cleared_cache": "Cleared {count} cached files",
-  "msg_download_complete": "Download complete! ({progress})"
+  "msg_download_complete": "Download complete! ({progress})",
+  
+  "panel_engineering_label": "Engineering & 3D Printing",
+  "label_mesh_cleanup": "Mesh Cleanup:",
+  "btn_auto_repair": "Auto Repair",
+  "btn_resolve_intersections": "Resolve Intersections",
+  "label_functional_mgmt": "Part Management:",
+  "btn_mark_part": "Mark Functional Part",
+  "panel_setup_maint_label": "Setup & Maintenance",
+  "label_remote_code_short": "Remote Code",
+  "label_advanced_section": "Advanced (Stdio / Terminal):",
+  "btn_get_api_key": "Get Key on Sketchfab",
+  "btn_get_token_bk": "Get Token on BlenderKit",
+  "label_external_assets": "External Assets (Download):"
 }
