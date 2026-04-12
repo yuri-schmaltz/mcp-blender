@@ -18,12 +18,19 @@ def _get_addon_module():
     spec.loader.exec_module(mod)
     return mod
 
+# Import i18n
+_i18n_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "utils", "i18n.py")
+_i18n_spec = _iu.spec_from_file_location("_blendermcp_i18n_panel", _i18n_path)
+_i18n = _iu.module_from_spec(_i18n_spec)
+_i18n_spec.loader.exec_module(_i18n)
+t = _i18n.t
+
 
 # =============================================================================
 # Main Panel: Connection status + Connect/Disconnect
 # =============================================================================
 class BLENDERMCP_PT_Panel(bpy.types.Panel):
-    bl_label = "Blender MCP"
+    bl_label = "Blender MCP" # This is a static property, hard to localize dynamically in class def
     bl_idname = "BLENDERMCP_PT_Panel"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
@@ -37,17 +44,17 @@ class BLENDERMCP_PT_Panel(bpy.types.Panel):
             # --- Connected state ---
             status_row = layout.row()
             status_row.alert = False
-            status_row.label(text=f"Connected  ·  Port {scene.blendermcp_port}", icon="CHECKMARK")
+            status_row.label(text=t("status_connected", port=scene.blendermcp_port), icon="CHECKMARK")
 
             layout.separator(factor=0.5)
             disconnect_row = layout.row(align=True)
             disconnect_row.scale_y = 1.4
-            disconnect_row.operator("blendermcp.stop_server", text="Disconnect", icon="CANCEL")
+            disconnect_row.operator("blendermcp.stop_server", text=t("btn_disconnect"), icon="CANCEL")
         else:
             # --- Disconnected state ---
             status_row = layout.row()
             status_row.alert = True
-            status_row.label(text="Disconnected", icon="ERROR")
+            status_row.label(text=t("status_disconnected"), icon="ERROR")
 
             layout.separator(factor=0.5)
             layout.prop(scene, "blendermcp_port")
@@ -55,14 +62,14 @@ class BLENDERMCP_PT_Panel(bpy.types.Panel):
             layout.separator(factor=0.5)
             connect_row = layout.row(align=True)
             connect_row.scale_y = 1.6
-            connect_row.operator("blendermcp.start_server", text="Connect to LLM", icon="PLAY")
+            connect_row.operator("blendermcp.start_server", text=t("btn_connect"), icon="PLAY")
 
 
 # =============================================================================
 # Sub-Panel: Integrations (Poly Haven, Sketchfab, Code Execution)
 # =============================================================================
 class BLENDERMCP_PT_Integrations(bpy.types.Panel):
-    bl_label = "Integrations"
+    bl_label = t("panel_integrations_label")
     bl_idname = "BLENDERMCP_PT_Integrations"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
@@ -76,47 +83,47 @@ class BLENDERMCP_PT_Integrations(bpy.types.Panel):
 
         # Poly Haven
         col = layout.column(align=True)
-        col.prop(scene, "blendermcp_use_polyhaven", text="Poly Haven Assets", icon="WORLD")
+        col.prop(scene, "blendermcp_use_polyhaven", text=t("prop_polyhaven_assets"), icon="WORLD")
         if scene.blendermcp_use_polyhaven:
             info = col.row()
-            info.label(text="HDRIs, textures & models from polyhaven.com", icon="INFO")
+            info.label(text=t("info_polyhaven_assets"), icon="INFO")
 
         layout.separator(factor=0.3)
 
         # AmbientCG
         col = layout.column(align=True)
-        col.prop(scene, "blendermcp_use_ambientcg", text="AmbientCG Assets", icon="MATERIAL")
+        col.prop(scene, "blendermcp_use_ambientcg", text=t("prop_ambientcg_assets"), icon="MATERIAL")
         if scene.blendermcp_use_ambientcg:
             info = col.row()
-            info.label(text="PBR textures from ambientcg.com", icon="INFO")
+            info.label(text=t("info_ambientcg_assets"), icon="INFO")
 
         layout.separator(factor=0.3)
 
         # Sketchfab
         col = layout.column(align=True)
-        col.prop(scene, "blendermcp_use_sketchfab", text="Sketchfab Assets", icon="MESH_MONKEY")
+        col.prop(scene, "blendermcp_use_sketchfab", text=t("prop_sketchfab_assets"), icon="MESH_MONKEY")
         if scene.blendermcp_use_sketchfab:
-            col.prop(scene, "blendermcp_sketchfab_api_key", text="API Key")
+            col.prop(scene, "blendermcp_sketchfab_api_key", text=t("prop_api_key"))
             warn = col.row()
             warn.alert = True
-            warn.label(text="Key is saved in .blend file", icon="ERROR")
+            warn.label(text=t("warn_api_key_saved"), icon="ERROR")
 
         layout.separator(factor=0.3)
 
         # Code Execution
         col = layout.column(align=True)
-        col.prop(scene, "blendermcp_allow_code_execution", text="Remote Code Execution", icon="SCRIPT")
+        col.prop(scene, "blendermcp_allow_code_execution", text=t("prop_remote_code"), icon="SCRIPT")
         if scene.blendermcp_allow_code_execution:
             warn = col.row()
             warn.alert = True
-            warn.label(text="LLM can execute arbitrary Python!", icon="ERROR")
+            warn.label(text=t("warn_remote_code"), icon="ERROR")
 
 
 # =============================================================================
 # Sub-Panel: Client Setup (first-time configuration)
 # =============================================================================
 class BLENDERMCP_PT_ClientSetup(bpy.types.Panel):
-    bl_label = "Client Setup"
+    bl_label = t("panel_client_setup_label")
     bl_idname = "BLENDERMCP_PT_ClientSetup"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
@@ -129,26 +136,26 @@ class BLENDERMCP_PT_ClientSetup(bpy.types.Panel):
         scene = context.scene
 
         # Step 1: Choose client
-        layout.label(text="1. Choose your LLM client:", icon="QUESTION")
+        layout.label(text=t("step_choose_client"), icon="QUESTION")
         layout.prop(scene, "blendermcp_client_target", text="")
 
         layout.separator(factor=0.3)
 
         # Step 2: Copy config
-        layout.label(text="2. Copy config to clipboard:", icon="COPYDOWN")
+        layout.label(text=t("step_copy_config"), icon="COPYDOWN")
         layout.operator(
             "blendermcp.copy_mcp_client_config",
-            text="Copy MCP Config",
+            text=t("btn_copy_config"),
             icon="COPYDOWN",
         )
 
         layout.separator(factor=0.3)
 
         # Step 3: Run server
-        layout.label(text="3. Start the MCP bridge:", icon="PLAY")
+        layout.label(text=t("step_run_server"), icon="PLAY")
         layout.operator(
             "blendermcp.run_mcp_terminal_server",
-            text="Run MCP Server in Terminal",
+            text=t("btn_run_server"),
             icon="CONSOLE",
         )
 
@@ -157,7 +164,7 @@ class BLENDERMCP_PT_ClientSetup(bpy.types.Panel):
 # Sub-Panel: Tools (diagnostics, logs, deps)
 # =============================================================================
 class BLENDERMCP_PT_Tools(bpy.types.Panel):
-    bl_label = "Tools"
+    bl_label = t("panel_tools_label")
     bl_idname = "BLENDERMCP_PT_Tools"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
@@ -169,16 +176,16 @@ class BLENDERMCP_PT_Tools(bpy.types.Panel):
         layout = self.layout
 
         col = layout.column(align=True)
-        col.operator("blendermcp.install_dependencies", text="Install Dependencies", icon="IMPORT")
-        col.operator("blendermcp.health_check", text="Health Check", icon="CHECKMARK")
-        col.operator("blendermcp.open_logs", text="Open Logs", icon="TEXT")
+        col.operator("blendermcp.install_dependencies", text=t("btn_install_deps"), icon="IMPORT")
+        col.operator("blendermcp.health_check", text=t("btn_health_check"), icon="CHECKMARK")
+        col.operator("blendermcp.open_logs", text=t("btn_open_logs"), icon="TEXT")
 
 
 # =============================================================================
 # Sub-Panel: Status & Cache (last action + asset info)
 # =============================================================================
 class BLENDERMCP_PT_StatusAndCache(bpy.types.Panel):
-    bl_label = "Status & Cache"
+    bl_label = t("panel_status_cache_label")
     bl_idname = "BLENDERMCP_PT_StatusAndCache"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
@@ -192,7 +199,7 @@ class BLENDERMCP_PT_StatusAndCache(bpy.types.Panel):
 
         # --- Section 1: Last Action ---
         box = layout.box()
-        box.label(text="Last Action", icon="INFO")
+        box.label(text=t("label_last_action"), icon="INFO")
         
         if scene.blendermcp_last_action:
             icon = "CHECKMARK" if scene.blendermcp_last_action_ok else "ERROR"
@@ -208,13 +215,13 @@ class BLENDERMCP_PT_StatusAndCache(bpy.types.Panel):
                 row = box.row()
                 row.label(text=scene.blendermcp_last_action_details[:60])
         else:
-            box.label(text="No actions yet", icon="DOT")
+            box.label(text=t("label_no_actions"), icon="DOT")
 
         layout.separator(factor=0.5)
 
         # --- Section 2: Asset Cache ---
         box = layout.box()
-        box.label(text="Asset Cache", icon="FILE_CACHE")
+        box.label(text=t("label_asset_cache"), icon="FILE_CACHE")
         
         try:
             addon_mod = _get_addon_module()
@@ -225,11 +232,11 @@ class BLENDERMCP_PT_StatusAndCache(bpy.types.Panel):
         size_mb = cache_size / (1024 * 1024)
         
         row = box.row(align=True)
-        row.label(text=f"{file_count} files  ·  {size_mb:.1f} MB")
+        row.label(text=t("label_cache_info", count=file_count, size=size_mb))
         
         row = box.row()
         row.scale_y = 1.2
-        row.operator("blendermcp.clear_cache", text="Clear Cache", icon="TRASH")
+        row.operator("blendermcp.clear_cache", text=t("btn_clear_cache"), icon="TRASH")
 
 
 # All panel classes in registration order (parent first, then children)

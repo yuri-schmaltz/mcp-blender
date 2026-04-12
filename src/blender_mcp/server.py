@@ -1010,47 +1010,261 @@ def download_sketchfab_model(ctx: Context, uid: str) -> str:
         return tool_error("Error downloading Sketchfab model", data={"detail": str(e), "uid": uid})
 
 
+@mcp.tool()
+def search_ambientcg_materials(ctx: Context, query: str = "", limit: int = 20) -> str:
+    """
+    Search for PBR materials on AmbientCG.
+
+    Parameters:
+    - query: Text to search for (e.g., 'brick', 'wood', 'metal')
+    - limit: Maximum results to return (default 20)
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("search_ambientcg_materials", {"query": query, "limit": limit})
+        if "error" in result:
+            return tool_error("AmbientCG search failed", data={"detail": result["error"]})
+
+        materials = result.get("materials", [])
+        if not materials:
+            return f"No AmbientCG materials found matching '{query}'"
+
+        output = f"Found {len(materials)} AmbientCG materials:\n\n"
+        for mat in materials:
+            output += f"- {mat.get('assetId')} (Category: {mat.get('category')})\n"
+        return output
+    except Exception as e:
+        return tool_error("Error searching AmbientCG", data={"detail": str(e)})
+
+
+@mcp.tool()
+def download_ambientcg_material(
+    ctx: Context, asset_id: str, resolution: str = "2K", file_format: str = "JPG"
+) -> str:
+    """
+    Download and import an AmbientCG material.
+
+    Parameters:
+    - asset_id: The ID of the material (e.g., 'Bricks001')
+    - resolution: Desired resolution (e.g., '1K', '2K', '4K', '8K')
+    - file_format: Format (usually 'JPG' or 'PNG')
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command(
+            "download_ambientcg_material",
+            {"asset_id": asset_id, "resolution": resolution, "file_format": file_format},
+        )
+        if "error" in result:
+            return tool_error("AmbientCG download failed", data={"detail": result["error"]})
+        return f"Successfully imported material '{asset_id}' from AmbientCG."
+    except Exception as e:
+        return tool_error("Error downloading AmbientCG material", data={"detail": str(e)})
+
+
+# 3D Printing Tools
+@mcp.tool()
+def set_exact_dimensions(
+    ctx: Context,
+    object_name: str,
+    size_x: float = None,
+    size_y: float = None,
+    size_z: float = None,
+) -> str:
+    """Set exact dimensions (in mm) for an object. Useful for precision engineering."""
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command(
+            "set_exact_dimensions",
+            {"object_name": object_name, "size_x": size_x, "size_y": size_y, "size_z": size_z},
+        )
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return tool_error("Error setting dimensions", data={"detail": str(e)})
+
+
+@mcp.tool()
+def apply_print_thickness(ctx: Context, object_name: str, thickness_mm: float = 2.0) -> str:
+    """Apply a shell thickness to a mesh for 3D printing (Solidify)."""
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command(
+            "apply_print_thickness", {"object_name": object_name, "thickness_mm": thickness_mm}
+        )
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return tool_error("Error applying thickness", data={"detail": str(e)})
+
+
+@mcp.tool()
+def auto_layout_for_printing(
+    ctx: Context, bed_size_x: float = 256, bed_size_y: float = 256, padding_mm: float = 5
+) -> str:
+    """Automatically arrange all meshes on the print bed (Z=0)."""
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command(
+            "auto_layout_for_printing",
+            {"bed_size_x": bed_size_x, "bed_size_y": bed_size_y, "padding_mm": padding_mm},
+        )
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return tool_error("Error layouting for print", data={"detail": str(e)})
+
+
+# Mesh Tools
+@mcp.tool()
+def check_mesh_integrity(ctx: Context, object_name: str) -> str:
+    """Analyze mesh for non-manifold geometry, holes, and printing issues."""
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("check_mesh_integrity", {"object_name": object_name})
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return tool_error("Error checking mesh", data={"detail": str(e)})
+
+
+@mcp.tool()
+def auto_repair_mesh(ctx: Context, object_name: str) -> str:
+    """Attempt to automatically fix common non-manifold issues in a mesh."""
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("auto_repair_mesh", {"object_name": object_name})
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return tool_error("Error repairing mesh", data={"detail": str(e)})
+
+
+# Studio & Rigging
+@mcp.tool()
+def setup_product_studio(ctx: Context, theme: str = "CLEAN") -> str:
+    """Setup a professional lighting and backdrop stúdio for products (options: CLEAN, DARK, COLORFUL)."""
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("setup_product_studio", {"theme": theme})
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return tool_error("Error setting up studio", data={"detail": str(e)})
+
+
+@mcp.tool()
+def setup_simple_vehicle_rig(ctx: Context, chassis_name: str, wheel_names: list[str]) -> str:
+    """Rig a vehicle with wheels for basic movement simulation."""
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command(
+            "setup_simple_vehicle_rig", {"chassis_name": chassis_name, "wheel_names": wheel_names}
+        )
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return tool_error("Error rigging vehicle", data={"detail": str(e)})
+
+
+@mcp.tool()
+def apply_boolean_operation(
+    ctx: Context, target_name: str, tool_name: str, operation: str = "DIFFERENCE"
+) -> str:
+    """Apply boolean (Difference, Union, Intersect) using tool_name obj on target_name obj."""
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command(
+            "apply_boolean_operation",
+            {"target_name": target_name, "tool_name": tool_name, "operation": operation},
+        )
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return tool_error("Error in boolean op", data={"detail": str(e)})
+
+
+@mcp.tool()
+def export_for_printing(
+    ctx: Context, object_names: list[str], filepath: str, format: str = "STL"
+) -> str:
+    """Export specified objects for 3D printing (STL or OBJ)."""
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command(
+            "export_for_printing", {"object_names": object_names, "filepath": filepath}
+        )
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return tool_error("Error exporting", data={"detail": str(e)})
+
+
+@mcp.tool()
+def assign_print_color(ctx: Context, object_name: str, hex_color: str) -> str:
+    """Assign a base color (Hex) to an object for multi-color printing."""
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command(
+            "assign_print_color", {"object_name": object_name, "hex_color": hex_color}
+        )
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return tool_error("Error assigning color", data={"detail": str(e)})
+
+
+@mcp.tool()
+def separate_loose_parts(ctx: Context, object_name: str, smart_rename: bool = True) -> str:
+    """Separate a single object into multiple objects based on loose geometry parts."""
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command(
+            "separate_loose_parts", {"object_name": object_name, "smart_rename": smart_rename}
+        )
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return tool_error("Error separating parts", data={"detail": str(e)})
+
+
+@mcp.tool()
+def setup_camera(
+    ctx: Context,
+    focus_object_name: str = None,
+    location: list[float] = [0, -10, 5],
+    create_new: bool = False,
+) -> str:
+    """Setup or create a camera looking at focus_object_name."""
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command(
+            "setup_camera",
+            {"focus_object_name": focus_object_name, "location": location, "create_new": create_new},
+        )
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return tool_error("Error setting up camera", data={"detail": str(e)})
+
+
 @mcp.prompt()
 def asset_creation_strategy() -> str:
-    """Defines the preferred strategy for creating assets in Blender"""
-    return """When creating 3D content in Blender, always start by checking if integrations are available:
+    """Defines the preferred strategy for creating assets in Blender v2.0."""
+    return """Ao criar conteúdo 3D no Blender, use a seguinte hierarquia de ferramentas:
 
-    0. Before anything, always check the scene from get_scene_info()
-    1. First use the following tools to verify if the following integrations are enabled:
-        1. PolyHaven
-            Use get_polyhaven_status() to verify its status
-            If PolyHaven is enabled:
-            - For objects/models: Use download_polyhaven_asset() with asset_type="models"
-            - For materials/textures: Use download_polyhaven_asset() with asset_type="textures"
-            - For environment lighting: Use download_polyhaven_asset() with asset_type="hdris"
-        2. Sketchfab
-            Sketchfab is good at Realistic models, and has a wider variety of models than PolyHaven.
-            Use get_sketchfab_status() to verify its status
-            If Sketchfab is enabled:
-            - For objects/models: First search using search_sketchfab_models() with your query
-            - Then download specific models using download_sketchfab_model() with the UID
-            - Note that only downloadable models can be accessed, and API key must be properly configured
-            - Sketchfab has a wider variety of models than PolyHaven, especially for specific subjects
+    1. VERIFICAÇÃO DE ESTADO:
+       - Use get_scene_info() para entender o que já existe.
+       - Use get_viewport_screenshot() para ver visualmente o progresso.
 
-    2. Always check the world_bounding_box for each item so that:
-        - Ensure that all objects that should not be clipping are not clipping.
-        - Items have right spatial relationship.
+    2. AQUISIÇÃO DE ASSETS (Hierarquia):
+       a. PolyHaven: Use para HDRIs de iluminação, texturas de alta qualidade e modelos básicos de ambiente.
+       b. Sketchfab: Use para modelos realistas ou complexos específicos (mais variedade que PolyHaven).
+       c. AmbientCG: Use para buscas extensas de materiais PBR (tijolos, madeira, tecidos).
+       d. Scripting: Apenas se não houver asset pronto adequado.
 
-    3. Recommended asset source priority:
-        - For specific existing objects: First try Sketchfab, then PolyHaven
-        - For generic objects/furniture: First try PolyHaven, then Sketchfab
-        - For environment lighting: Use PolyHaven HDRIs
-        - For materials/textures: Use PolyHaven textures
+    3. WORKFLOW DE IMPRESSÃO 3D:
+       - Defina dimensões exatas com set_exact_dimensions().
+       - Verifique erros com check_mesh_integrity().
+       - Repare se necessário com auto_repair_mesh().
+       - Organize no bed com auto_layout_for_printing().
 
-    Only fall back to scripting when:
-    - PolyHaven and Sketchfab are disabled
-    - A simple primitive is explicitly requested
-    - No suitable asset exists in any of the libraries
-    - The task specifically requires a basic material/color
+    4. WORKFLOW DE PRODUTO/ESTÚDIO:
+       - Use setup_product_studio() para iluminação profissional instantânea.
+       - Configure a câmera focando no produto com setup_camera().
+       - Gere renders consistentes com render_catalog_angles().
     """
+
+
 # Main execution
-
-
 def main(host: str | None = None, port: int | None = None):
     """Run the MCP server"""
     if host:

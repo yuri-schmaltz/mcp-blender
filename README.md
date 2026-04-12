@@ -40,24 +40,27 @@ Give feedback, get inspired, and build on top of the MCP: [Discord](https://disc
 
 [Support this project](https://github.com/sponsors/ahujasid)
 
-## Release notes (1.2.0)
-- View screenshots for Blender viewport to better understand the scene
-- Search and download Sketchfab models
-
-
-### Previously added features:
-- Support for Poly Haven assets through their API
-- For newcomers, you can go straight to Installation. For existing users, see the points below
-- Download the latest addon.py file and replace the older one, then add it to Blender
-- Delete and re-add the MCP server in your preferred MCP-compatible client and you should be good to go!
+## Release notes (2.0.0)
+- **Modular Architecture**: Ported large handlers out of `addon.py` for better stability and maintainability.
+- **3D Printing Toolkit**: New tools for exact dimensions, print thickness, and automated bed layout.
+- **Mesh Integrity**: Real-time manifold checking and auto-repair directly through MCP.
+- **AmbientCG Integration**: Search and download thousands of PBR materials.
+- **Product Studio**: One-click professional lighting, backdrops, and camera setups for product rendering.
+- **Vehicle Rigging**: Automated base rigs for chassis and wheels.
+- **Extension Mode Support**: Fully compatible with Blender 4.2+ Extension system.
 
 ## Features
 
-- **Two-way communication**: Connect local LLM assistants to Blender through a socket-based server
-- **Object manipulation**: Create, modify, and delete 3D objects in Blender
-- **Material control**: Apply and modify materials and colors
-- **Scene inspection**: Get detailed information about the current Blender scene
-- **Code execution**: Run arbitrary Python code in Blender from your assistant
+- **Professional Asset Sourcing**: Integrated support for Poly Haven, Sketchfab, and AmbientCG.
+- **Precise 3D Printing**: Exact mm-scale control and automated export workflows.
+- **Mesh Health**: Integrity checks and automated manifold repairs for 3D printing.
+- **Studio Automation**: Procedural studio setups, lighting themes, and catalog angle rendering.
+- **Two-way communication**: Connect local LLM assistants to Blender via socket-based FastMCP.
+- **Object manipulation**: Create, modify, and delete 3D objects with spatial awareness.
+- **Material control**: Procedural material node generation and PBR texture application.
+- **Scene inspection**: Bounding-box aware scene data for collision-free object placement.
+- **Visual Feedback**: Real-time viewport screenshots for assistant visual grounding.
+- **Code execution**: Securely controlled Python execution for complex custom tasks.
 
 ## Components
 

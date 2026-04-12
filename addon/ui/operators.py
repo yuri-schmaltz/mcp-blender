@@ -26,6 +26,13 @@ _update_action_status = _helpers._update_action_status
 _logs_path = _helpers._logs_path
 _open_in_system = _helpers._open_in_system
 
+# Import i18n
+_i18n_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "utils", "i18n.py")
+_i18n_spec = _iu.spec_from_file_location("_blendermcp_i18n_operators", _i18n_path)
+_i18n = _iu.module_from_spec(_i18n_spec)
+_i18n_spec.loader.exec_module(_i18n)
+t = _i18n.t
+
 
 def _get_addon_module():
     """Load addon.py via filesystem (works in any Blender loading mode)."""
@@ -56,8 +63,8 @@ def _get_addon_module():
 # ---------------------------------------------------------------------------
 class BLENDERMCP_OT_StartServer(bpy.types.Operator):
     bl_idname = "blendermcp.start_server"
-    bl_label = "Connect to LLM client"
-    bl_description = "Start the BlenderMCP server to connect with your LLM client"
+    bl_label = t("op_start_server_label")
+    bl_description = t("op_start_server_desc")
 
     def execute(self, context):
         addon_mod = _get_addon_module()
@@ -69,7 +76,7 @@ class BLENDERMCP_OT_StartServer(bpy.types.Operator):
 
         bpy.types.blendermcp_server.start()
         scene.blendermcp_server_running = True
-        _update_action_status(scene, "Connect to MCP server", True, f"Listening on port {scene.blendermcp_port}")
+        _update_action_status(scene, t("btn_connect"), True, t("msg_server_listening", port=scene.blendermcp_port))
         return {"FINISHED"}
 
 
@@ -107,8 +114,8 @@ class BLENDERMCP_OT_InstallDependencies(bpy.types.Operator):
                 _update_action_status(context.scene, "Check/Install Dependencies", False, "uv sync failed")
                 return {"CANCELLED"}
 
-            self.report({"INFO"}, "Dependencies are ready (uv sync completed).")
-            _update_action_status(context.scene, "Check/Install Dependencies", True, "uv sync completed")
+            self.report({"INFO"}, t("msg_dependencies_ready"))
+            _update_action_status(context.scene, t("btn_install_deps"), True, "uv sync completed")
             return {"FINISHED"}
 
         code, output = _install_runtime_dependencies_with_pip(root)
@@ -120,8 +127,8 @@ class BLENDERMCP_OT_InstallDependencies(bpy.types.Operator):
             _update_action_status(context.scene, "Check/Install Dependencies", False, "pip fallback failed")
             return {"CANCELLED"}
 
-        self.report({"INFO"}, "Runtime dependencies installed via Blender Python (pip).")
-        _update_action_status(context.scene, "Check/Install Dependencies", True, "pip fallback completed")
+        self.report({"INFO"}, t("msg_dependencies_installed_pip"))
+        _update_action_status(context.scene, t("btn_install_deps"), True, "pip fallback completed")
         return {"FINISHED"}
 
 
@@ -130,7 +137,7 @@ class BLENDERMCP_OT_InstallDependencies(bpy.types.Operator):
 # ---------------------------------------------------------------------------
 class BLENDERMCP_OT_RunMCPServerTerminal(bpy.types.Operator):
     bl_idname = "blendermcp.run_mcp_terminal_server"
-    bl_label = "Run MCP Server in Terminal"
+    bl_label = t("btn_run_server")
     bl_description = "Launch uv run blender-mcp --host localhost --port <port> in a new terminal"
 
     def execute(self, context):
@@ -157,8 +164,8 @@ class BLENDERMCP_OT_RunMCPServerTerminal(bpy.types.Operator):
             _update_action_status(context.scene, "Run MCP Server in Terminal", False, str(exc))
             return {"CANCELLED"}
 
-        self.report({"INFO"}, f"MCP server terminal launched on {host}:{port}.")
-        _update_action_status(context.scene, "Run MCP Server in Terminal", True, f"Started on {host}:{port}")
+        self.report({"INFO"}, t("msg_server_launched", host=host, port=port))
+        _update_action_status(context.scene, t("btn_run_server"), True, f"Started on {host}:{port}")
         return {"FINISHED"}
 
 
@@ -167,7 +174,7 @@ class BLENDERMCP_OT_RunMCPServerTerminal(bpy.types.Operator):
 # ---------------------------------------------------------------------------
 class BLENDERMCP_OT_CopyMCPClientConfig(bpy.types.Operator):
     bl_idname = "blendermcp.copy_mcp_client_config"
-    bl_label = "Copy MCP Client Config"
+    bl_label = t("btn_copy_config")
     bl_description = "Copy stdio config snippet for Claude/Cursor/Ollama/LM Studio"
 
     def execute(self, context):
@@ -175,8 +182,8 @@ class BLENDERMCP_OT_CopyMCPClientConfig(bpy.types.Operator):
         client = scene.blendermcp_client_target
         snippet = _mcp_client_config_snippet(client, host="localhost", port=int(scene.blendermcp_port))
         context.window_manager.clipboard = snippet
-        self.report({"INFO"}, f"Copied {client} MCP config to clipboard.")
-        _update_action_status(scene, "Copy MCP Client Config", True, f"Client: {client}")
+        self.report({"INFO"}, t("msg_copied_config", client=client))
+        _update_action_status(scene, t("btn_copy_config"), True, f"Client: {client}")
         return {"FINISHED"}
 
 
@@ -185,7 +192,7 @@ class BLENDERMCP_OT_CopyMCPClientConfig(bpy.types.Operator):
 # ---------------------------------------------------------------------------
 class BLENDERMCP_OT_HealthCheck(bpy.types.Operator):
     bl_idname = "blendermcp.health_check"
-    bl_label = "Health Check"
+    bl_label = t("btn_health_check")
     bl_description = "Run local diagnostics (uv + blender-mcp --doctor)"
 
     def execute(self, context):
@@ -206,8 +213,8 @@ class BLENDERMCP_OT_HealthCheck(bpy.types.Operator):
             _update_action_status(context.scene, "Health Check", False, "doctor failed")
             return {"CANCELLED"}
 
-        self.report({"INFO"}, "Health check passed. See Blender console for details.")
-        _update_action_status(context.scene, "Health Check", True, f"doctor ok for localhost:{port}")
+        self.report({"INFO"}, t("msg_health_check_passed"))
+        _update_action_status(context.scene, t("btn_health_check"), True, f"doctor ok for localhost:{port}")
         return {"FINISHED"}
 
 
@@ -216,7 +223,7 @@ class BLENDERMCP_OT_HealthCheck(bpy.types.Operator):
 # ---------------------------------------------------------------------------
 class BLENDERMCP_OT_OpenLogs(bpy.types.Operator):
     bl_idname = "blendermcp.open_logs"
-    bl_label = "Open Logs"
+    bl_label = t("btn_open_logs")
     bl_description = "Open Blender MCP log file location"
 
     def execute(self, context):
@@ -230,8 +237,8 @@ class BLENDERMCP_OT_OpenLogs(bpy.types.Operator):
             _update_action_status(context.scene, "Open Logs", False, str(exc))
             return {"CANCELLED"}
 
-        self.report({"INFO"}, f"Opened logs: {path}")
-        _update_action_status(context.scene, "Open Logs", True, os.path.basename(path))
+        self.report({"INFO"}, t("msg_opened_logs", path=path))
+        _update_action_status(context.scene, t("btn_open_logs"), True, os.path.basename(path))
         return {"FINISHED"}
 
 
@@ -240,14 +247,14 @@ class BLENDERMCP_OT_OpenLogs(bpy.types.Operator):
 # ---------------------------------------------------------------------------
 class BLENDERMCP_OT_ClearCache(bpy.types.Operator):
     bl_idname = "blendermcp.clear_cache"
-    bl_label = "Clear Asset Cache"
+    bl_label = t("btn_clear_cache")
     bl_description = "Clear all cached downloaded assets from Poly Haven and Sketchfab"
 
     def execute(self, context):
         addon_mod = _get_addon_module()
         deleted = addon_mod._asset_cache.clear()
-        self.report({"INFO"}, f"Cleared {deleted} cached files")
-        _update_action_status(context.scene, "Clear Cache", True, f"Deleted files: {deleted}")
+        self.report({"INFO"}, t("msg_cleared_cache", count=deleted))
+        _update_action_status(context.scene, t("btn_clear_cache"), True, f"Deleted files: {deleted}")
         return {"FINISHED"}
 
 
@@ -256,8 +263,8 @@ class BLENDERMCP_OT_ClearCache(bpy.types.Operator):
 # ---------------------------------------------------------------------------
 class BLENDERMCP_OT_StopServer(bpy.types.Operator):
     bl_idname = "blendermcp.stop_server"
-    bl_label = "Stop the LLM connection"
-    bl_description = "Stop the connection to your LLM client"
+    bl_label = t("op_stop_server_label")
+    bl_description = t("op_stop_server_desc")
 
     def execute(self, context):
         scene = context.scene
@@ -311,7 +318,7 @@ class BLENDERMCP_OT_DownloadProgress(bpy.types.Operator):
 
             if progress_info.status == "completed":
                 context.window_manager.progress_end()
-                self.report({"INFO"}, f"Download complete! ({progress_info.format_progress()})")
+                self.report({"INFO"}, t("msg_download_complete", progress=progress_info.format_progress()))
                 self.cancel(context)
                 return {"FINISHED"}
             elif progress_info.status == "error":

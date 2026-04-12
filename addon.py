@@ -70,15 +70,47 @@ bl_info = {
     "name": "Blender MCP",
     "author": "BlenderMCP",
     "version": (2, 0, 0),
-    "blender": (3, 0, 0),
+    "blender": (4, 2, 0),
     "location": "View3D > Sidebar > BlenderMCP",
     "description": "Connect Blender to local LLM clients via MCP",
     "category": "Interface",
 }
 
-# Add User-Agent as required by Poly Haven API
-REQ_HEADERS = requests.utils.default_headers()
-REQ_HEADERS.update({"User-Agent": "blender-mcp"})
+# MP-05: Persistence and asset caching
+try:
+    if __package__:
+        from .addon.utils.cache import get_asset_cache
+        from .addon.utils.network import robust_get
+        from .addon.utils.constants import REQ_HEADERS
+    else:
+        from addon.utils.cache import get_asset_cache
+        from addon.utils.network import robust_get
+        from addon.utils.constants import REQ_HEADERS
+except ImportError:
+    # Minimal fallback if utils not found (shouldn't happen in production)
+    from contextlib import suppress
+    def get_asset_cache():
+        class MockCache:
+            def get(self, *args): return None
+            def put(self, *args, **kwargs): return args[2]
+        return MockCache()
+    def robust_get(url, **kwargs): return requests.get(url, **kwargs)
+    REQ_HEADERS = {"User-Agent": "blender-mcp"}
+
+# Helper for dynamic handler loading
+def _call_handler(module_name, func_name, *args, **kwargs):
+    """Dynamically load and call a handler function."""
+    try:
+        if __package__:
+            module = __import__(f"{__package__}.addon.handlers.{module_name}", fromlist=[func_name])
+        else:
+            module = __import__(f"addon.handlers.{module_name}", fromlist=[func_name])
+        func = getattr(module, func_name)
+        return func(*args, **kwargs)
+    except Exception as e:
+        print(f"Error calling handler {module_name}.{func_name}: {e}")
+        traceback.print_exc()
+        return {"error": f"Handler {module_name} error: {str(e)}"}
 
 # Load network utilities (retry, fallback, logging)
 try:
@@ -103,66 +135,6 @@ except (ImportError, ValueError):
 CACHE_DIR = os.path.join(os.path.expanduser("~"), ".blender_mcp", "cache")
 CACHE_TTL_DAYS = 7  # Cache expires after 7 days
 
-
-class AssetCache:
-    """Persistent cache for downloaded assets (MP-05)."""
-
-    def __init__(self, cache_dir=CACHE_DIR, ttl_days=CACHE_TTL_DAYS):
-        self.cache_dir = cache_dir
-        self.ttl_seconds = ttl_days * 24 * 3600
-        os.makedirs(cache_dir, exist_ok=True)
-
-    def _get_cache_path(self, asset_id: str, asset_type: str, resolution: str = "") -> str:
-        """Generate cache file path from asset identifiers."""
-        import hashlib
-
-        cache_key = f"{asset_id}_{asset_type}_{resolution}"
-        cache_hash = hashlib.sha256(cache_key.encode("utf-8")).hexdigest()
-        return os.path.join(self.cache_dir, f"{cache_hash}.cache")
-
-    def get(self, asset_id: str, asset_type: str, resolution: str = "") -> str | None:
-        """Retrieve cached asset path if valid, None otherwise."""
-        cache_path = self._get_cache_path(asset_id, asset_type, resolution)
-
-        if not os.path.exists(cache_path):
-            return None
-
-        # Check if cache is expired
-        file_age = time.time() - os.path.getmtime(cache_path)
-        if file_age > self.ttl_seconds:
-            try:
-                os.remove(cache_path)
-            except OSError:
-                pass
-            return None
-
-        return cache_path
-
-    def put(self, asset_id: str, asset_type: str, source_path: str, resolution: str = "") -> str:
-        """Store asset in cache and return cache path."""
-        cache_path = self._get_cache_path(asset_id, asset_type, resolution)
-
-        try:
-            shutil.copy2(source_path, cache_path)
-            return cache_path
-        except Exception as e:
-            print(f"Failed to cache asset: {e}")
-            return source_path
-
-    def clear(self) -> int:
-        """Clear all cached assets. Returns number of files deleted."""
-        deleted = 0
-        try:
-            for filename in os.listdir(self.cache_dir):
-                filepath = os.path.join(self.cache_dir, filename)
-                if os.path.isfile(filepath):
-                    os.remove(filepath)
-                    deleted += 1
-        except Exception as e:
-            print(f"Error clearing cache: {e}")
-        return deleted
-
-    def get_cache_size(self) -> tuple[int, int]:
         """Get cache size in bytes and number of files."""
         total_size = 0
         file_count = 0
@@ -586,59 +558,15 @@ class BlenderMCPServer(SocketBlenderMCPServer):
         """Get categories for a specific asset type from Polyhaven"""
         try:
             if asset_type not in ["hdris", "textures", "models", "all"]:
-                return {
-                    "error": f"Invalid asset type: {asset_type}. Must be one of: hdris, textures, models, all"
-                }
+    def get_polyhaven_categories(self, asset_type="hdris"):
+        """Get available categories from Poly Haven"""
+        return _call_handler("polyhaven", "get_polyhaven_categories", asset_type)
 
-            response = robust_get(
-                f"https://api.polyhaven.com/categories/{asset_type}", headers=REQ_HEADERS
-            )
-            if response.status_code == 200:
-                return {"categories": response.json()}
-            else:
-                return {"error": f"Poly Haven API returned status {response.status_code}. Try again later."}
-        except Exception as e:
-            return friendly_error("Poly Haven categories", e)
-
-    def search_polyhaven_assets(self, asset_type=None, categories=None):
-        """Search for assets from Polyhaven with optional filtering"""
-        try:
-            url = "https://api.polyhaven.com/assets"
-            params = {}
-
-            if asset_type and asset_type != "all":
-                if asset_type not in ["hdris", "textures", "models"]:
-                    return {
-                        "error": f"Invalid asset type: {asset_type}. Must be one of: hdris, textures, models, all"
-                    }
-                params["type"] = asset_type
-
-            if categories:
-                params["categories"] = categories
-
-            response = robust_get(url, params=params, headers=REQ_HEADERS)
-            if response.status_code == 200:
-                assets = response.json()
-                limited_assets = {}
-                for i, (key, value) in enumerate(assets.items()):
-                    if i >= 20:
-                        break
-                    limited_assets[key] = value
-
-                return {
-                    "assets": limited_assets,
-                    "total_count": len(assets),
-                    "returned_count": len(limited_assets),
-                }
-            else:
-                return {"error": f"Poly Haven search returned status {response.status_code}. Try again later."}
-        except Exception as e:
-            return friendly_error("Poly Haven search", e)
+    def search_polyhaven_assets(self, query, asset_type="hdris", categories=None):
+        """Search for assets on Poly Haven"""
+        return _call_handler("polyhaven", "search_polyhaven_assets", query, asset_type)
 
     def download_polyhaven_asset(self, asset_id, asset_type, resolution="1k", file_format=None):
-        try:
-            # First get the files information
-            files_response = robust_get(
                 f"https://api.polyhaven.com/files/{asset_id}", headers=REQ_HEADERS
             )
             if files_response.status_code != 200:
@@ -1037,341 +965,12 @@ class BlenderMCPServer(SocketBlenderMCPServer):
             return {"error": f"Failed to download asset: {str(e)}"}
 
     def set_texture(self, object_name, texture_id):
-        """Apply a previously downloaded Polyhaven texture to an object by creating a new material"""
-        try:
-            # Get the object
-            obj = bpy.data.objects.get(object_name)
-            if not obj:
-                return {"error": f"Object not found: {object_name}"}
-
-            # Make sure object can accept materials
-            if not hasattr(obj, "data") or not hasattr(obj.data, "materials"):
-                return {"error": f"Object {object_name} cannot accept materials"}
-
-            # Find all images related to this texture and ensure they're properly loaded
-            texture_images = {}
-            for img in bpy.data.images:
-                if img.name.startswith(texture_id + "_"):
-                    # Extract the map type from the image name
-                    map_type = img.name.split("_")[-1].split(".")[0]
-
-                    # Force a reload of the image
-                    img.reload()
-
-                    # Ensure proper color space
-                    if map_type.lower() in ["color", "diffuse", "albedo"]:
-                        try:
-                            img.colorspace_settings.name = "sRGB"
-                        except Exception:
-                            pass
-                    else:
-                        try:
-                            img.colorspace_settings.name = "Non-Color"
-                        except Exception:
-                            pass
-
-                    # Ensure the image is packed
-                    if not img.packed_file:
-                        img.pack()
-
-                    texture_images[map_type] = img
-                    print(f"Loaded texture map: {map_type} - {img.name}")
-
-                    # Debug info
-                    print(f"Image size: {img.size[0]}x{img.size[1]}")
-                    print(f"Color space: {img.colorspace_settings.name}")
-                    print(f"File format: {img.file_format}")
-                    print(f"Is packed: {bool(img.packed_file)}")
-
-            if not texture_images:
-                return {
-                    "error": f"No texture images found for: {texture_id}. Please download the texture first."
-                }
-
-            # Create a new material
-            new_mat_name = f"{texture_id}_material_{object_name}"
-
-            # Remove any existing material with this name to avoid conflicts
-            existing_mat = bpy.data.materials.get(new_mat_name)
-            if existing_mat:
-                bpy.data.materials.remove(existing_mat)
-
-            new_mat = bpy.data.materials.new(name=new_mat_name)
-            new_mat.use_nodes = True
-
-            # Set up the material nodes
-            nodes = new_mat.node_tree.nodes
-            links = new_mat.node_tree.links
-
-            # Clear default nodes
-            nodes.clear()
-
-            # Create output node
-            output = nodes.new(type="ShaderNodeOutputMaterial")
-            output.location = (600, 0)
-
-            # Create principled BSDF node
-            principled = nodes.new(type="ShaderNodeBsdfPrincipled")
-            principled.location = (300, 0)
-            links.new(principled.outputs[0], output.inputs[0])
-
-            # Add texture nodes based on available maps
-            tex_coord = nodes.new(type="ShaderNodeTexCoord")
-            tex_coord.location = (-800, 0)
-
-            mapping = nodes.new(type="ShaderNodeMapping")
-            mapping.location = (-600, 0)
-            mapping.vector_type = "TEXTURE"  # Changed from default 'POINT' to 'TEXTURE'
-            links.new(tex_coord.outputs["UV"], mapping.inputs["Vector"])
-
-            # Position offset for texture nodes
-            x_pos = -400
-            y_pos = 300
-
-            # Connect different texture maps
-            for map_type, image in texture_images.items():
-                tex_node = nodes.new(type="ShaderNodeTexImage")
-                tex_node.location = (x_pos, y_pos)
-                tex_node.image = image
-
-                # Set color space based on map type
-                if map_type.lower() in ["color", "diffuse", "albedo"]:
-                    try:
-                        tex_node.image.colorspace_settings.name = "sRGB"
-                    except Exception:
-                        pass  # Use default if sRGB not available
-                else:
-                    try:
-                        tex_node.image.colorspace_settings.name = "Non-Color"
-                    except Exception:
-                        pass  # Use default if Non-Color not available
-
-                links.new(mapping.outputs["Vector"], tex_node.inputs["Vector"])
-
-                # Connect to appropriate input on Principled BSDF
-                if map_type.lower() in ["color", "diffuse", "albedo"]:
-                    links.new(tex_node.outputs["Color"], principled.inputs["Base Color"])
-                elif map_type.lower() in ["roughness", "rough"]:
-                    links.new(tex_node.outputs["Color"], principled.inputs["Roughness"])
-                elif map_type.lower() in ["metallic", "metalness", "metal"]:
-                    links.new(tex_node.outputs["Color"], principled.inputs["Metallic"])
-                elif map_type.lower() in ["normal", "nor", "dx", "gl"]:
-                    # Add normal map node
-                    normal_map = nodes.new(type="ShaderNodeNormalMap")
-                    normal_map.location = (x_pos + 200, y_pos)
-                    links.new(tex_node.outputs["Color"], normal_map.inputs["Color"])
-                    links.new(normal_map.outputs["Normal"], principled.inputs["Normal"])
-                elif map_type.lower() in ["displacement", "disp", "height"]:
-                    # Add displacement node
-                    disp_node = nodes.new(type="ShaderNodeDisplacement")
-                    disp_node.location = (x_pos + 200, y_pos - 200)
-                    disp_node.inputs["Scale"].default_value = 0.1  # Reduce displacement strength
-                    links.new(tex_node.outputs["Color"], disp_node.inputs["Height"])
-                    links.new(disp_node.outputs["Displacement"], output.inputs["Displacement"])
-
-                y_pos -= 250
-
-            # Second pass: Connect nodes with proper handling for special cases
-            texture_nodes = {}
-
-            # First find all texture nodes and store them by map type
-            for node in nodes:
-                if node.type == "TEX_IMAGE" and node.image:
-                    for map_type, image in texture_images.items():
-                        if node.image == image:
-                            texture_nodes[map_type] = node
-                            break
-
-            # Now connect everything using the nodes instead of images
-            # Handle base color (diffuse)
-            for map_name in ["color", "diffuse", "albedo"]:
-                if map_name in texture_nodes:
-                    links.new(
-                        texture_nodes[map_name].outputs["Color"], principled.inputs["Base Color"]
-                    )
-                    print(f"Connected {map_name} to Base Color")
-                    break
-
-            # Handle roughness
-            for map_name in ["roughness", "rough"]:
-                if map_name in texture_nodes:
-                    links.new(
-                        texture_nodes[map_name].outputs["Color"], principled.inputs["Roughness"]
-                    )
-                    print(f"Connected {map_name} to Roughness")
-                    break
-
-            # Handle metallic
-            for map_name in ["metallic", "metalness", "metal"]:
-                if map_name in texture_nodes:
-                    links.new(
-                        texture_nodes[map_name].outputs["Color"], principled.inputs["Metallic"]
-                    )
-                    print(f"Connected {map_name} to Metallic")
-                    break
-
-            # Handle normal maps
-            for map_name in ["gl", "dx", "nor"]:
-                if map_name in texture_nodes:
-                    normal_map_node = nodes.new(type="ShaderNodeNormalMap")
-                    normal_map_node.location = (100, 100)
-                    links.new(
-                        texture_nodes[map_name].outputs["Color"], normal_map_node.inputs["Color"]
-                    )
-                    links.new(normal_map_node.outputs["Normal"], principled.inputs["Normal"])
-                    print(f"Connected {map_name} to Normal")
-                    break
-
-            # Handle displacement
-            for map_name in ["displacement", "disp", "height"]:
-                if map_name in texture_nodes:
-                    disp_node = nodes.new(type="ShaderNodeDisplacement")
-                    disp_node.location = (300, -200)
-                    disp_node.inputs["Scale"].default_value = 0.1  # Reduce displacement strength
-                    links.new(texture_nodes[map_name].outputs["Color"], disp_node.inputs["Height"])
-                    links.new(disp_node.outputs["Displacement"], output.inputs["Displacement"])
-                    print(f"Connected {map_name} to Displacement")
-                    break
-
-            # Handle ARM texture (Ambient Occlusion, Roughness, Metallic)
-            if "arm" in texture_nodes:
-                separate_rgb = nodes.new(type="ShaderNodeSeparateRGB")
-                separate_rgb.location = (-200, -100)
-                links.new(texture_nodes["arm"].outputs["Color"], separate_rgb.inputs["Image"])
-
-                # Connect Roughness (G) if no dedicated roughness map
-                if not any(map_name in texture_nodes for map_name in ["roughness", "rough"]):
-                    links.new(separate_rgb.outputs["G"], principled.inputs["Roughness"])
-                    print("Connected ARM.G to Roughness")
-
-                # Connect Metallic (B) if no dedicated metallic map
-                if not any(
-                    map_name in texture_nodes for map_name in ["metallic", "metalness", "metal"]
-                ):
-                    links.new(separate_rgb.outputs["B"], principled.inputs["Metallic"])
-                    print("Connected ARM.B to Metallic")
-
-                # For AO (R channel), multiply with base color if we have one
-                base_color_node = None
-                for map_name in ["color", "diffuse", "albedo"]:
-                    if map_name in texture_nodes:
-                        base_color_node = texture_nodes[map_name]
-                        break
-
-                if base_color_node:
-                    mix_node = nodes.new(type="ShaderNodeMixRGB")
-                    mix_node.location = (100, 200)
-                    mix_node.blend_type = "MULTIPLY"
-                    mix_node.inputs["Fac"].default_value = 0.8  # 80% influence
-
-                    # Disconnect direct connection to base color
-                    for link in base_color_node.outputs["Color"].links:
-                        if link.to_socket == principled.inputs["Base Color"]:
-                            links.remove(link)
-
-                    # Connect through the mix node
-                    links.new(base_color_node.outputs["Color"], mix_node.inputs[1])
-                    links.new(separate_rgb.outputs["R"], mix_node.inputs[2])
-                    links.new(mix_node.outputs["Color"], principled.inputs["Base Color"])
-                    print("Connected ARM.R to AO mix with Base Color")
-
-            # Handle AO (Ambient Occlusion) if separate
-            if "ao" in texture_nodes:
-                base_color_node = None
-                for map_name in ["color", "diffuse", "albedo"]:
-                    if map_name in texture_nodes:
-                        base_color_node = texture_nodes[map_name]
-                        break
-
-                if base_color_node:
-                    mix_node = nodes.new(type="ShaderNodeMixRGB")
-                    mix_node.location = (100, 200)
-                    mix_node.blend_type = "MULTIPLY"
-                    mix_node.inputs["Fac"].default_value = 0.8  # 80% influence
-
-                    # Disconnect direct connection to base color
-                    for link in base_color_node.outputs["Color"].links:
-                        if link.to_socket == principled.inputs["Base Color"]:
-                            links.remove(link)
-
-                    # Connect through the mix node
-                    links.new(base_color_node.outputs["Color"], mix_node.inputs[1])
-                    links.new(texture_nodes["ao"].outputs["Color"], mix_node.inputs[2])
-                    links.new(mix_node.outputs["Color"], principled.inputs["Base Color"])
-                    print("Connected AO to mix with Base Color")
-
-            # CRITICAL: Make sure to clear all existing materials from the object
-            while len(obj.data.materials) > 0:
-                obj.data.materials.pop(index=0)
-
-            # Assign the new material to the object
-            obj.data.materials.append(new_mat)
-
-            # CRITICAL: Make the object active and select it
-            bpy.context.view_layer.objects.active = obj
-            obj.select_set(True)
-
-            # CRITICAL: Force Blender to update the material
-            bpy.context.view_layer.update()
-
-            # Get the list of texture maps
-            texture_maps = list(texture_images.keys())
-
-            # Get info about texture nodes for debugging
-            material_info = {
-                "name": new_mat.name,
-                "has_nodes": new_mat.use_nodes,
-                "node_count": len(new_mat.node_tree.nodes),
-                "texture_nodes": [],
-            }
-
-            for node in new_mat.node_tree.nodes:
-                if node.type == "TEX_IMAGE" and node.image:
-                    connections = []
-                    for output in node.outputs:
-                        for link in output.links:
-                            connections.append(
-                                f"{output.name} → {link.to_node.name}.{link.to_socket.name}"
-                            )
-
-                    material_info["texture_nodes"].append(
-                        {
-                            "name": node.name,
-                            "image": node.image.name,
-                            "colorspace": node.image.colorspace_settings.name,
-                            "connections": connections,
-                        }
-                    )
-
-            return {
-                "success": True,
-                "message": f"Created new material and applied texture {texture_id} to {object_name}",
-                "material": new_mat.name,
-                "maps": texture_maps,
-                "material_info": material_info,
-            }
-
-        except Exception as e:
-            print(f"Error in set_texture: {str(e)}")
-            traceback.print_exc()
-            return {"error": f"Failed to apply texture: {str(e)}"}
+        """Apply a previously downloaded Polyhaven texture to an object"""
+        return _call_handler("material_tools", "set_texture", object_name, texture_id)
 
     def get_polyhaven_status(self):
         """Get the current status of PolyHaven integration"""
-        enabled = bpy.context.scene.blendermcp_use_polyhaven
-        if enabled:
-            return {
-                "enabled": True,
-                "message": "PolyHaven integration is enabled and ready to use.",
-            }
-        else:
-            return {
-                "enabled": False,
-                "message": """PolyHaven integration is currently disabled. To enable it:
-                            1. In the 3D Viewport, find the BlenderMCP panel in the sidebar (press N if hidden)
-                            2. Check the 'Use assets from Poly Haven' checkbox
-                            3. Restart the connection to your LLM client""",
-            }
+        return _call_handler("polyhaven", "get_polyhaven_status", bpy.context.scene)
 
     # region Sketchfab API
     def get_sketchfab_status(self):
@@ -1494,154 +1093,17 @@ class BlenderMCPServer(SocketBlenderMCPServer):
             traceback.print_exc()
             return {"error": str(e)}
 
+    def get_sketchfab_status(self):
+        """Get the current status of Sketchfab integration"""
+        return _call_handler("sketchfab", "get_sketchfab_status", bpy.context.scene)
+
+    def search_sketchfab_models(self, query, categories=None, count=20, downloadable=True):
+        """Search for models on Sketchfab"""
+        return _call_handler("sketchfab", "search_sketchfab_models", bpy.context.scene, query, categories, count, downloadable)
+
     def download_sketchfab_model(self, uid):
-        """Download a model from Sketchfab by its UID"""
-        try:
-            api_key = bpy.context.scene.blendermcp_sketchfab_api_key
-            if not api_key:
-                return {"error": "Sketchfab API key is not configured"}
-
-            # Use proper authorization header for API key auth
-            headers = {"Authorization": f"Token {api_key}"}
-
-            # Request download URL using the exact endpoint from the documentation
-            download_endpoint = f"https://api.sketchfab.com/v3/models/{uid}/download"
-
-            response = robust_get(
-                download_endpoint, headers=headers, timeout=30  # Add timeout of 30 seconds
-            )
-
-            if response.status_code == 401:
-                return {"error": "Authentication failed (401). Check your API key."}
-
-            if response.status_code != 200:
-                return {"error": f"Download request failed with status code {response.status_code}"}
-
-            data = response.json()
-
-            # Safety check for None data
-            if data is None:
-                return {"error": "Received empty response from Sketchfab API for download request"}
-
-            # Extract download URL with safety checks
-            gltf_data = data.get("gltf")
-            if not gltf_data:
-                return {
-                    "error": "No gltf download URL available for this model. Response: " + str(data)
-                }
-
-            download_url = gltf_data.get("url")
-            if not download_url:
-                return {
-                    "error": "No download URL available for this model. Make sure the model is downloadable and you have access."
-                }
-
-            # Download the model with progress tracking (MP-02)
-            operation_id = f"sketchfab_{uid}"
-
-            model_response = robust_get(download_url, timeout=60, stream=True)
-
-            if model_response.status_code != 200:
-                return {
-                    "error": f"Model download failed with status code {model_response.status_code}"
-                }
-
-            # Save to temporary file with progress
-            temp_dir = tempfile.mkdtemp()
-            zip_file_path = os.path.join(temp_dir, f"{uid}.zip")
-
-            total_size = int(model_response.headers.get("content-length", 0))
-            downloaded = 0
-
-            if PROGRESS_AVAILABLE:
-                tracker = get_progress_tracker()
-                if tracker:
-                    tracker.start_operation(operation_id, total_size)
-
-            with open(zip_file_path, "wb") as f:
-                for chunk in model_response.iter_content(chunk_size=8192):
-                    if chunk:
-                        f.write(chunk)
-                        downloaded += len(chunk)
-                        if PROGRESS_AVAILABLE and tracker:
-                            tracker.update_progress(operation_id, downloaded)
-
-            if PROGRESS_AVAILABLE and tracker:
-                tracker.complete_operation(operation_id)
-
-            # Extract the zip file with enhanced security
-            with zipfile.ZipFile(zip_file_path, "r") as zip_ref:
-                # More secure zip slip prevention
-                for file_info in zip_ref.infolist():
-                    # Get the path of the file
-                    file_path = file_info.filename
-
-                    # Convert directory separators to the current OS style
-                    # This handles both / and \ in zip entries
-                    target_path = os.path.join(temp_dir, os.path.normpath(file_path))
-
-                    # Get absolute paths for comparison
-                    abs_temp_dir = os.path.abspath(temp_dir)
-                    abs_target_path = os.path.abspath(target_path)
-
-                    # Ensure the normalized path doesn't escape the target directory
-                    if not abs_target_path.startswith(abs_temp_dir):
-                        with suppress(Exception):
-                            shutil.rmtree(temp_dir)
-                        return {
-                            "error": "Security issue: Zip contains files with path traversal attempt"
-                        }
-
-                    # Additional explicit check for directory traversal
-                    if ".." in file_path:
-                        with suppress(Exception):
-                            shutil.rmtree(temp_dir)
-                        return {
-                            "error": "Security issue: Zip contains files with directory traversal sequence"
-                        }
-
-                # If all files passed security checks, extract them
-                zip_ref.extractall(temp_dir)
-
-            # Find the main glTF file
-            gltf_files = [
-                f for f in os.listdir(temp_dir) if f.endswith(".gltf") or f.endswith(".glb")
-            ]
-
-            if not gltf_files:
-                with suppress(Exception):
-                    shutil.rmtree(temp_dir)
-                return {"error": "No glTF file found in the downloaded model"}
-
-            main_file = os.path.join(temp_dir, gltf_files[0])
-
-            # Import the model
-            bpy.ops.import_scene.gltf(filepath=main_file)
-
-            # Get the names of imported objects
-            imported_objects = [obj.name for obj in bpy.context.selected_objects]
-
-            # Clean up temporary files
-            with suppress(Exception):
-                shutil.rmtree(temp_dir)
-
-            return {
-                "success": True,
-                "message": "Model imported successfully",
-                "imported_objects": imported_objects,
-            }
-
-        except requests.exceptions.Timeout:
-            return {
-                "error": "Request timed out. Check your internet connection and try again with a simpler model."
-            }
-        except json.JSONDecodeError as e:
-            return {"error": f"Invalid JSON response from Sketchfab API: {str(e)}"}
-        except Exception as e:
-            import traceback
-
-            traceback.print_exc()
-            return {"error": f"Failed to download model: {str(e)}"}
+        """Download a model from Sketchfab"""
+        return _call_handler("sketchfab", "download_sketchfab_model", bpy.context.scene, uid)
 
     # region AmbientCG API
     def search_ambientcg_materials(self, query="", limit=20):
@@ -1658,7 +1120,10 @@ class BlenderMCPServer(SocketBlenderMCPServer):
     def download_ambientcg_material(self, asset_id, resolution="2K", file_format="JPG"):
         """Download and import an AmbientCG material"""
         try:
-            from addon.handlers.ambientcg import download_ambientcg_material as _download
+            if __package__:
+                from .addon.handlers.ambientcg import download_ambientcg_material as _download
+            else:
+                from addon.handlers.ambientcg import download_ambientcg_material as _download
             tracker = None
             if PROGRESS_AVAILABLE:
                 tracker = get_progress_tracker()
@@ -2017,6 +1482,7 @@ def unregister():
             pass
 
     del bpy.types.Scene.blendermcp_port
+    del bpy.types.Scene.blendermcp_allow_code_execution
     del bpy.types.Scene.blendermcp_server_running
     del bpy.types.Scene.blendermcp_use_polyhaven
     del bpy.types.Scene.blendermcp_use_ambientcg

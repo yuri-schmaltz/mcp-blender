@@ -4,10 +4,11 @@ import os
 import shutil
 import tempfile
 import zipfile
+
 import bpy
 
 # Use the robust networking module
-from addon.utils.network import robust_get, friendly_error, log_asset_download
+from addon.utils.network import friendly_error, log_asset_download, robust_get
 
 
 def get_ambientcg_status(scene):
@@ -47,14 +48,14 @@ def search_ambientcg_materials(scene, query="", limit=20):
         response = robust_get(url, params=params)
         if response.status_code == 200:
             data = response.json()
-            
+
             # Format the output for the LLM
             results = []
             for asset in data.get("foundAssets", []):
                 resolutions = []
                 for dl in asset.get("downloadFolders", {}).get("default", {}).get("downloadFiletypeCategories", {}).get("zip", {}).get("downloads", []):
                     resolutions.append(dl.get("attribute"))
-                
+
                 results.append({
                     "assetId": asset.get("assetId"),
                     "tags": asset.get("tags", []),
@@ -82,7 +83,7 @@ def download_ambientcg_material(scene, asset_id, resolution="2K", file_format="J
         # LLMs often pass "2k" instead of "2K"
         resolution = resolution.upper()
         file_format = file_format.upper()
-        
+
         # Determine actual download URL
         # Format usually: https://ambientcg.com/get?file=AssetId_Resolution-Format.zip
         # e.g. Wood066_2K-JPG.zip
@@ -99,17 +100,17 @@ def download_ambientcg_material(scene, asset_id, resolution="2K", file_format="J
             # Download ZIP
             operation_id = f"ambientcg_{asset_id}_{resolution}"
             response = robust_get(download_url, stream=True)
-            
+
             if response.status_code == 404:
                 # Try fallback (AmbientCG sometimes uses different naming or the resolution is missing)
                 return {"error": f"Material '{asset_id}' not found in {resolution}-{file_format}. Try checking the available resolutions from the search results, or try '1K' or '2K' PNG."}
-                
+
             if response.status_code != 200:
                 return {"error": f"Failed to download material: {response.status_code}"}
 
             total_size = int(response.headers.get("content-length", 0))
             downloaded = 0
-            
+
             if progress_tracker:
                 progress_tracker.start_operation(operation_id, total_size)
 
@@ -120,7 +121,7 @@ def download_ambientcg_material(scene, asset_id, resolution="2K", file_format="J
                         downloaded += len(chunk)
                         if progress_tracker:
                             progress_tracker.update_progress(operation_id, downloaded)
-            
+
             if progress_tracker:
                 progress_tracker.complete_operation(operation_id)
 
@@ -143,12 +144,12 @@ def download_ambientcg_material(scene, asset_id, resolution="2K", file_format="J
             for file in extracted_files:
                 filepath = os.path.join(extract_dir, file)
                 name_without_ext = os.path.splitext(file)[0]
-                
+
                 # Ex: Wood066_2K-JPG_Color.jpg -> split by _
                 parts = name_without_ext.split("_")
                 if len(parts) >= 2:
                     map_suffix = parts[-1]  # 'Color', 'NormalGL', etc.
-                    
+
                     for map_key, aliases in map_types.items():
                         if map_suffix in aliases and map_key not in maps:
                             maps[map_key] = filepath
@@ -218,17 +219,17 @@ def download_ambientcg_material(scene, asset_id, resolution="2K", file_format="J
                 img_node.image = bpy.data.images.load(maps["Normal"])
                 img_node.image.colorspace_settings.name = "Non-Color"
                 img_node.name = "Normal_Map"
-                
+
                 normal_map_node = nodes.new(type="ShaderNodeNormalMap")
                 normal_map_node.location = (-200, -600)
-                
+
                 links.new(mapping.outputs["Vector"], img_node.inputs["Vector"])
                 links.new(img_node.outputs["Color"], normal_map_node.inputs["Color"])
                 links.new(normal_map_node.outputs["Normal"], principled.inputs["Normal"])
 
             # Log the successful download
             log_asset_download("ambientcg", asset_id, "material", resolution)
-            
+
             # Apply to selected objects if any
             applied_to = []
             if bpy.context.selected_objects:
