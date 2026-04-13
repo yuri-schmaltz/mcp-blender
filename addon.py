@@ -69,7 +69,7 @@ except Exception:
 bl_info = {
     "name": "Blender MCP",
     "author": "BlenderMCP",
-    "version": (2, 3, 0),
+    "version": (2, 4, 1),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > BlenderMCP",
     "description": "Connect Blender to local LLM clients via MCP",
