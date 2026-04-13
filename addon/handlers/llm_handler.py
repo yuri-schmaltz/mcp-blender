@@ -3,7 +3,8 @@ import re
 import traceback
 import bpy
 import requests
-from ..utils.network import get_session, friendly_error
+from addon.utils.network import get_session, friendly_error
+
 
 def _get_system_prompt():
     """Returns the system prompt that explains the AI's capabilities in Blender."""

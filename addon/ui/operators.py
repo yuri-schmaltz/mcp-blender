@@ -303,7 +303,8 @@ class BLENDERMCP_OT_OpenURL(bpy.types.Operator):
     bl_label = "Open URL"
     bl_description = "Open a specific URL in the system browser"
     
-    url: bpy.props.StringProperty(name="URL", default="")
+    url = bpy.props.StringProperty(name="URL", default="")
+
 
     def execute(self, context):
         if not self.url:
@@ -438,7 +439,8 @@ class BLENDERMCP_OT_MarkFunctionalPart(bpy.types.Operator):
     bl_label = "Mark as Functional Part"
     bl_description = "Add metadata to object for engineering management"
     
-    role: bpy.props.StringProperty(name="Role", default="Part")
+    role = bpy.props.StringProperty(name="Role", default="Part")
+
 
     def execute(self, context):
         if not context.active_object:
@@ -474,7 +476,8 @@ class BLENDERMCP_OT_SendChat(bpy.types.Operator):
         # Actually, in Blender, we can't easily do async without threading
         # For now, we'll do it synchronously for simplicity
         
-        from ..handlers import llm_handler
+        from addon.handlers import llm_handler
+
         result = llm_handler.handle_chat_request(context)
         
         if "error" in result:
