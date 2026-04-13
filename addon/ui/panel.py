@@ -114,7 +114,7 @@ class BLENDERMCP_PT_Engineering(bpy.types.Panel):
         # Mesh Cleanup
         col = layout.column(align=True)
         col.label(text=t("label_mesh_cleanup"))
-        col.operator("blendermcp.auto_repair_mesh", text=t("btn_auto_repair"), icon="WRENCH")
+        col.operator("blendermcp.auto_repair_mesh", text=t("btn_auto_repair"), icon="MODIFIER")
         col.operator("blendermcp.resolve_self_intersections", text=t("btn_resolve_intersections"), icon="MOD_BOOLEAN")
         
         layout.separator(factor=0.5)
