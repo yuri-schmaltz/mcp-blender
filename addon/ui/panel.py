@@ -184,6 +184,70 @@ class BLENDERMCP_PT_Integrations(bpy.types.Panel):
 
 
 # =============================================================================
+# Sub-Panel: Online AI Assistant (New)
+# =============================================================================
+class BLENDERMCP_PT_OnlineLLM(bpy.types.Panel):
+    bl_label = t("label_llm_assistant")
+    bl_idname = "BLENDERMCP_PT_OnlineLLM"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "BlenderMCP"
+    bl_parent_id = "BLENDERMCP_PT_Panel"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    def draw(self, context):
+        layout = self.layout
+        scene = context.scene
+
+        col = layout.column(align=True)
+        col.prop(scene, "blendermcp_llm_provider", text=t("label_llm_provider"))
+        
+        provider = scene.blendermcp_llm_provider
+        
+        box = layout.box()
+        if provider == "OPENAI":
+            box.prop(scene, "blendermcp_openai_key", text="OpenAI Key")
+            box.prop(scene, "blendermcp_openai_model", text=t("label_llm_model"))
+            op = box.operator("blendermcp.open_url", text=t("btn_get_openai_key"), icon="URL")
+            op.url = "https://platform.openai.com/api-keys"
+        elif provider == "ANTHROPIC":
+            box.prop(scene, "blendermcp_anthropic_key", text="Claude Key")
+            box.prop(scene, "blendermcp_anthropic_model", text=t("label_llm_model"))
+            op = box.operator("blendermcp.open_url", text=t("btn_get_anthropic_key"), icon="URL")
+            op.url = "https://console.anthropic.com/settings/keys"
+        elif provider == "GOOGLE":
+            box.prop(scene, "blendermcp_google_key", text="Gemini Key")
+            box.prop(scene, "blendermcp_google_model", text=t("label_llm_model"))
+            op = box.operator("blendermcp.open_url", text=t("btn_get_google_key"), icon="URL")
+            op.url = "https://aistudio.google.com/app/apikey"
+
+        layout.separator()
+        
+        # Chat interface
+        chat_box = layout.box()
+        chat_box.label(text=t("label_chat_with_ai"), icon="CONSOLE")
+        chat_box.prop(scene, "blendermcp_chat_prompt", text="")
+        
+        row = chat_box.row(align=True)
+        row.operator("blendermcp.send_chat", text=t("btn_send_prompt"), icon="PLAY")
+        row.operator("blendermcp.clear_chat", text="", icon="X")
+        
+        if scene.blendermcp_chat_status:
+            status_box = chat_box.box()
+            status_box.label(text=t("status_ai_label"))
+            status_col = status_box.column()
+            status_col.scale_y = 0.8
+            # Split status by lines if it's long
+            lines = scene.blendermcp_chat_status.split("\n")
+            for line in lines[:5]: # Show first 5 lines
+                status_col.label(text=line)
+            if len(lines) > 5:
+                status_col.label(text="...")
+
+
+
+
+# =============================================================================
 # Sub-Panel: Setup & Maintenance (Consolidated)
 # =============================================================================
 class BLENDERMCP_PT_Setup(bpy.types.Panel):
@@ -230,5 +294,6 @@ PANEL_CLASSES = [
     BLENDERMCP_PT_Panel,
     BLENDERMCP_PT_Engineering,
     BLENDERMCP_PT_Integrations,
+    BLENDERMCP_PT_OnlineLLM,
     BLENDERMCP_PT_Setup,
 ]

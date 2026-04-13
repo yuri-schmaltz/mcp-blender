@@ -457,6 +457,64 @@ class BLENDERMCP_OT_MarkFunctionalPart(bpy.types.Operator):
         return {"FINISHED"}
 
 
+# ---------------------------------------------------------------------------
+# Operator: Send Chat (Online LLM)
+# ---------------------------------------------------------------------------
+class BLENDERMCP_OT_SendChat(bpy.types.Operator):
+    bl_idname = "blendermcp.send_chat"
+    bl_label = "Send to AI"
+    bl_description = "Send prompt to selected online LLM provider"
+
+    def execute(self, context):
+        scene = context.scene
+        scene.blendermcp_chat_status = t("status_ai_thinking")
+
+        
+        # Use a brief timer to allow UI update before blocking request
+        # Actually, in Blender, we can't easily do async without threading
+        # For now, we'll do it synchronously for simplicity
+        
+        from ..handlers import llm_handler
+        result = llm_handler.handle_chat_request(context)
+        
+        if "error" in result:
+            self.report({"ERROR"}, result["error"])
+            scene.blendermcp_chat_status = f"Error: {result['error']}"
+            _update_action_status(scene, "AI Chat", False, result["error"])
+        else:
+            status = result.get("status", "success")
+            msg = result.get("message", "Done")
+            scene.blendermcp_chat_status = msg
+            
+            if status == "success":
+                self.report({"INFO"}, "AI execution completed.")
+                _update_action_status(scene, "AI Chat", True, "Execution success")
+            elif status == "pending":
+                self.report({"WARNING"}, "Code generated (Execution disabled)")
+                _update_action_status(scene, "AI Chat", True, "Code generated")
+            else:
+                self.report({"INFO"}, "AI response received.")
+                _update_action_status(scene, "AI Chat", True, "Response received")
+                
+        return {"FINISHED"}
+
+
+# ---------------------------------------------------------------------------
+# Operator: Clear Chat
+# ---------------------------------------------------------------------------
+class BLENDERMCP_OT_ClearChat(bpy.types.Operator):
+    bl_idname = "blendermcp.clear_chat"
+    bl_label = "Clear Chat"
+    bl_description = "Clear prompt and status"
+
+    def execute(self, context):
+        scene = context.scene
+        scene.blendermcp_chat_prompt = ""
+        scene.blendermcp_chat_status = ""
+        return {"FINISHED"}
+
+
+
 # All operator classes for registration
 OPERATOR_CLASSES = [
     BLENDERMCP_OT_StartServer,
@@ -471,4 +529,7 @@ OPERATOR_CLASSES = [
     BLENDERMCP_OT_ResolveSelfIntersections,
     BLENDERMCP_OT_MarkFunctionalPart,
     BLENDERMCP_OT_OpenURL,
+    BLENDERMCP_OT_SendChat,
+    BLENDERMCP_OT_ClearChat,
 ]
+

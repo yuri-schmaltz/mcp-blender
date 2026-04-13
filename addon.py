@@ -556,6 +556,80 @@ def register():
         description="Your BlenderKit API token. Get it from blenderkit.com/settings/profile. WARNING: Saved in .blend file in plain text.",
         default="",
     )
+
+    # Online LLM Integration
+    bpy.types.Scene.blendermcp_llm_provider = bpy.props.EnumProperty(
+        name="Provider",
+        description="Select the online LLM provider to use",
+        items=[
+            ("OPENAI", "OpenAI", "Use OpenAI models (GPT-4o, etc.)"),
+            ("ANTHROPIC", "Anthropic", "Use Anthropic models (Claude 3.5, etc.)"),
+            ("GOOGLE", "Google", "Use Google Gemini models"),
+        ],
+        default="OPENAI",
+    )
+
+    bpy.types.Scene.blendermcp_openai_key = bpy.props.StringProperty(
+        name="OpenAI API Key",
+        subtype="PASSWORD",
+        description="Your OpenAI API key. WARNING: Saved in .blend file in plain text.",
+        default="",
+    )
+
+    bpy.types.Scene.blendermcp_anthropic_key = bpy.props.StringProperty(
+        name="Anthropic API Key",
+        subtype="PASSWORD",
+        description="Your Anthropic API key. WARNING: Saved in .blend file in plain text.",
+        default="",
+    )
+
+    bpy.types.Scene.blendermcp_google_key = bpy.props.StringProperty(
+        name="Google API Key",
+        subtype="PASSWORD",
+        description="Your Google Gemini API key. WARNING: Saved in .blend file in plain text.",
+        default="",
+    )
+
+    bpy.types.Scene.blendermcp_openai_model = bpy.props.EnumProperty(
+        name="Model",
+        items=[
+            ("gpt-4o", "GPT-4o", "OpenAI's most capable model"),
+            ("gpt-4o-mini", "GPT-4o Mini", "Fast and efficient model"),
+            ("gpt-3.5-turbo", "GPT-3.5 Turbo", "Legacy balanced model"),
+        ],
+        default="gpt-4o",
+    )
+
+    bpy.types.Scene.blendermcp_anthropic_model = bpy.props.EnumProperty(
+        name="Model",
+        items=[
+            ("claude-3-5-sonnet-20240620", "Claude 3.5 Sonnet", "Most advanced Claude model"),
+            ("claude-3-opus-20240229", "Claude 3 Opus", "Most capable model for complex tasks"),
+            ("claude-3-haiku-20240307", "Claude 3 Haiku", "Fastest and most compact model"),
+        ],
+        default="claude-3-5-sonnet-20240620",
+    )
+
+    bpy.types.Scene.blendermcp_google_model = bpy.props.EnumProperty(
+        name="Model",
+        items=[
+            ("gemini-1.5-pro", "Gemini 1.5 Pro", "Most capable Gemini model"),
+            ("gemini-1.5-flash", "Gemini 1.5 Flash", "Fast and optimized Gemini model"),
+        ],
+        default="gemini-1.5-pro",
+    )
+
+    bpy.types.Scene.blendermcp_chat_prompt = bpy.props.StringProperty(
+        name="Ask AI",
+        description="Type your command for the AI assistant",
+        default="",
+    )
+
+    bpy.types.Scene.blendermcp_chat_status = bpy.props.StringProperty(
+        name="AI Status",
+        default="",
+    )
+
     # Dynamic client detection – import via filesystem for Blender compat
     if __package__:
         from .addon.utils.helpers import detect_installed_clients as _detect_clients
@@ -626,6 +700,18 @@ def unregister():
     del bpy.types.Scene.blendermcp_last_action_details
     del bpy.types.Scene.blendermcp_last_action_ok
     del bpy.types.Scene.blendermcp_show_advanced
+
+    # Online LLM
+    del bpy.types.Scene.blendermcp_llm_provider
+    del bpy.types.Scene.blendermcp_openai_key
+    del bpy.types.Scene.blendermcp_anthropic_key
+    del bpy.types.Scene.blendermcp_google_key
+    del bpy.types.Scene.blendermcp_openai_model
+    del bpy.types.Scene.blendermcp_anthropic_model
+    del bpy.types.Scene.blendermcp_google_model
+    del bpy.types.Scene.blendermcp_chat_prompt
+    del bpy.types.Scene.blendermcp_chat_status
+
 
     print("BlenderMCP addon unregistered")
 

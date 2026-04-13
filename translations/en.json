@@ -85,5 +85,16 @@
   "label_advanced_section": "Advanced (Stdio / Terminal):",
   "btn_get_api_key": "Get Key on Sketchfab",
   "btn_get_token_bk": "Get Token on BlenderKit",
-  "label_external_assets": "External Assets (Download):"
+  "label_external_assets": "External Assets (Download):",
+  "label_llm_assistant": "AI Assistant (Cloud)",
+  "label_llm_provider": "Provider",
+  "label_llm_model": "Model",
+  "label_chat_with_ai": "Chat with AI",
+  "btn_send_prompt": "Send Prompt",
+  "btn_get_openai_key": "Get OpenAI Key",
+  "btn_get_anthropic_key": "Get Anthropic Key",
+  "btn_get_google_key": "Get Google Key",
+  "status_ai_thinking": "Thinking...",
+  "status_ai_label": "Status:"
 }
+
