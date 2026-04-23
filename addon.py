@@ -319,6 +319,15 @@ class BlenderMCPServer(SocketBlenderMCPServer):
             # AmbientCG tools
             "search_ambientcg_materials": self.search_ambientcg_materials,
             "download_ambientcg_material": self.download_ambientcg_material,
+            # Scene manipulation
+            "get_active_object": self.get_active_object,
+            "set_active_object": self.set_active_object,
+            "transform_object": self.transform_object,
+            "add_primitive": self.add_primitive,
+            "delete_object": self.delete_object,
+            # Operator discovery
+            "list_blender_operators": self.list_blender_operators,
+            "get_operator_help": self.get_operator_help,
         }
 
         handler = handlers.get(cmd_type)
@@ -344,8 +353,8 @@ class BlenderMCPServer(SocketBlenderMCPServer):
         return {"status": "error", "message": f"Unknown command type: {cmd_type}"}
 
     # Delegation methods
-    def get_scene_info(self):
-        return _call_handler("scene_tools", "get_scene_info", bpy.context.scene)
+    def get_scene_info(self, **kwargs):
+        return _call_handler("scene_tools", "get_scene_info", bpy.context.scene, **kwargs)
     
     def get_object_info(self, name):
         return _call_handler("scene_tools", "get_object_info", bpy.context.scene, name)
@@ -448,6 +457,27 @@ class BlenderMCPServer(SocketBlenderMCPServer):
 
     def setup_product_studio(self, **kwargs):
         return _call_handler("studio_tools", "setup_product_studio", bpy.context.scene, **kwargs)
+
+    def get_active_object(self):
+        return _call_handler("scene_tools", "get_active_object", bpy.context.scene)
+    
+    def set_active_object(self, **kwargs):
+        return _call_handler("scene_tools", "set_active_object", bpy.context.scene, **kwargs)
+
+    def transform_object(self, **kwargs):
+        return _call_handler("transform_tools", "transform_object", bpy.context.scene, **kwargs)
+
+    def add_primitive(self, **kwargs):
+        return _call_handler("transform_tools", "add_primitive", bpy.context.scene, **kwargs)
+
+    def delete_object(self, **kwargs):
+        return _call_handler("transform_tools", "delete_object", bpy.context.scene, **kwargs)
+
+    def list_blender_operators(self, **kwargs):
+        return _call_handler("operator_tools", "list_blender_operators", bpy.context.scene, **kwargs)
+
+    def get_operator_help(self, **kwargs):
+        return _call_handler("operator_tools", "get_operator_help", bpy.context.scene, **kwargs)
 
     def render_catalog_angles(self, **kwargs):
         return _call_handler("reporting_tools", "render_catalog_angles", bpy.context.scene, **kwargs)

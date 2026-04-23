@@ -8,7 +8,7 @@ import zipfile
 import bpy
 
 # Use the robust networking module
-from addon.utils.network import friendly_error, log_asset_download, robust_get
+from ..utils.network import friendly_error, log_asset_download, robust_get
 
 
 def get_ambientcg_status(scene):
@@ -187,7 +187,9 @@ def download_ambientcg_material(scene, asset_id, resolution="2K", file_format="J
             if "Color" in maps:
                 img_node = nodes.new(type="ShaderNodeTexImage")
                 img_node.location = (-500, 300)
-                img_node.image = bpy.data.images.load(maps["Color"])
+                img = bpy.data.images.load(maps["Color"])
+                img.pack()
+                img_node.image = img
                 img_node.name = "Color_Map"
                 links.new(mapping.outputs["Vector"], img_node.inputs["Vector"])
                 links.new(img_node.outputs["Color"], principled.inputs["Base Color"])
@@ -196,7 +198,9 @@ def download_ambientcg_material(scene, asset_id, resolution="2K", file_format="J
             if "Roughness" in maps:
                 img_node = nodes.new(type="ShaderNodeTexImage")
                 img_node.location = (-500, 0)
-                img_node.image = bpy.data.images.load(maps["Roughness"])
+                img = bpy.data.images.load(maps["Roughness"])
+                img.pack()
+                img_node.image = img
                 img_node.image.colorspace_settings.name = "Non-Color"
                 img_node.name = "Roughness_Map"
                 links.new(mapping.outputs["Vector"], img_node.inputs["Vector"])
@@ -206,7 +210,9 @@ def download_ambientcg_material(scene, asset_id, resolution="2K", file_format="J
             if "Metallic" in maps:
                 img_node = nodes.new(type="ShaderNodeTexImage")
                 img_node.location = (-500, -300)
-                img_node.image = bpy.data.images.load(maps["Metallic"])
+                img = bpy.data.images.load(maps["Metallic"])
+                img.pack()
+                img_node.image = img
                 img_node.image.colorspace_settings.name = "Non-Color"
                 img_node.name = "Metallic_Map"
                 links.new(mapping.outputs["Vector"], img_node.inputs["Vector"])
@@ -216,7 +222,9 @@ def download_ambientcg_material(scene, asset_id, resolution="2K", file_format="J
             if "Normal" in maps:
                 img_node = nodes.new(type="ShaderNodeTexImage")
                 img_node.location = (-500, -600)
-                img_node.image = bpy.data.images.load(maps["Normal"])
+                img = bpy.data.images.load(maps["Normal"])
+                img.pack()
+                img_node.image = img
                 img_node.image.colorspace_settings.name = "Non-Color"
                 img_node.name = "Normal_Map"
 

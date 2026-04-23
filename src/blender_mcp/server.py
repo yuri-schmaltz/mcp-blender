@@ -423,22 +423,151 @@ def _read_file_with_retry(path: Path, attempts: int = 3, delay: float = 0.2) -> 
         else:
             break
 
-    assert last_error is not None
-    raise last_error
+        raise last_error
 
 
 @mcp.tool()
-def get_scene_info(ctx: Context) -> str:
-    """Get detailed information about the current Blender scene"""
+def get_scene_info(ctx: Context, filter_type: str = None, filter_name: str = None, limit: int = 100) -> str:
+    """
+    Get information about the current Blender scene, including objects and materials.
+    
+    Parameters:
+    - filter_type: Optional object type to filter by (e.g. 'MESH', 'LIGHT', 'CAMERA')
+    - filter_name: Optional partial name to filter objects
+    - limit: Maximum number of objects to return (default 100)
+    """
     try:
         blender = get_blender_connection()
-        result = blender.send_command("get_scene_info")
-
-        # Just return the JSON representation of what Blender sent us
+        result = blender.send_command("get_scene_info", {
+            "filter_type": filter_type,
+            "filter_name": filter_name,
+            "limit": limit
+        })
         return json.dumps(result, indent=2)
     except Exception as e:
-        logger.error(f"Error getting scene info from Blender: {str(e)}")
+        logger.error(f"Error getting scene info: {str(e)}")
         return tool_error("Error getting scene info", data={"detail": str(e)})
+
+
+@mcp.tool()
+def get_active_object(ctx: Context) -> str:
+    """Get the name and type of the currently active object in Blender."""
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("get_active_object")
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return tool_error("Error getting active object", data={"detail": str(e)})
+
+
+@mcp.tool()
+def set_active_object(ctx: Context, name: str) -> str:
+    """Set an object as active and selected by its name."""
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("set_active_object", {"name": name})
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return tool_error("Error setting active object", data={"detail": str(e)})
+
+
+@mcp.tool()
+def transform_object(
+    ctx: Context,
+    name: str,
+    location: list[float] = None,
+    rotation: list[float] = None,
+    scale: list[float] = None,
+    relative: bool = False,
+) -> str:
+    """
+    Precisely transform an object's location, rotation, and scale.
+    
+    Parameters:
+    - name: Name of the object
+    - location: List of [x, y, z] coordinates
+    - rotation: List of [x, y, z] Euler angles in degrees
+    - scale: List of [x, y, z] scale factors
+    - relative: If True, transformations are relative to current values
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("transform_object", {
+            "name": name,
+            "location": location,
+            "rotation": rotation,
+            "scale": scale,
+            "relative": relative
+        })
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return tool_error("Error transforming object", data={"detail": str(e)})
+
+
+@mcp.tool()
+def add_primitive(
+    ctx: Context,
+    type: str,
+    name: str = None,
+    location: list[float] = [0, 0, 0],
+    scale: list[float] = [1, 1, 1],
+) -> str:
+    """
+    Add a new primitive object (Cube, Sphere, etc.) to the scene.
+    
+    Parameters:
+    - type: Type of primitive ('CUBE', 'SPHERE', 'PLANE', 'MONKEY', 'CYLINDER', 'CONE', 'TORUS')
+    - name: Optional name for the new object
+    - location: [x, y, z] position
+    - scale: [x, y, z] scale
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("add_primitive", {
+            "type": type,
+            "name": name,
+            "location": location,
+            "scale": scale
+        })
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return tool_error("Error adding primitive", data={"detail": str(e)})
+
+
+@mcp.tool()
+def delete_object(ctx: Context, name: str) -> str:
+    """Delete an object from the scene by its name."""
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("delete_object", {"name": name})
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return tool_error("Error deleting object", data={"detail": str(e)})
+
+
+@mcp.tool()
+def list_blender_operators(ctx: Context, filter_text: str = "") -> str:
+    """
+    List available Blender operators (bpy.ops), optionally filtered.
+    Useful for discovering what commands can be executed via execute_blender_code.
+    """
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("list_blender_operators", {"filter_text": filter_text})
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return tool_error("Error listing operators", data={"detail": str(e)})
+
+
+@mcp.tool()
+def get_operator_help(ctx: Context, operator_name: str) -> str:
+    """Get documentation and parameters for a specific Blender operator (e.g. 'bpy.ops.mesh.subdivide')."""
+    try:
+        blender = get_blender_connection()
+        result = blender.send_command("get_operator_help", {"operator_name": operator_name})
+        return json.dumps(result, indent=2)
+    except Exception as e:
+        return tool_error("Error getting operator help", data={"detail": str(e)})
 
 
 @mcp.tool()

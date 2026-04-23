@@ -186,6 +186,10 @@ def download_sketchfab_model(scene, uid):
 
         main_file = os.path.join(temp_dir, gltf_files[0])
         bpy.ops.import_scene.gltf(filepath=main_file)
+        
+        # Pack all textures to ensure they persist after temp dir deletion
+        bpy.ops.file.pack_all()
+        
         imported_objects = [obj.name for obj in bpy.context.selected_objects]
 
         with suppress(Exception):

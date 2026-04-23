@@ -397,12 +397,12 @@ def batch_export_all_formats(scene, base_path=None):
         export_3mf_for_multicolor(scene, filepath=threemf_path)
 
         # 3. Generate Report
-        from addon.handlers.reporting_tools import generate_print_report
+        from .reporting_tools import generate_print_report
         report_path = os.path.join(base_path, "print_report.txt")
         generate_print_report(scene, filepath=report_path)
 
         # 4. Render Catalog (if studio exists)
-        from addon.handlers.studio_tools import render_catalog_angles
+        from .studio_tools import render_catalog_angles
         catalog_dir = os.path.join(base_path, "catalog")
         render_catalog_angles(scene, output_dir=catalog_dir)
 

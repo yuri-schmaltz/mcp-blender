@@ -119,8 +119,10 @@ def setup_camera(scene, focus_object_name=None, location=(0, -10, 5), create_new
             "camera_name": cam_obj.name,
             "is_active": (scene.camera == cam_obj)
         }
+    except Exception as e:
+        return {"error": f"Failed to set up camera: {str(e)}"}
 
-def get_scene_info(scene):
+def get_scene_info(scene, filter_type=None, filter_name=None, limit=100):
     """Get information about the current Blender scene"""
     try:
         # Simplify the scene info to reduce data size
@@ -129,13 +131,17 @@ def get_scene_info(scene):
             "object_count": len(scene.objects),
             "objects": [],
             "materials_count": len(bpy.data.materials),
+            "active_object": scene.objects.active.name if scene.objects.active else None
         }
 
-        # Collect minimal object information (limit to first 10 objects)
-        for i, obj in enumerate(scene.objects):
-            if i >= 10:
-                break
-
+        # Collect object information
+        count = 0
+        for obj in scene.objects:
+            if filter_type and obj.type != filter_type:
+                continue
+            if filter_name and filter_name.lower() not in obj.name.lower():
+                continue
+                
             obj_info = {
                 "name": obj.name,
                 "type": obj.type,
@@ -146,9 +152,32 @@ def get_scene_info(scene):
                 ],
             }
             scene_info["objects"].append(obj_info)
+            count += 1
+            if count >= limit:
+                break
         return scene_info
     except Exception as e:
         traceback.print_exc()
+        return {"error": str(e)}
+
+def get_active_object(scene):
+    """Get the currently active object"""
+    obj = bpy.context.view_layer.objects.active
+    if obj:
+        return {"name": obj.name, "type": obj.type}
+    return {"name": None, "message": "No active object"}
+
+def set_active_object(scene, name):
+    """Set the active object by name"""
+    try:
+        obj = scene.objects.get(name)
+        if not obj:
+            return {"error": f"Object '{name}' not found."}
+        
+        bpy.context.view_layer.objects.active = obj
+        obj.select_set(True)
+        return {"success": True, "message": f"Object '{name}' is now active."}
+    except Exception as e:
         return {"error": str(e)}
 
 
@@ -203,6 +232,7 @@ def get_object_info(scene, name):
             "edges": len(mesh.edges),
             "polygons": len(mesh.polygons),
         }
+    return obj_info
 
 def get_viewport_screenshot(scene, max_size=800, filepath=None, format="png"):
     """

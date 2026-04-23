@@ -200,7 +200,9 @@ def download_polyhaven_asset(scene, asset_id, asset_type="hdris", resolution="4k
             node_env = nodes.new(type="ShaderNodeTexEnvironment")
 
             try:
-                node_env.image = bpy.data.images.load(local_path)
+                img = bpy.data.images.load(local_path)
+                img.pack()
+                node_env.image = img
             except Exception as e:
                 return {"error": f"Failed to load image into Blender: {str(e)}"}
 
