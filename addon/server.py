@@ -187,7 +187,25 @@ class BlenderMCPServer:
                         # Execute command in Blender's main thread
                         def execute_wrapper():
                             try:
-                                response = self.execute_command(command)
+                                # Use temp_override to ensure context is available for operators
+                                # This helps when running from timers or background tasks
+                                override = {}
+                                if hasattr(bpy.context, "window_manager") and bpy.context.window_manager.windows:
+                                    win = bpy.context.window_manager.windows[0]
+                                    override["window"] = win
+                                    override["screen"] = win.screen
+                                    for area in win.screen.areas:
+                                        if area.type == 'VIEW_3D':
+                                            override["area"] = area
+                                            for region in area.regions:
+                                                if region.type == 'WINDOW':
+                                                    override["region"] = region
+                                                    break
+                                            break
+                                
+                                with bpy.context.temp_override(**override):
+                                    response = self.execute_command(command)
+                                    
                                 response_json = json.dumps(response)
                                 try:
                                     client.sendall(response_json.encode("utf-8"))

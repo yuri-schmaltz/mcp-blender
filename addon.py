@@ -12,6 +12,7 @@ import tempfile
 import time
 import traceback
 import zipfile
+import logging
 from contextlib import redirect_stdout, suppress
 
 import bpy
@@ -44,7 +45,21 @@ def _load_socket_server_class():
     return module.BlenderMCPServer
 
 
+def get_prefs():
+    """Access global addon preferences."""
+    return bpy.context.preferences.addons[__package__ if __package__ else "mcp_blender"].preferences
+
+
 SocketBlenderMCPServer = _load_socket_server_class()
+
+# Load tool schemas for MCP compliance
+try:
+    if __package__:
+        from .addon import tool_schemas
+    else:
+        import addon.tool_schemas as tool_schemas
+except ImportError:
+    tool_schemas = None
 
 # Import progress tracking for MP-02 (filesystem-based, no sys.path mutation)
 try:
@@ -328,6 +343,8 @@ class BlenderMCPServer(SocketBlenderMCPServer):
             # Operator discovery
             "list_blender_operators": self.list_blender_operators,
             "get_operator_help": self.get_operator_help,
+            # MCP Compliance
+            "list_tools": self.list_tools,
         }
 
         handler = handlers.get(cmd_type)
@@ -335,15 +352,21 @@ class BlenderMCPServer(SocketBlenderMCPServer):
             try:
                 result = handler(**params)
                 
-                # Push Undo state
+                # Push Undo state on success for non-read-only commands
                 read_only_cmds = (
                     "get_scene_info", "get_object_info", "get_polyhaven_categories",
                     "search_polyhaven_assets", "search_sketchfab_models", "search_ambientcg_materials",
-                    "get_polyhaven_status", "get_sketchfab_status", "get_ambientcg_status", "get_viewport_screenshot"
+                    "get_polyhaven_status", "get_sketchfab_status", "get_ambientcg_status", 
+                    "get_viewport_screenshot", "list_tools"
                 )
                 if cmd_type not in read_only_cmds:
                     try:
-                        bpy.ops.ed.undo_push(message=f"MCP: {cmd_type}")
+                        # Named Checkpoint: includes first param if available for better history
+                        msg = f"MCP: {cmd_type}"
+                        if params:
+                            first_val = next(iter(params.values()))
+                            msg += f" ({str(first_val)[:20]})"
+                        bpy.ops.ed.undo_push(message=msg)
                     except: pass
 
                 return {"status": "success", "result": result}
@@ -363,8 +386,8 @@ class BlenderMCPServer(SocketBlenderMCPServer):
         return _call_handler("scene_tools", "get_viewport_screenshot", bpy.context.scene, max_size, filepath, format)
 
     def execute_code(self, code):
-        if not bpy.context.scene.blendermcp_allow_code_execution:
-            return {"error": "Code execution blocked."}
+        if not get_prefs().allow_code_execution:
+            return {"error": "Code execution blocked by global preferences. Enable it in Edit > Preferences > Addons > Blender MCP."}
         try:
             namespace = {"bpy": bpy}
             capture_buffer = io.StringIO()
@@ -512,7 +535,85 @@ class BlenderMCPServer(SocketBlenderMCPServer):
     def list_functional_parts(self, **kwargs):
         return _call_handler("functional_parts", "list_functional_parts", bpy.context.scene, **kwargs)
 
+    def list_tools(self, **kwargs):
+        if tool_schemas:
+            return tool_schemas.get_tools_list()
+        return {"error": "Tool schemas not available"}
+
     # endregion
+
+
+class BlenderMCPPreferences(bpy.types.AddonPreferences):
+    bl_idname = __package__ if __package__ else "mcp_blender"
+
+    port: IntProperty(
+        name="Default Port",
+        description="Default port for the BlenderMCP socket server",
+        default=9876,
+        min=1024,
+        max=65535,
+    )
+
+    allow_code_execution: bpy.props.BoolProperty(
+        name="Allow Remote Code Execution",
+        description="WARNING: Allows the LLM to execute arbitrary Python code. Enable only if you trust the requests",
+        default=False,
+    )
+
+    # API Keys
+    openai_key: bpy.props.StringProperty(
+        name="OpenAI API Key",
+        subtype="PASSWORD",
+        description="Global OpenAI API key",
+        default="",
+    )
+
+    anthropic_key: bpy.props.StringProperty(
+        name="Anthropic API Key",
+        subtype="PASSWORD",
+        description="Global Anthropic API key",
+        default="",
+    )
+
+    google_key: bpy.props.StringProperty(
+        name="Google API Key",
+        subtype="PASSWORD",
+        description="Global Google Gemini API key",
+        default="",
+    )
+
+    sketchfab_api_key: bpy.props.StringProperty(
+        name="Sketchfab API Key",
+        subtype="PASSWORD",
+        description="Global Sketchfab API key",
+        default="",
+    )
+
+    blenderkit_api_key: bpy.props.StringProperty(
+        name="BlenderKit API Token",
+        subtype="PASSWORD",
+        description="Global BlenderKit API token",
+        default="",
+    )
+
+    def draw(self, context):
+        layout = self.layout
+        layout.label(text="Server Settings")
+        layout.prop(self, "port")
+        
+        box = layout.box()
+        box.label(text="Security", icon="ERROR")
+        box.prop(self, "allow_code_execution")
+        
+        layout.separator()
+        layout.label(text="API Keys (Stored Globally)")
+        
+        grid = layout.grid_flow(columns=2, even_columns=True, even_rows=False, align=True)
+        grid.prop(self, "openai_key")
+        grid.prop(self, "anthropic_key")
+        grid.prop(self, "google_key")
+        grid.prop(self, "sketchfab_api_key")
+        grid.prop(self, "blenderkit_api_key")
 
 
 # Blender UI Panel and Operators are now in addon/ui/ package.
@@ -530,19 +631,25 @@ _UI_CLASSES = _mod.UI_CLASSES
 
 # Registration functions
 def register():
+    # Configure logging to file
+    log_path = _logs_path()
+    logging.basicConfig(
+        filename=log_path,
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        force=True
+    )
+    logging.info("BlenderMCP starting...")
+
+    bpy.utils.register_class(BlenderMCPPreferences)
+
     bpy.types.Scene.blendermcp_port = IntProperty(
         name="Port",
-        description="Port number for the BlenderMCP socket server (default: 9876). Must match the port configured in your MCP client.",
+        description="Port number for the BlenderMCP socket server. Overrides global preference for this file.",
         default=9876,
         min=1024,
         max=65535,
     )
-    bpy.types.Scene.blendermcp_allow_code_execution = bpy.props.BoolProperty(
-        name="Allow Remote Code Execution",
-        description="WARNING: Allows the LLM to execute arbitrary Python code. Enable only if you trust the requests",
-        default=False,
-    )
-
     bpy.types.Scene.blendermcp_server_running = bpy.props.BoolProperty(
         name="Server Running",
         description="Indicates whether the MCP server is currently running and accepting connections",
@@ -573,20 +680,6 @@ def register():
         default=False,
     )
 
-    bpy.types.Scene.blendermcp_sketchfab_api_key = bpy.props.StringProperty(
-        name="Sketchfab API Key",
-        subtype="PASSWORD",
-        description="Your Sketchfab API key. Get it from sketchfab.com/settings/password. Only models you have download access to will work. WARNING: Saved in .blend file in plain text.",
-        default="",
-    )
-
-    bpy.types.Scene.blendermcp_blenderkit_api_key = bpy.props.StringProperty(
-        name="BlenderKit API Token",
-        subtype="PASSWORD",
-        description="Your BlenderKit API token. Get it from blenderkit.com/settings/profile. WARNING: Saved in .blend file in plain text.",
-        default="",
-    )
-
     # Online LLM Integration
     bpy.types.Scene.blendermcp_llm_provider = bpy.props.EnumProperty(
         name="Provider",
@@ -597,20 +690,6 @@ def register():
             ("GOOGLE", "Google", "Use Google Gemini models"),
         ],
         default="OPENAI",
-    )
-
-    bpy.types.Scene.blendermcp_openai_key = bpy.props.StringProperty(
-        name="OpenAI API Key",
-        subtype="PASSWORD",
-        description="Your OpenAI API key. WARNING: Saved in .blend file in plain text.",
-        default="",
-    )
-
-    bpy.types.Scene.blendermcp_anthropic_key = bpy.props.StringProperty(
-        name="Anthropic API Key",
-        subtype="PASSWORD",
-        description="Your Anthropic API key. WARNING: Saved in .blend file in plain text.",
-        default="",
     )
 
     bpy.types.Scene.blendermcp_google_key = bpy.props.StringProperty(
@@ -722,8 +801,6 @@ def unregister():
     del bpy.types.Scene.blendermcp_use_ambientcg
     del bpy.types.Scene.blendermcp_use_sketchfab
     del bpy.types.Scene.blendermcp_use_blenderkit
-    del bpy.types.Scene.blendermcp_sketchfab_api_key
-    del bpy.types.Scene.blendermcp_blenderkit_api_key
     del bpy.types.Scene.blendermcp_client_target
     del bpy.types.Scene.blendermcp_last_action
     del bpy.types.Scene.blendermcp_last_action_at
@@ -733,14 +810,14 @@ def unregister():
 
     # Online LLM
     del bpy.types.Scene.blendermcp_llm_provider
-    del bpy.types.Scene.blendermcp_openai_key
-    del bpy.types.Scene.blendermcp_anthropic_key
     del bpy.types.Scene.blendermcp_google_key
     del bpy.types.Scene.blendermcp_openai_model
     del bpy.types.Scene.blendermcp_anthropic_model
     del bpy.types.Scene.blendermcp_google_model
     del bpy.types.Scene.blendermcp_chat_prompt
     del bpy.types.Scene.blendermcp_chat_status
+
+    bpy.utils.unregister_class(BlenderMCPPreferences)
 
 
     print("BlenderMCP addon unregistered")

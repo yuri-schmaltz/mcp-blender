@@ -6,6 +6,15 @@ import requests
 from addon.utils.network import get_session, friendly_error
 
 
+def get_prefs():
+    """Access global addon preferences safely."""
+    # Try multiple common package names for robustness
+    for name in [__package__.split('.')[0] if __package__ else "mcp_blender", "mcp_blender", "bl_ext.user_default.mcp_blender"]:
+        if name in bpy.context.preferences.addons:
+            return bpy.context.preferences.addons[name].preferences
+    return None
+
+
 def _get_system_prompt():
     """Returns the system prompt that explains the AI's capabilities in Blender."""
     return """You are BlenderMCP, an AI assistant for Blender 3D. 
@@ -109,23 +118,27 @@ def handle_chat_request(context):
     if not prompt:
         return {"error": "Prompt is empty"}
     
+    prefs = get_prefs()
+    if not prefs:
+        return {"error": "Addon preferences not found"}
+
     try:
         if provider == "OPENAI":
-            key = scene.blendermcp_openai_key
+            key = prefs.openai_key
             model = scene.blendermcp_openai_model
-            if not key: return {"error": "Missing OpenAI API Key"}
+            if not key: return {"error": "Missing OpenAI API Key in Preferences"}
             response_text = call_openai(key, model, prompt)
             
         elif provider == "ANTHROPIC":
-            key = scene.blendermcp_anthropic_key
+            key = prefs.anthropic_key
             model = scene.blendermcp_anthropic_model
-            if not key: return {"error": "Missing Anthropic API Key"}
+            if not key: return {"error": "Missing Anthropic API Key in Preferences"}
             response_text = call_anthropic(key, model, prompt)
             
         elif provider == "GOOGLE":
-            key = scene.blendermcp_google_key
+            key = prefs.google_key
             model = scene.blendermcp_google_model
-            if not key: return {"error": "Missing Google API Key"}
+            if not key: return {"error": "Missing Google API Key in Preferences"}
             response_text = call_google(key, model, prompt)
         else:
             return {"error": "Unknown provider"}
@@ -133,7 +146,7 @@ def handle_chat_request(context):
         code = extract_python_code(response_text)
         
         if code:
-            if scene.blendermcp_allow_code_execution:
+            if prefs.allow_code_execution:
                 # Import main addon code execution logic if available, or do it directly
                 # For simplicity, we'll execute it here
                 try:

@@ -57,6 +57,17 @@ _i18n_spec.loader.exec_module(_i18n)
 t = _i18n.t
 
 
+def get_prefs(context):
+    """Access global addon preferences safely."""
+    # We use the package name if available, otherwise the known ID
+    pkg = __package__.split('.')[0] if __package__ else "mcp_blender"
+    # In some contexts, it might be nested under bl_ext
+    for name in [pkg, "mcp_blender", "bl_ext.user_default.mcp_blender"]:
+        if name in context.preferences.addons:
+            return context.preferences.addons[name].preferences
+    return None
+
+
 # =============================================================================
 # Main Panel: Connection & Status
 # =============================================================================
@@ -158,7 +169,11 @@ class BLENDERMCP_PT_Integrations(bpy.types.Panel):
         
         if scene.blendermcp_use_sketchfab:
             box = layout.box()
-            box.prop(scene, "blendermcp_sketchfab_api_key", text=t("prop_api_key"))
+            prefs = get_prefs(context)
+            if prefs:
+                box.prop(prefs, "sketchfab_api_key", text=t("prop_api_key"))
+            else:
+                box.label(text="Preferences not found", icon="ERROR")
             
             op = box.operator("blendermcp.open_url", text=t("btn_get_api_key"), icon="URL")
             op.url = "https://sketchfab.com/settings/password"
@@ -173,7 +188,11 @@ class BLENDERMCP_PT_Integrations(bpy.types.Panel):
         
         if scene.blendermcp_use_blenderkit:
             box = layout.box()
-            box.prop(scene, "blendermcp_blenderkit_api_key", text=t("prop_api_key"))
+            prefs = get_prefs(context)
+            if prefs:
+                box.prop(prefs, "blenderkit_api_key", text=t("prop_api_key"))
+            else:
+                box.label(text="Preferences not found", icon="ERROR")
             
             op = box.operator("blendermcp.open_url", text=t("btn_get_token_bk"), icon="URL")
             op.url = "https://www.blenderkit.com/settings/profile/"
@@ -204,19 +223,24 @@ class BLENDERMCP_PT_OnlineLLM(bpy.types.Panel):
         
         provider = scene.blendermcp_llm_provider
         
+        prefs = get_prefs(context)
+        if not prefs:
+            layout.label(text="Preferences not found", icon="ERROR")
+            return
+
         box = layout.box()
         if provider == "OPENAI":
-            box.prop(scene, "blendermcp_openai_key", text="OpenAI Key")
+            box.prop(prefs, "openai_key", text="OpenAI Key")
             box.prop(scene, "blendermcp_openai_model", text=t("label_llm_model"))
             op = box.operator("blendermcp.open_url", text=t("btn_get_openai_key"), icon="URL")
             op.url = "https://platform.openai.com/api-keys"
         elif provider == "ANTHROPIC":
-            box.prop(scene, "blendermcp_anthropic_key", text="Claude Key")
+            box.prop(prefs, "anthropic_key", text="Claude Key")
             box.prop(scene, "blendermcp_anthropic_model", text=t("label_llm_model"))
             op = box.operator("blendermcp.open_url", text=t("btn_get_anthropic_key"), icon="URL")
             op.url = "https://console.anthropic.com/settings/keys"
         elif provider == "GOOGLE":
-            box.prop(scene, "blendermcp_google_key", text="Gemini Key")
+            box.prop(prefs, "google_key", text="Gemini Key")
             box.prop(scene, "blendermcp_google_model", text=t("label_llm_model"))
             op = box.operator("blendermcp.open_url", text=t("btn_get_google_key"), icon="URL")
             op.url = "https://aistudio.google.com/app/apikey"
@@ -271,7 +295,11 @@ class BLENDERMCP_PT_Setup(bpy.types.Panel):
         layout.separator(factor=0.5)
 
         # Integrations (Security side)
-        layout.prop(scene, "blendermcp_allow_code_execution", text=t("label_remote_code_short"), icon="SCRIPT")
+        prefs = get_prefs(context)
+        if prefs:
+            layout.prop(prefs, "allow_code_execution", text=t("label_remote_code_short"), icon="SCRIPT")
+        else:
+            layout.label(text="Preferences not found", icon="ERROR")
         
         layout.separator(factor=0.5)
         

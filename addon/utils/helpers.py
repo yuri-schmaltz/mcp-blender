@@ -8,6 +8,24 @@ import shutil
 import subprocess
 import sys
 import time
+import bpy
+
+
+def ensure_mode(mode: str):
+    """Decorator to ensure Blender is in the correct mode before running a function.
+    
+    Supported modes: 'OBJECT', 'EDIT', 'POSE', 'SCULPT', 'VERTEX_PAINT', 'WEIGHT_PAINT', 'TEXTURE_PAINT'.
+    """
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            if bpy.context.mode != mode:
+                try:
+                    bpy.ops.object.mode_set(mode=mode)
+                except Exception as e:
+                    return {"error": f"Failed to switch to {mode} (Current: {bpy.context.mode}): {str(e)}"}
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
 
 
 # ── Client auto-detection ───────────────────────────────────────────────

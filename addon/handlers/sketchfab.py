@@ -11,6 +11,15 @@ import bpy
 
 from ..utils.network import robust_get
 
+
+def get_prefs():
+    """Access global addon preferences safely."""
+    # Try multiple common package names for robustness
+    for name in [__package__.split('.')[0] if __package__ else "mcp_blender", "mcp_blender", "bl_ext.user_default.mcp_blender"]:
+        if name in bpy.context.preferences.addons:
+            return bpy.context.preferences.addons[name].preferences
+    return None
+
 # Try to get progress tracker
 PROGRESS_AVAILABLE = False
 def get_progress_tracker():
@@ -27,7 +36,8 @@ except ImportError:
 def get_sketchfab_status(scene):
     """Get the current status of Sketchfab integration"""
     enabled = scene.blendermcp_use_sketchfab
-    api_key = scene.blendermcp_sketchfab_api_key
+    prefs = get_prefs()
+    api_key = prefs.sketchfab_api_key if prefs else ""
 
     if api_key:
         try:
@@ -76,9 +86,10 @@ def get_sketchfab_status(scene):
 def search_sketchfab_models(scene, query, categories=None, count=20, downloadable=True):
     """Search for models on Sketchfab"""
     try:
-        api_key = scene.blendermcp_sketchfab_api_key
+        prefs = get_prefs()
+        api_key = prefs.sketchfab_api_key if prefs else ""
         if not api_key:
-            return {"error": "Sketchfab API key is not configured"}
+            return {"error": "Sketchfab API key is not configured in Preferences"}
 
         params = {
             "type": "models",
@@ -115,9 +126,10 @@ def search_sketchfab_models(scene, query, categories=None, count=20, downloadabl
 def download_sketchfab_model(scene, uid):
     """Download and import a model from Sketchfab"""
     try:
-        api_key = scene.blendermcp_sketchfab_api_key
+        prefs = get_prefs()
+        api_key = prefs.sketchfab_api_key if prefs else ""
         if not api_key:
-            return {"error": "Sketchfab API key is not configured"}
+            return {"error": "Sketchfab API key is not configured in Preferences"}
 
         headers = {"Authorization": f"Token {api_key}"}
         download_endpoint = f"https://api.sketchfab.com/v3/models/{uid}/download"

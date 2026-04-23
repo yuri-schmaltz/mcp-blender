@@ -7,6 +7,15 @@ import time
 # BlenderKit API URL
 BASE_API_URL = "https://www.blenderkit.com/api/v1"
 
+
+def get_prefs():
+    """Access global addon preferences safely."""
+    # Try multiple common package names for robustness
+    for name in [__package__.split('.')[0] if __package__ else "mcp_blender", "mcp_blender", "bl_ext.user_default.mcp_blender"]:
+        if name in bpy.context.preferences.addons:
+            return context.preferences.addons[name].preferences
+    return None
+
 def search_blenderkit(scene, query, asset_type='model', free_only=True):
     """
     Search BlenderKit for assets.
@@ -77,7 +86,8 @@ def import_blenderkit_asset(scene, asset_id):
         asset_data = response.json()
         
         # If the user provided a token in our addon, we could use it here.
-        token = scene.blendermcp_blenderkit_api_key
+        prefs = get_prefs()
+        token = prefs.blenderkit_api_key if prefs else ""
         
         return {
             "message": f"Asset {asset_data.get('name')} found. Specialized download logic is being initialized. "

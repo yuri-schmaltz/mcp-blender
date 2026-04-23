@@ -15,27 +15,38 @@ class AssetCache:
         self.ttl_seconds = ttl_days * 24 * 3600
         os.makedirs(cache_dir, exist_ok=True)
 
-    def _get_cache_path(self, asset_id: str, asset_type: str, resolution: str = "") -> str:
-        """Generate cache file path from asset identifiers."""
+    def _get_cache_path(self, asset_id: str, asset_type: str, resolution: str = "", ext: str = "") -> str:
+        """Generate cache file path from asset identifiers and optional extension."""
         import hashlib
 
         cache_key = f"{asset_id}_{asset_type}_{resolution}"
         cache_hash = hashlib.sha256(cache_key.encode("utf-8")).hexdigest()
-        return os.path.join(self.cache_dir, f"{cache_hash}.cache")
+        filename = f"{cache_hash}{ext}"
+        return os.path.join(self.cache_dir, filename)
 
     def get(self, asset_id: str, asset_type: str, resolution: str = "") -> str | None:
         """Retrieve cached asset path if valid, None otherwise. Logs hit/miss/expire and timing."""
         import logging
+        import glob
 
         start = time.time()
         logger = logging.getLogger("AssetCache")
-        cache_path = self._get_cache_path(asset_id, asset_type, resolution)
+        
+        # Search for any file matching this hash (regardless of extension)
+        import hashlib
+        cache_key = f"{asset_id}_{asset_type}_{resolution}"
+        cache_hash = hashlib.sha256(cache_key.encode("utf-8")).hexdigest()
+        
+        pattern = os.path.join(self.cache_dir, f"{cache_hash}*")
+        matches = glob.glob(pattern)
 
-        if not os.path.exists(cache_path):
+        if not matches:
             logger.info(f"Cache MISS for {asset_id} [{asset_type}/{resolution}]")
-            logger.debug(f"Checked path: {cache_path}")
+            logger.debug(f"Checked pattern: {pattern}")
             logger.info(f"Cache lookup took {time.time() - start:.4f}s")
             return None
+
+        cache_path = matches[0]
 
         # Check if cache is expired
         file_age = time.time() - os.path.getmtime(cache_path)
@@ -58,7 +69,10 @@ class AssetCache:
 
         start = time.time()
         logger = logging.getLogger("AssetCache")
-        cache_path = self._get_cache_path(asset_id, asset_type, resolution)
+        
+        # Preservar a extensão original
+        ext = os.path.splitext(source_path)[1]
+        cache_path = self._get_cache_path(asset_id, asset_type, resolution, ext)
 
         try:
             shutil.copy2(source_path, cache_path)
