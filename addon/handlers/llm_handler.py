@@ -112,32 +112,32 @@ def extract_python_code(text):
 def handle_chat_request(context):
     """Main entry point for handling a chat request from the UI."""
     scene = context.scene
-    provider = scene.blendermcp_llm_provider
+    prefs = get_prefs()
+    if not prefs:
+        return {"error": "Addon preferences not found"}
+        
+    provider = prefs.llm_provider
     prompt = scene.blendermcp_chat_prompt
     
     if not prompt:
         return {"error": "Prompt is empty"}
-    
-    prefs = get_prefs()
-    if not prefs:
-        return {"error": "Addon preferences not found"}
 
     try:
         if provider == "OPENAI":
             key = prefs.openai_key
-            model = scene.blendermcp_openai_model
+            model = prefs.openai_model
             if not key: return {"error": "Missing OpenAI API Key in Preferences"}
             response_text = call_openai(key, model, prompt)
             
         elif provider == "ANTHROPIC":
             key = prefs.anthropic_key
-            model = scene.blendermcp_anthropic_model
+            model = prefs.anthropic_model
             if not key: return {"error": "Missing Anthropic API Key in Preferences"}
             response_text = call_anthropic(key, model, prompt)
             
         elif provider == "GOOGLE":
             key = prefs.google_key
-            model = scene.blendermcp_google_model
+            model = prefs.google_model
             if not key: return {"error": "Missing Google API Key in Preferences"}
             response_text = call_google(key, model, prompt)
         else:

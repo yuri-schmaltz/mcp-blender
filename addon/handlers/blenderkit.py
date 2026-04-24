@@ -13,13 +13,16 @@ def get_prefs():
     # Try multiple common package names for robustness
     for name in [__package__.split('.')[0] if __package__ else "mcp_blender", "mcp_blender", "bl_ext.user_default.mcp_blender"]:
         if name in bpy.context.preferences.addons:
-            return context.preferences.addons[name].preferences
+            return bpy.context.preferences.addons[name].preferences
     return None
 
 def search_blenderkit(scene, query, asset_type='model', free_only=True):
     """
     Search BlenderKit for assets.
     """
+    prefs = get_prefs()
+    if not (prefs and prefs.use_blenderkit):
+        return {"error": "BlenderKit integration is disabled in Preferences."}
     url = f"{BASE_API_URL}/search/"
     params = {
         "query": query,

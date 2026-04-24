@@ -11,9 +11,18 @@ import bpy
 from ..utils.network import friendly_error, log_asset_download, robust_get
 
 
+def get_prefs():
+    """Access global addon preferences safely."""
+    for name in [__package__.split('.')[0] if __package__ else "mcp_blender", "mcp_blender", "bl_ext.user_default.mcp_blender"]:
+        if name in bpy.context.preferences.addons:
+            return bpy.context.preferences.addons[name].preferences
+    return None
+
+
 def get_ambientcg_status(scene):
     """Get the current status of AmbientCG integration"""
-    enabled = scene.blendermcp_use_ambientcg
+    prefs = get_prefs()
+    enabled = prefs.use_ambientcg if prefs else False
     if enabled:
         return {
             "enabled": True,
@@ -23,9 +32,9 @@ def get_ambientcg_status(scene):
         return {
             "enabled": False,
             "message": """AmbientCG integration is currently disabled. To enable it:
-                        1. In the 3D Viewport, find the BlenderMCP panel in the sidebar (press N if hidden)
-                        2. Open 'Integrations' panel
-                        3. Check the 'AmbientCG Assets' checkbox
+                        1. Go to Edit > Preferences > Add-ons
+                        2. Find Blender MCP and expand it
+                        3. Check 'Use AmbientCG' in the Integrations section
                         4. Restart the connection to your LLM client""",
         }
 
@@ -33,8 +42,9 @@ def get_ambientcg_status(scene):
 def search_ambientcg_materials(scene, query="", limit=20):
     """Search for materials on AmbientCG based on query"""
     try:
-        if not scene.blendermcp_use_ambientcg:
-            return {"error": "AmbientCG integration is disabled. Please enable it in the BlenderMCP panel."}
+        prefs = get_prefs()
+        if not (prefs and prefs.use_ambientcg):
+            return {"error": "AmbientCG integration is disabled. Please enable it in the Addon Preferences."}
 
         url = "https://ambientcg.com/api/v2/full_json"
         params = {
@@ -76,8 +86,9 @@ def search_ambientcg_materials(scene, query="", limit=20):
 def download_ambientcg_material(scene, asset_id, resolution="2K", file_format="JPG", progress_tracker=None):
     """Download and set up an AmbientCG material"""
     try:
-        if not scene.blendermcp_use_ambientcg:
-            return {"error": "AmbientCG integration is disabled. Please enable it in the BlenderMCP panel."}
+        prefs = get_prefs()
+        if not (prefs and prefs.use_ambientcg):
+            return {"error": "AmbientCG integration is disabled. Please enable it in the Addon Preferences."}
 
         # Validate resolution formatting (AmbientCG uses uppercase K: 1K, 2K, 4K, 8K)
         # LLMs often pass "2k" instead of "2K"

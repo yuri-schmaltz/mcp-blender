@@ -35,8 +35,8 @@ except ImportError:
 
 def get_sketchfab_status(scene):
     """Get the current status of Sketchfab integration"""
-    enabled = scene.blendermcp_use_sketchfab
     prefs = get_prefs()
+    enabled = prefs.use_sketchfab if prefs else False
     api_key = prefs.sketchfab_api_key if prefs else ""
 
     if api_key:
@@ -67,8 +67,8 @@ def get_sketchfab_status(scene):
         return {
             "enabled": False,
             "message": """Sketchfab integration is currently enabled, but API key is not given. To enable it:
-                        1. In the 3D Viewport, find the BlenderMCP panel in the sidebar (press N if hidden)
-                        2. Keep the 'Use Sketchfab' checkbox checked
+                        1. Go to Edit > Preferences > Add-ons
+                        2. Find Blender MCP and expand it
                         3. Enter your Sketchfab API Key
                         4. Restart the connection to your LLM client""",
         }
@@ -76,10 +76,11 @@ def get_sketchfab_status(scene):
         return {
             "enabled": False,
             "message": """Sketchfab integration is currently disabled. To enable it:
-                        1. In the 3D Viewport, find the BlenderMCP panel in the sidebar (press N if hidden)
-                        2. Check the 'Use assets from Sketchfab' checkbox
-                        3. Enter your Sketchfab API Key
-                        4. Restart the connection to your LLM client""",
+                        1. Go to Edit > Preferences > Add-ons
+                        2. Find Blender MCP and expand it
+                        3. Check 'Use Sketchfab' in the Integrations section
+                        4. Enter your Sketchfab API Key
+                        5. Restart the connection to your LLM client""",
         }
 
 

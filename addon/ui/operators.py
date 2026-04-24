@@ -303,13 +303,13 @@ class BLENDERMCP_OT_OpenURL(bpy.types.Operator):
     bl_label = "Open URL"
     bl_description = "Open a specific URL in the system browser"
     
-    url = bpy.props.StringProperty(name="URL", default="")
+    target_url: bpy.props.StringProperty(name="URL", default="")
 
 
     def execute(self, context):
-        if not self.url:
+        if not self.target_url:
             return {"CANCELLED"}
-        _open_in_system(self.url)
+        _open_in_system(self.target_url)
         return {"FINISHED"}
 
 
@@ -322,7 +322,7 @@ class BLENDERMCP_OT_DownloadProgress(bpy.types.Operator):
     bl_idname = "blendermcp.download_progress"
     bl_label = "Download Progress"
 
-    operation_id = bpy.props.StringProperty(default="")
+    operation_id: bpy.props.StringProperty(default="")
     _timer = None
     _last_progress = 0
 
@@ -439,7 +439,7 @@ class BLENDERMCP_OT_MarkFunctionalPart(bpy.types.Operator):
     bl_label = "Mark as Functional Part"
     bl_description = "Add metadata to object for engineering management"
     
-    role = bpy.props.StringProperty(name="Role", default="Part")
+    role: bpy.props.StringProperty(name="Role", default="Part")
 
 
     def execute(self, context):

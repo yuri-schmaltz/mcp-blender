@@ -596,24 +596,109 @@ class BlenderMCPPreferences(bpy.types.AddonPreferences):
         default="",
     )
 
+    # Integration Toggles
+    use_polyhaven: bpy.props.BoolProperty(
+        name="Use Poly Haven",
+        description="Enable Poly Haven asset integration",
+        default=False,
+    )
+    use_ambientcg: bpy.props.BoolProperty(
+        name="Use AmbientCG",
+        description="Enable AmbientCG asset integration",
+        default=False,
+    )
+    use_sketchfab: bpy.props.BoolProperty(
+        name="Use Sketchfab",
+        description="Enable Sketchfab asset integration",
+        default=False,
+    )
+    use_blenderkit: bpy.props.BoolProperty(
+        name="Use BlenderKit",
+        description="Enable BlenderKit asset integration",
+        default=False,
+    )
+
+    # Online LLM Integration
+    llm_provider: bpy.props.EnumProperty(
+        name="Provider",
+        description="Select the online LLM provider to use",
+        items=[
+            ("OPENAI", "OpenAI", "Use OpenAI models"),
+            ("ANTHROPIC", "Anthropic", "Use Anthropic models"),
+            ("GOOGLE", "Google", "Use Google Gemini models"),
+        ],
+        default="OPENAI",
+    )
+
+    openai_model: bpy.props.EnumProperty(
+        name="OpenAI Model",
+        items=[
+            ("gpt-4o", "GPT-4o", ""),
+            ("gpt-4o-mini", "GPT-4o Mini", ""),
+            ("gpt-3.5-turbo", "GPT-3.5 Turbo", ""),
+        ],
+        default="gpt-4o",
+    )
+
+    anthropic_model: bpy.props.EnumProperty(
+        name="Anthropic Model",
+        items=[
+            ("claude-3-5-sonnet-20240620", "Claude 3.5 Sonnet", ""),
+            ("claude-3-opus-20240229", "Claude 3 Opus", ""),
+            ("claude-3-haiku-20240307", "Claude 3 Haiku", ""),
+        ],
+        default="claude-3-5-sonnet-20240620",
+    )
+
+    google_model: bpy.props.EnumProperty(
+        name="Google Model",
+        items=[
+            ("gemini-1.5-pro", "Gemini 1.5 Pro", ""),
+            ("gemini-1.5-flash", "Gemini 1.5 Flash", ""),
+        ],
+        default="gemini-1.5-pro",
+    )
+
     def draw(self, context):
         layout = self.layout
-        layout.label(text="Server Settings")
-        layout.prop(self, "port")
         
+        # Section: Connection
         box = layout.box()
-        box.label(text="Security", icon="ERROR")
-        box.prop(self, "allow_code_execution")
+        box.label(text="Server & Security", icon="SETTINGS")
+        row = box.row()
+        row.prop(self, "port")
+        row.prop(self, "allow_code_execution", toggle=True)
         
-        layout.separator()
-        layout.label(text="API Keys (Stored Globally)")
+        # Section: Integrations
+        box = layout.box()
+        box.label(text="Integrations", icon="WORLD")
+        grid = box.grid_flow(columns=2, even_columns=True, even_rows=False, align=True)
+        grid.prop(self, "use_polyhaven", text="Poly Haven", icon="IMAGE_DATA")
+        grid.prop(self, "use_ambientcg", text="AmbientCG", icon="MATERIAL")
+        grid.prop(self, "use_sketchfab", text="Sketchfab", icon="MESH_MONKEY")
+        grid.prop(self, "use_blenderkit", text="BlenderKit", icon="IMAGE_DATA")
         
-        grid = layout.grid_flow(columns=2, even_columns=True, even_rows=False, align=True)
-        grid.prop(self, "openai_key")
-        grid.prop(self, "anthropic_key")
-        grid.prop(self, "google_key")
-        grid.prop(self, "sketchfab_api_key")
-        grid.prop(self, "blenderkit_api_key")
+        # Section: API Keys
+        box = layout.box()
+        box.label(text="API Keys & LLM Config", icon="CONSOLE")
+        
+        col = box.column(align=True)
+        col.prop(self, "llm_provider")
+        
+        if self.llm_provider == 'OPENAI':
+            col.prop(self, "openai_key")
+            col.prop(self, "openai_model")
+        elif self.llm_provider == 'ANTHROPIC':
+            col.prop(self, "anthropic_key")
+            col.prop(self, "anthropic_model")
+        elif self.llm_provider == 'GOOGLE':
+            col.prop(self, "google_key")
+            col.prop(self, "google_model")
+        
+        box.separator()
+        col = box.column(align=True)
+        col.prop(self, "sketchfab_api_key")
+        col.prop(self, "blenderkit_api_key")
 
 
 # Blender UI Panel and Operators are now in addon/ui/ package.
@@ -650,84 +735,6 @@ def register():
         min=1024,
         max=65535,
     )
-    bpy.types.Scene.blendermcp_server_running = bpy.props.BoolProperty(
-        name="Server Running",
-        description="Indicates whether the MCP server is currently running and accepting connections",
-        default=False,
-    )
-
-    bpy.types.Scene.blendermcp_use_polyhaven = bpy.props.BoolProperty(
-        name="Use Poly Haven",
-        description="Enable Poly Haven asset integration. Allows downloading HDRIs, textures, and 3D models from Poly Haven API. Requires internet connection.",
-        default=False,
-    )
-
-    bpy.types.Scene.blendermcp_use_ambientcg = bpy.props.BoolProperty(
-        name="Use AmbientCG",
-        description="Enable AmbientCG asset integration. Search and download PBR textures from AmbientCG API.",
-        default=False,
-    )
-
-    bpy.types.Scene.blendermcp_use_sketchfab = bpy.props.BoolProperty(
-        name="Use Sketchfab",
-        description="Enable Sketchfab asset integration. Search and download 3D models from Sketchfab. Requires API key and internet connection.",
-        default=False,
-    )
-
-    bpy.types.Scene.blendermcp_use_blenderkit = bpy.props.BoolProperty(
-        name="Use BlenderKit",
-        description="Enable BlenderKit asset integration. Search and download models, materials, and textures from BlenderKit API.",
-        default=False,
-    )
-
-    # Online LLM Integration
-    bpy.types.Scene.blendermcp_llm_provider = bpy.props.EnumProperty(
-        name="Provider",
-        description="Select the online LLM provider to use",
-        items=[
-            ("OPENAI", "OpenAI", "Use OpenAI models (GPT-4o, etc.)"),
-            ("ANTHROPIC", "Anthropic", "Use Anthropic models (Claude 3.5, etc.)"),
-            ("GOOGLE", "Google", "Use Google Gemini models"),
-        ],
-        default="OPENAI",
-    )
-
-    bpy.types.Scene.blendermcp_google_key = bpy.props.StringProperty(
-        name="Google API Key",
-        subtype="PASSWORD",
-        description="Your Google Gemini API key. WARNING: Saved in .blend file in plain text.",
-        default="",
-    )
-
-    bpy.types.Scene.blendermcp_openai_model = bpy.props.EnumProperty(
-        name="Model",
-        items=[
-            ("gpt-4o", "GPT-4o", "OpenAI's most capable model"),
-            ("gpt-4o-mini", "GPT-4o Mini", "Fast and efficient model"),
-            ("gpt-3.5-turbo", "GPT-3.5 Turbo", "Legacy balanced model"),
-        ],
-        default="gpt-4o",
-    )
-
-    bpy.types.Scene.blendermcp_anthropic_model = bpy.props.EnumProperty(
-        name="Model",
-        items=[
-            ("claude-3-5-sonnet-20240620", "Claude 3.5 Sonnet", "Most advanced Claude model"),
-            ("claude-3-opus-20240229", "Claude 3 Opus", "Most capable model for complex tasks"),
-            ("claude-3-haiku-20240307", "Claude 3 Haiku", "Fastest and most compact model"),
-        ],
-        default="claude-3-5-sonnet-20240620",
-    )
-
-    bpy.types.Scene.blendermcp_google_model = bpy.props.EnumProperty(
-        name="Model",
-        items=[
-            ("gemini-1.5-pro", "Gemini 1.5 Pro", "Most capable Gemini model"),
-            ("gemini-1.5-flash", "Gemini 1.5 Flash", "Fast and optimized Gemini model"),
-        ],
-        default="gemini-1.5-pro",
-    )
-
     bpy.types.Scene.blendermcp_chat_prompt = bpy.props.StringProperty(
         name="Ask AI",
         description="Type your command for the AI assistant",
@@ -794,29 +801,30 @@ def unregister():
         except Exception:
             pass
 
-    del bpy.types.Scene.blendermcp_port
-    del bpy.types.Scene.blendermcp_allow_code_execution
-    del bpy.types.Scene.blendermcp_server_running
-    del bpy.types.Scene.blendermcp_use_polyhaven
-    del bpy.types.Scene.blendermcp_use_ambientcg
-    del bpy.types.Scene.blendermcp_use_sketchfab
-    del bpy.types.Scene.blendermcp_use_blenderkit
-    del bpy.types.Scene.blendermcp_client_target
-    del bpy.types.Scene.blendermcp_last_action
-    del bpy.types.Scene.blendermcp_last_action_at
-    del bpy.types.Scene.blendermcp_last_action_details
-    del bpy.types.Scene.blendermcp_last_action_ok
-    del bpy.types.Scene.blendermcp_show_advanced
-
-    # Online LLM
-    del bpy.types.Scene.blendermcp_llm_provider
-    del bpy.types.Scene.blendermcp_google_key
-    del bpy.types.Scene.blendermcp_openai_model
-    del bpy.types.Scene.blendermcp_anthropic_model
-    del bpy.types.Scene.blendermcp_google_model
-    del bpy.types.Scene.blendermcp_chat_prompt
-    del bpy.types.Scene.blendermcp_chat_status
-
+    # Cleanup Scene properties safely
+    for prop in [
+        "blendermcp_port",
+        "blendermcp_server_running",
+        "blendermcp_use_polyhaven",
+        "blendermcp_use_ambientcg",
+        "blendermcp_use_sketchfab",
+        "blendermcp_use_blenderkit",
+        "blendermcp_llm_provider",
+        "blendermcp_google_key",
+        "blendermcp_openai_model",
+        "blendermcp_anthropic_model",
+        "blendermcp_google_model",
+        "blendermcp_chat_prompt",
+        "blendermcp_chat_status",
+        "blendermcp_client_target",
+        "blendermcp_last_action",
+        "blendermcp_last_action_at",
+        "blendermcp_last_action_details",
+        "blendermcp_last_action_ok",
+        "blendermcp_show_advanced"
+    ]:
+        if hasattr(bpy.types.Scene, prop):
+            delattr(bpy.types.Scene, prop)
     bpy.utils.unregister_class(BlenderMCPPreferences)
 
 

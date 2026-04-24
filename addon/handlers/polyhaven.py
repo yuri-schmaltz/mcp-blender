@@ -26,9 +26,18 @@ except ImportError:
     pass
 
 
+def get_prefs():
+    """Access global addon preferences safely."""
+    for name in [__package__.split('.')[0] if __package__ else "mcp_blender", "mcp_blender", "bl_ext.user_default.mcp_blender"]:
+        if name in bpy.context.preferences.addons:
+            return bpy.context.preferences.addons[name].preferences
+    return None
+
+
 def get_polyhaven_status(scene):
     """Get the current status of PolyHaven integration"""
-    enabled = scene.blendermcp_use_polyhaven
+    prefs = get_prefs()
+    enabled = prefs.use_polyhaven if prefs else False
     if enabled:
         return {
             "enabled": True,
@@ -38,9 +47,10 @@ def get_polyhaven_status(scene):
         return {
             "enabled": False,
             "message": """PolyHaven integration is currently disabled. To enable it:
-                        1. In the 3D Viewport, find the BlenderMCP panel in the sidebar (press N if hidden)
-                        2. Check the 'Use assets from Poly Haven' checkbox
-                        3. Restart the connection to your LLM client""",
+                        1. Go to Edit > Preferences > Add-ons
+                        2. Find Blender MCP and expand it
+                        3. Check 'Use Poly Haven' in the Integrations section
+                        4. Restart the connection to your LLM client""",
         }
 
 
@@ -121,7 +131,8 @@ def resolve_polyhaven_resolution(asset_id, asset_type, requested_res="4k"):
 
 def download_polyhaven_asset(scene, asset_id, asset_type="hdris", resolution="4k"):
     """Download and set up a Poly Haven asset"""
-    if not scene.blendermcp_use_polyhaven:
+    prefs = get_prefs()
+    if not (prefs and prefs.use_polyhaven):
         return {"error": "PolyHaven integration is disabled in Blender settings."}
 
     resolution = resolve_polyhaven_resolution(asset_id, asset_type, resolution)

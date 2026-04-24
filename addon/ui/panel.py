@@ -76,7 +76,7 @@ class BLENDERMCP_PT_Panel(bpy.types.Panel):
     bl_idname = "BLENDERMCP_PT_Panel"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "BlenderMCP"
+    bl_category = "MCP"
 
     def draw(self, context):
         layout = self.layout
@@ -115,7 +115,7 @@ class BLENDERMCP_PT_Engineering(bpy.types.Panel):
     bl_idname = "BLENDERMCP_PT_Engineering"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "BlenderMCP"
+    bl_category = "MCP"
     bl_parent_id = "BLENDERMCP_PT_Panel"
 
     def draw(self, context):
@@ -144,62 +144,29 @@ class BLENDERMCP_PT_Integrations(bpy.types.Panel):
     bl_idname = "BLENDERMCP_PT_Integrations"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "BlenderMCP"
+    bl_category = "MCP"
     bl_parent_id = "BLENDERMCP_PT_Panel"
     bl_options = {"DEFAULT_CLOSED"}
 
     def draw(self, context):
         layout = self.layout
-        scene = context.scene
+        prefs = get_prefs(context)
+        if not prefs:
+            layout.label(text="Preferences not found", icon="ERROR")
+            return
 
         col = layout.column(align=True)
         col.label(text=t("label_external_assets"))
         
-        # Poly Haven
-        row = col.row(align=True)
-        row.prop(scene, "blendermcp_use_polyhaven", text=t("prop_polyhaven_assets"), icon="WORLD")
+        col.prop(prefs, "use_polyhaven", text=t("prop_polyhaven_assets"), icon="WORLD")
+        col.prop(prefs, "use_ambientcg", text=t("prop_ambientcg_assets"), icon="MATERIAL")
+        col.prop(prefs, "use_sketchfab", text=t("prop_sketchfab_assets"), icon="MESH_MONKEY")
+        col.prop(prefs, "use_blenderkit", text="BlenderKit Assets", icon="IMAGE_DATA")
         
-        # AmbientCG
-        row = col.row(align=True)
-        row.prop(scene, "blendermcp_use_ambientcg", text=t("prop_ambientcg_assets"), icon="MATERIAL")
-
-        # Sketchfab
-        row = col.row(align=True)
-        row.prop(scene, "blendermcp_use_sketchfab", text=t("prop_sketchfab_assets"), icon="MESH_MONKEY")
-        
-        if scene.blendermcp_use_sketchfab:
-            box = layout.box()
-            prefs = get_prefs(context)
-            if prefs:
-                box.prop(prefs, "sketchfab_api_key", text=t("prop_api_key"))
-            else:
-                box.label(text="Preferences not found", icon="ERROR")
-            
-            op = box.operator("blendermcp.open_url", text=t("btn_get_api_key"), icon="URL")
-            op.url = "https://sketchfab.com/settings/password"
-            
-            warn = box.row()
-            warn.alert = True
-            warn.label(text=t("warn_api_key_saved"), icon="ERROR")
-
-        # BlenderKit
-        row = col.row(align=True)
-        row.prop(scene, "blendermcp_use_blenderkit", text="BlenderKit Assets", icon="IMAGE_DATA")
-        
-        if scene.blendermcp_use_blenderkit:
-            box = layout.box()
-            prefs = get_prefs(context)
-            if prefs:
-                box.prop(prefs, "blenderkit_api_key", text=t("prop_api_key"))
-            else:
-                box.label(text="Preferences not found", icon="ERROR")
-            
-            op = box.operator("blendermcp.open_url", text=t("btn_get_token_bk"), icon="URL")
-            op.url = "https://www.blenderkit.com/settings/profile/"
-            
-            warn = box.row()
-            warn.alert = True
-            warn.label(text=t("warn_api_key_saved"), icon="ERROR")
+        layout.separator()
+        layout.operator("wm.url_open", text="Configure Keys in Preferences", icon="SETTINGS").url = "https://github.com/yuri-schmaltz/mcp-blender" # Placeholder or just omit
+        # Better: just use a label suggesting preferences
+        layout.label(text="Manage API Keys in Addon Preferences", icon="INFO")
 
 
 # =============================================================================
@@ -210,41 +177,23 @@ class BLENDERMCP_PT_OnlineLLM(bpy.types.Panel):
     bl_idname = "BLENDERMCP_PT_OnlineLLM"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "BlenderMCP"
+    bl_category = "MCP"
     bl_parent_id = "BLENDERMCP_PT_Panel"
     bl_options = {"DEFAULT_CLOSED"}
 
     def draw(self, context):
         layout = self.layout
         scene = context.scene
-
-        col = layout.column(align=True)
-        col.prop(scene, "blendermcp_llm_provider", text=t("label_llm_provider"))
-        
-        provider = scene.blendermcp_llm_provider
-        
         prefs = get_prefs(context)
+        
         if not prefs:
             layout.label(text="Preferences not found", icon="ERROR")
             return
 
-        box = layout.box()
-        if provider == "OPENAI":
-            box.prop(prefs, "openai_key", text="OpenAI Key")
-            box.prop(scene, "blendermcp_openai_model", text=t("label_llm_model"))
-            op = box.operator("blendermcp.open_url", text=t("btn_get_openai_key"), icon="URL")
-            op.url = "https://platform.openai.com/api-keys"
-        elif provider == "ANTHROPIC":
-            box.prop(prefs, "anthropic_key", text="Claude Key")
-            box.prop(scene, "blendermcp_anthropic_model", text=t("label_llm_model"))
-            op = box.operator("blendermcp.open_url", text=t("btn_get_anthropic_key"), icon="URL")
-            op.url = "https://console.anthropic.com/settings/keys"
-        elif provider == "GOOGLE":
-            box.prop(prefs, "google_key", text="Gemini Key")
-            box.prop(scene, "blendermcp_google_model", text=t("label_llm_model"))
-            op = box.operator("blendermcp.open_url", text=t("btn_get_google_key"), icon="URL")
-            op.url = "https://aistudio.google.com/app/apikey"
-
+        # Simple provider status
+        row = layout.row()
+        row.label(text=f"Active Provider: {prefs.llm_provider}", icon="INFO")
+        
         layout.separator()
         
         # Chat interface
@@ -279,7 +228,7 @@ class BLENDERMCP_PT_Setup(bpy.types.Panel):
     bl_idname = "BLENDERMCP_PT_Setup"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "BlenderMCP"
+    bl_category = "MCP"
     bl_parent_id = "BLENDERMCP_PT_Panel"
     bl_options = {"DEFAULT_CLOSED"}
 
