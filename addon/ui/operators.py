@@ -61,16 +61,23 @@ def _get_addon_module():
     for cand in ["addon.py", "__init__.py"]:
         addon_py = os.path.join(project_root, cand)
         if os.path.exists(addon_py):
-            # Check if already loaded by Blender
-            for mod in sys.modules.values():
+            # Check if already loaded by Blender (including extension naming)
+            for name, mod in sys.modules.items():
                 if hasattr(mod, "__file__") and mod.__file__ and os.path.abspath(mod.__file__) == os.path.abspath(addon_py):
+                    return mod
+                if "addon_entry" in name and hasattr(mod, "BlenderMCPServer"):
                     return mod
             
             # Load dynamic spec if not already in sys.modules
             spec = _iu.spec_from_file_location("blender_mcp_addon_ui_core", addon_py)
             mod = _iu.module_from_spec(spec)
+            # Propagate root package if possible
             if __package__:
-                mod.__package__ = __package__
+                parts = __package__.split('.')
+                if len(parts) >= 3:
+                    mod.__package__ = ".".join(parts[:3])
+                else:
+                    mod.__package__ = parts[0]
             spec.loader.exec_module(mod)
             return mod
             

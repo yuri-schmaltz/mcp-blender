@@ -34,16 +34,23 @@ def _get_addon_module():
     for cand in ["addon.py", "__init__.py"]:
         addon_py = os.path.join(project_root, cand)
         if os.path.exists(addon_py):
-            # Check if already loaded by Blender
-            for mod in sys.modules.values():
+            # Check if already loaded by Blender (including extension naming)
+            for name, mod in sys.modules.items():
                 if hasattr(mod, "__file__") and mod.__file__ and os.path.abspath(mod.__file__) == os.path.abspath(addon_py):
+                    return mod
+                if "addon_entry" in name and hasattr(mod, "BlenderMCPServer"):
                     return mod
             
             # Load dynamic spec if not already in sys.modules
             spec = _iu.spec_from_file_location("_blendermcp_addon_ref_panel", addon_py)
             mod = _iu.module_from_spec(spec)
+            # Propagate root package if possible
             if __package__:
-                mod.__package__ = __package__
+                parts = __package__.split('.')
+                if len(parts) >= 3:
+                    mod.__package__ = ".".join(parts[:3])
+                else:
+                    mod.__package__ = parts[0]
             spec.loader.exec_module(mod)
             return mod
             
@@ -101,7 +108,7 @@ class BLENDERMCP_PT_Panel(bpy.types.Panel):
         # --- Strategic intelligence status ---
         box = layout.box()
         col = box.column(align=True)
-        col.label(text="AI Intel: Senior Strategic Partner", icon="LIGHTBULB")
+        col.label(text="AI Intel: Senior Strategic Partner", icon="LIGHT")
         col.label(text="Mode: Gabarito IA Excellence (v2.5.0)", icon="SOLO_ON")
         
         layout.separator(factor=0.5)
@@ -164,17 +171,14 @@ class BLENDERMCP_PT_Integrations(bpy.types.Panel):
             return
 
         col = layout.column(align=True)
-        col.label(text=t("label_external_assets"))
-        
-        col.prop(prefs, "use_polyhaven", text=t("prop_polyhaven_assets"), icon="WORLD")
-        col.prop(prefs, "use_ambientcg", text=t("prop_ambientcg_assets"), icon="MATERIAL")
-        col.prop(prefs, "use_sketchfab", text=t("prop_sketchfab_assets"), icon="MESH_MONKEY")
-        col.prop(prefs, "use_blenderkit", text="BlenderKit Assets", icon="IMAGE_DATA")
+        col.label(text="Manage all integrations and API keys in the Addon Preferences.")
         
         layout.separator()
-        layout.operator("wm.url_open", text="Configure Keys in Preferences", icon="SETTINGS").url = "https://github.com/yuri-schmaltz/mcp-blender" # Placeholder or just omit
-        # Better: just use a label suggesting preferences
-        layout.label(text="Manage API Keys in Addon Preferences", icon="INFO")
+        # Open local Preferences
+        layout.operator("screen.userpref_show", text="Open Addon Settings", icon="PREFERENCES")
+        
+        # Open GitHub Repository (as requested)
+        layout.operator("wm.url_open", text="Configure Keys in Preferences", icon="SETTINGS").url = "https://github.com/yuri-schmaltz/mcp-blender"
 
 
 # =============================================================================

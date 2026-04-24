@@ -116,10 +116,25 @@ except ImportError:
 def _call_handler(module_name, func_name, *args, **kwargs):
     """Dynamically load and call a handler function."""
     try:
-        if __package__:
-            module = __import__(f"{__package__}.addon.handlers.{module_name}", fromlist=[func_name])
+        # Robust package detection
+        pkg = __package__
+        if not pkg:
+            # Try to infer from sys.modules or context
+            pkg = "mcp_blender"
+        
+        # Ensure we are using the root package (strip sub-packages if any)
+        # e.g., 'bl_ext.user_default.mcp_blender.addon.ui' -> 'bl_ext.user_default.mcp_blender'
+        if "bl_ext" in pkg:
+            parts = pkg.split('.')
+            if len(parts) >= 3: # bl_ext.repo.extension
+                root_pkg = ".".join(parts[:3])
+            else:
+                root_pkg = parts[0]
         else:
-            module = __import__(f"addon.handlers.{module_name}", fromlist=[func_name])
+            root_pkg = pkg.split('.')[0]
+
+        module_path = f"{root_pkg}.addon.handlers.{module_name}"
+        module = __import__(module_path, fromlist=[func_name])
         func = getattr(module, func_name)
         return func(*args, **kwargs)
     except Exception as e:
