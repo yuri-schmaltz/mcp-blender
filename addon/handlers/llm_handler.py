@@ -3,7 +3,7 @@ import re
 import traceback
 import bpy
 import requests
-from addon.utils.network import get_session, friendly_error
+from ..utils.network import get_session, friendly_error
 
 
 def get_prefs():

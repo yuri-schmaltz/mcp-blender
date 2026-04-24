@@ -476,7 +476,7 @@ class BLENDERMCP_OT_SendChat(bpy.types.Operator):
         # Actually, in Blender, we can't easily do async without threading
         # For now, we'll do it synchronously for simplicity
         
-        from addon.handlers import llm_handler
+        from ..handlers import llm_handler
 
         result = llm_handler.handle_chat_request(context)
         
