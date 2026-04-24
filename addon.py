@@ -726,111 +726,73 @@ def register():
     )
     logging.info("BlenderMCP starting...")
 
+    # 1. Registration of Preferences
     bpy.utils.register_class(BlenderMCPPreferences)
+    
+    # 2. Modular registration of UI and Core components
+    try:
+        from .addon.core.registration import register_all
+        register_all()
+    except (ImportError, ValueError):
+        # Fallback for manual registration if core is not found
+        for cls in _UI_CLASSES:
+            bpy.utils.register_class(cls)
 
-    bpy.types.Scene.blendermcp_port = IntProperty(
-        name="Port",
-        description="Port number for the BlenderMCP socket server. Overrides global preference for this file.",
-        default=9876,
-        min=1024,
-        max=65535,
-    )
-    bpy.types.Scene.blendermcp_chat_prompt = bpy.props.StringProperty(
-        name="Ask AI",
-        description="Type your command for the AI assistant",
-        default="",
-    )
-
-    bpy.types.Scene.blendermcp_chat_status = bpy.props.StringProperty(
-        name="AI Status",
-        default="",
-    )
-
-    # Dynamic client detection – import via filesystem for Blender compat
-    if __package__:
-        from .addon.utils.helpers import detect_installed_clients as _detect_clients
-    else:
-        from addon.utils.helpers import detect_installed_clients as _detect_clients
-
-    def _client_items_callback(self, context):  # noqa: ARG001
-        return _detect_clients()
-
+    # 3. Setup Scene properties (Global context)
+    bpy.types.Scene.blendermcp_server_running = bpy.props.BoolProperty(name="Server Running", default=False)
+    bpy.types.Scene.blendermcp_port = bpy.props.IntProperty(name="Port", default=9876)
+    bpy.types.Scene.blendermcp_chat_prompt = bpy.props.StringProperty(name="Ask AI", default="")
+    bpy.types.Scene.blendermcp_chat_status = bpy.props.StringProperty(name="AI Status", default="Ready")
     bpy.types.Scene.blendermcp_client_target = bpy.props.EnumProperty(
-        name="MCP Client",
-        description="Client target for config snippet (auto-detected)",
-        items=_client_items_callback,
+        name="Target Client",
+        items=[
+            ('lm_studio', "LM Studio", "Local LLM via LM Studio"),
+            ('ollama', "Ollama", "Local LLM via Ollama"),
+            ('custom', "Custom", "Generic OpenAI-compatible API"),
+        ],
+        default='lm_studio',
     )
-    bpy.types.Scene.blendermcp_last_action = bpy.props.StringProperty(
-        name="Last Action",
-        default="",
-    )
-    bpy.types.Scene.blendermcp_last_action_at = bpy.props.StringProperty(
-        name="Last Action At",
-        default="",
-    )
-    bpy.types.Scene.blendermcp_last_action_details = bpy.props.StringProperty(
-        name="Last Action Details",
-        default="",
-    )
-    bpy.types.Scene.blendermcp_last_action_ok = bpy.props.BoolProperty(
-        name="Last Action OK",
-        default=True,
-    )
-    bpy.types.Scene.blendermcp_show_advanced = bpy.props.BoolProperty(
-        name="Show Advanced Settings",
-        description="Show technical configuration and manual server commands",
-        default=False,
-    )
+    
+    # Action metrics & UX
+    bpy.types.Scene.blendermcp_last_action = bpy.props.StringProperty(name="Last Action", default="None")
+    bpy.types.Scene.blendermcp_last_action_at = bpy.props.StringProperty(name="At", default="")
+    bpy.types.Scene.blendermcp_last_action_details = bpy.props.StringProperty(name="Details", default="")
+    bpy.types.Scene.blendermcp_last_action_ok = bpy.props.BoolProperty(name="Status", default=True)
+    bpy.types.Scene.blendermcp_show_advanced = bpy.props.BoolProperty(name="Advanced", default=False)
 
-    for cls in _UI_CLASSES:
-        bpy.utils.register_class(cls)
+    print("BlenderMCP Excellence v2.5.0 registered.")
 
-    print("BlenderMCP addon registered")
 
 
 def unregister():
-    # Stop the server if it's running
+    # 1. Stop the server
     if hasattr(bpy.types, "blendermcp_server") and bpy.types.blendermcp_server:
         bpy.types.blendermcp_server.stop()
         del bpy.types.blendermcp_server
 
-    for cls in reversed(_UI_CLASSES):
-        try:
-            if hasattr(cls, "bl_rna"):
-                bpy.utils.unregister_class(cls)
-        except Exception:
-            pass
+    # 2. Call modular unregistration
+    try:
+        from .addon.core.registration import unregister_all
+        unregister_all()
+    except (ImportError, ValueError):
+        # Fallback cleanup
+        for cls in reversed(_UI_CLASSES):
+            try:
+                if hasattr(cls, "bl_rna"):
+                    bpy.utils.unregister_class(cls)
+            except Exception: pass
+        
+        mcp_props = [p for p in dir(bpy.types.Scene) if p.startswith("blendermcp_")]
+        for prop in mcp_props:
+            try: delattr(bpy.types.Scene, prop)
+            except Exception: pass
 
-    # Cleanup Scene properties safely
-    for prop in [
-        "blendermcp_port",
-        "blendermcp_server_running",
-        "blendermcp_use_polyhaven",
-        "blendermcp_use_ambientcg",
-        "blendermcp_use_sketchfab",
-        "blendermcp_use_blenderkit",
-        "blendermcp_llm_provider",
-        "blendermcp_google_key",
-        "blendermcp_openai_model",
-        "blendermcp_anthropic_model",
-        "blendermcp_google_model",
-        "blendermcp_chat_prompt",
-        "blendermcp_chat_status",
-        "blendermcp_client_target",
-        "blendermcp_last_action",
-        "blendermcp_last_action_at",
-        "blendermcp_last_action_details",
-        "blendermcp_last_action_ok",
-        "blendermcp_show_advanced"
-    ]:
-        if hasattr(bpy.types.Scene, prop):
-            delattr(bpy.types.Scene, prop)
-    bpy.utils.unregister_class(BlenderMCPPreferences)
+    # 3. Final cleanup
+    if hasattr(BlenderMCPPreferences, "bl_rna"):
+        bpy.utils.unregister_class(BlenderMCPPreferences)
 
-
-    print("BlenderMCP addon unregistered")
+    print("BlenderMCP Excellence v2.5.0 unregistered.")
 
 
 if __name__ == "__main__":
     register()
-

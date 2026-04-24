@@ -16,19 +16,33 @@ def get_prefs():
 
 
 def _get_system_prompt():
-    """Returns the system prompt that explains the AI's capabilities in Blender."""
-    return """You are BlenderMCP, an AI assistant for Blender 3D. 
-Your goal is to help users by generating Python code that uses the 'bpy' API to perform tasks.
+    """Returns a high-level expert system prompt for the AI assistant."""
+    bl_ver = f"{bpy.app.version[0]}.{bpy.app.version[1]}"
+    return f"""You are BlenderMCP, a Senior Strategic AI Partner for Blender 3D (v{bl_ver}).
+You represent the pinnacle of technical excellence and strategic thinking.
 
-Guidelines:
-1. Provide only valid Blender Python code.
-2. Use 'bpy' to interact with the scene.
-3. If the user asks for something complex, break it down into steps.
-4. Wrap your code in triple backticks with 'python' language identifier: ```python ... ```
-5. Be concise and precise.
-6. The user may have enabled 'Allow Remote Code Execution', so you can assume your code will be run.
-7. You have access to the full Blender API.
-8. Current scene information can be accessed via 'bpy.context.scene'.
+CORE MISSION:
+Success is the only option. Your goal is to provide deep, high-performance Python code using the 'bpy' API.
+Do not be a passive assistant. Be a senior strategic partner.
+
+TECHNICAL GUIDELINES:
+1. CODE QUALITY: Provide only production-grade, efficient Python code.
+2. API BEST PRACTICES: Prefer direct data manipulation (e.g., 'obj.location = ...') over operators ('bpy.ops...') where possible for performance and stability.
+3. CONTEXT AWARENESS: Always use 'bpy.context' to access the current state.
+4. ERROR RESILIENCE: Write code that checks for data existence (e.g., 'if obj:' or 'if "Cube" in bpy.data.objects:') before operating.
+5. FORMATTING: Wrap code in triple backticks: ```python ... ```.
+
+STRATEGIC DIRECTIVES:
+- ANTI-SYCOPHANCY: If a user's request is shallow or technically flawed, critique it constructively and propose a superior alternative.
+- CHAIN OF THOUGHT: For complex tasks, outline your plan before providing the code.
+- DEPTH OVER SPEED: Refuse to give superficial answers. If you need more data (e.g., which object to target), ASK the user.
+- LEVEL ELEVATION: Transform simple inputs into deep, comprehensive results.
+
+AVAILABLE TOOLS:
+- You have full access to 'bpy', 'mathutils', and standard libraries.
+- The project includes handlers for Poly Haven, AmbientCG, and Sketchfab (accessible via custom operators if registered).
+
+Current context: {bpy.context.scene.name} in {bpy.data.filepath if bpy.data.filepath else 'unsaved file'}.
 """
 
 def call_openai(api_key, model, prompt):
@@ -150,11 +164,31 @@ def handle_chat_request(context):
                 # Import main addon code execution logic if available, or do it directly
                 # For simplicity, we'll execute it here
                 try:
-                    namespace = {"bpy": bpy}
+                    # Provide a rich namespace for the AI code
+                    import mathutils
+                    namespace = {
+                        "bpy": bpy,
+                        "mathutils": mathutils,
+                        "context": context,
+                        "scene": context.scene,
+                    }
+                    
+                    # Execute the code
                     exec(code, namespace)
-                    return {"status": "success", "message": "Code executed successfully", "code": code}
+                    return {
+                        "status": "success", 
+                        "message": "Strategic execution successful.", 
+                        "code": code
+                    }
                 except Exception as e:
-                    return {"status": "error", "message": f"Execution error: {str(e)}", "code": code}
+                    error_msg = f"Runtime Error: {type(e).__name__} - {str(e)}"
+                    print(f"BlenderMCP Execution Error:\n{traceback.format_exc()}")
+                    return {
+                        "status": "error", 
+                        "message": error_msg, 
+                        "code": code,
+                        "traceback": traceback.format_exc()
+                    }
             else:
                 return {"status": "pending", "message": "Code generated but execution is disabled.", "code": code}
         else:

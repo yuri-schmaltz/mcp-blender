@@ -97,6 +97,14 @@ class BLENDERMCP_PT_Panel(bpy.types.Panel):
             row.operator("blendermcp.start_server", text=t("btn_connect"), icon="PLAY")
 
         layout.separator(factor=0.5)
+
+        # --- Strategic intelligence status ---
+        box = layout.box()
+        col = box.column(align=True)
+        col.label(text="AI Intel: Senior Strategic Partner", icon="LIGHTBULB")
+        col.label(text="Mode: Gabarito IA Excellence (v2.5.0)", icon="SOLO_ON")
+        
+        layout.separator(factor=0.5)
         
         # --- Last Action Summary (Previously separate Status & Cache) ---
         if scene.blendermcp_last_action:
