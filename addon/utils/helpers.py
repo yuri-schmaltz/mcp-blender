@@ -11,6 +11,44 @@ import time
 import bpy
 
 
+def resolve_addon_package(caller_package=None):
+    """Resolve the root extension/addon package name for addon preferences lookup.
+    
+    In Blender 4.2+ Extension mode, __package__ for sub-modules is e.g.
+    'bl_ext.user_default.mcp_blender.addon.handlers' — we need only the first
+    3 parts: 'bl_ext.user_default.mcp_blender'.
+    
+    Args:
+        caller_package: The __package__ of the calling module. If None, uses
+                        the helpers module's own __package__.
+    
+    Returns:
+        The root package name suitable for bpy.context.preferences.addons lookup.
+    """
+    pkg = caller_package or __package__
+    if not pkg:
+        return "mcp_blender"
+    if pkg.startswith("bl_ext."):
+        parts = pkg.split(".")
+        return ".".join(parts[:3]) if len(parts) >= 3 else pkg
+    return pkg.split(".")[0]
+
+
+def get_addon_prefs(caller_package=None):
+    """Access global addon preferences safely from any sub-module.
+    
+    Args:
+        caller_package: The __package__ of the calling module.
+    
+    Returns:
+        The AddonPreferences instance, or None if not found.
+    """
+    root_pkg = resolve_addon_package(caller_package)
+    if root_pkg in bpy.context.preferences.addons:
+        return bpy.context.preferences.addons[root_pkg].preferences
+    return None
+
+
 def ensure_mode(mode: str):
     """Decorator to ensure Blender is in the correct mode before running a function.
     

@@ -47,7 +47,7 @@ def _load_socket_server_class():
 
 def get_prefs():
     """Access global addon preferences."""
-    return bpy.context.preferences.addons[__package__ if __package__ else "mcp_blender"].preferences
+    return bpy.context.preferences.addons[_ADDON_PACKAGE].preferences
 
 
 SocketBlenderMCPServer = _load_socket_server_class()
@@ -558,8 +558,30 @@ class BlenderMCPServer(SocketBlenderMCPServer):
     # endregion
 
 
+def _get_addon_package():
+    """Resolve the root extension/addon package name for bl_idname.
+    
+    In Blender 4.2+ Extension mode, __package__ is e.g. 'bl_ext.user_default.mcp_blender'.
+    In legacy addon mode, it's the addon folder name or empty.
+    This must exactly match the key Blender uses in bpy.context.preferences.addons.
+    """
+    pkg = __package__
+    if not pkg:
+        return "mcp_blender"
+    # For extensions loaded via bl_ext, the root is always the first 3 parts
+    # e.g. 'bl_ext.user_default.mcp_blender' (even if __package__ has extra sub-levels)
+    if pkg.startswith("bl_ext."):
+        parts = pkg.split(".")
+        return ".".join(parts[:3]) if len(parts) >= 3 else pkg
+    # For legacy addons, it's just the top-level package
+    return pkg.split(".")[0]
+
+
+_ADDON_PACKAGE = _get_addon_package()
+
+
 class BlenderMCPPreferences(bpy.types.AddonPreferences):
-    bl_idname = __package__ if __package__ else "mcp_blender"
+    bl_idname = _ADDON_PACKAGE
 
     port: IntProperty(
         name="Default Port",
@@ -775,7 +797,7 @@ def register():
     bpy.types.Scene.blendermcp_last_action_ok = bpy.props.BoolProperty(name="Status", default=True)
     bpy.types.Scene.blendermcp_show_advanced = bpy.props.BoolProperty(name="Advanced", default=False)
 
-    print("BlenderMCP Excellence v2.5.0 registered.")
+    print(f"BlenderMCP Excellence v2.5.1 registered. (bl_idname={_ADDON_PACKAGE})")
 
 
 

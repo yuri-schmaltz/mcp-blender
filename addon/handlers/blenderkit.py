@@ -10,11 +10,8 @@ BASE_API_URL = "https://www.blenderkit.com/api/v1"
 
 def get_prefs():
     """Access global addon preferences safely."""
-    # Try multiple common package names for robustness
-    for name in [__package__.split('.')[0] if __package__ else "mcp_blender", "mcp_blender", "bl_ext.user_default.mcp_blender"]:
-        if name in bpy.context.preferences.addons:
-            return bpy.context.preferences.addons[name].preferences
-    return None
+    from ..utils.helpers import get_addon_prefs
+    return get_addon_prefs(__package__)
 
 def search_blenderkit(scene, query, asset_type='model', free_only=True):
     """

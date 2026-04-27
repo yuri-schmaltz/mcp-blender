@@ -66,12 +66,18 @@ t = _i18n.t
 
 def get_prefs(context):
     """Access global addon preferences safely."""
-    # We use the package name if available, otherwise the known ID
-    pkg = __package__.split('.')[0] if __package__ else "mcp_blender"
-    # In some contexts, it might be nested under bl_ext
-    for name in [pkg, "mcp_blender", "bl_ext.user_default.mcp_blender"]:
-        if name in context.preferences.addons:
-            return context.preferences.addons[name].preferences
+    pkg = __package__
+    if pkg and pkg.startswith("bl_ext."):
+        # Extension mode: bl_ext.user_default.mcp_blender.addon.ui -> bl_ext.user_default.mcp_blender
+        parts = pkg.split(".")
+        root_pkg = ".".join(parts[:3]) if len(parts) >= 3 else pkg
+    elif pkg:
+        root_pkg = pkg.split(".")[0]
+    else:
+        root_pkg = "mcp_blender"
+    
+    if root_pkg in context.preferences.addons:
+        return context.preferences.addons[root_pkg].preferences
     return None
 
 
@@ -176,9 +182,6 @@ class BLENDERMCP_PT_Integrations(bpy.types.Panel):
         layout.separator()
         # Open local Preferences
         layout.operator("screen.userpref_show", text="Open Addon Settings", icon="PREFERENCES")
-        
-        # Open GitHub Repository (as requested)
-        layout.operator("wm.url_open", text="Configure Keys in Preferences", icon="SETTINGS").url = "https://github.com/yuri-schmaltz/mcp-blender"
 
 
 # =============================================================================
