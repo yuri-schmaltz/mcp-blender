@@ -763,10 +763,10 @@ def register():
     )
     logging.info("BlenderMCP starting...")
 
-    # 1. Registration of Preferences
-    bpy.utils.register_class(BlenderMCPPreferences)
+    # NOTE: BlenderMCPPreferences is now registered by __init__.py
+    # to guarantee correct bl_idname in Blender Extension mode.
     
-    # 2. Modular registration of UI and Core components
+    # 1. Modular registration of UI and Core components
     try:
         from .addon.core.registration import register_all
         register_all()
@@ -775,7 +775,7 @@ def register():
         for cls in _UI_CLASSES:
             bpy.utils.register_class(cls)
 
-    # 3. Setup Scene properties (Global context)
+    # 2. Setup Scene properties (Global context)
     bpy.types.Scene.blendermcp_server_running = bpy.props.BoolProperty(name="Server Running", default=False)
     bpy.types.Scene.blendermcp_port = bpy.props.IntProperty(name="Port", default=9876)
     bpy.types.Scene.blendermcp_chat_prompt = bpy.props.StringProperty(name="Ask AI", default="")
@@ -797,7 +797,7 @@ def register():
     bpy.types.Scene.blendermcp_last_action_ok = bpy.props.BoolProperty(name="Status", default=True)
     bpy.types.Scene.blendermcp_show_advanced = bpy.props.BoolProperty(name="Advanced", default=False)
 
-    print(f"BlenderMCP Excellence v2.5.1 registered. (bl_idname={_ADDON_PACKAGE})")
+    print(f"BlenderMCP v2.5.1 registered. (package={_ADDON_PACKAGE})")
 
 
 
@@ -824,11 +824,9 @@ def unregister():
             try: delattr(bpy.types.Scene, prop)
             except Exception: pass
 
-    # 3. Final cleanup
-    if hasattr(BlenderMCPPreferences, "bl_rna"):
-        bpy.utils.unregister_class(BlenderMCPPreferences)
+    # NOTE: BlenderMCPPreferences is unregistered by __init__.py
 
-    print("BlenderMCP Excellence v2.5.0 unregistered.")
+    print("BlenderMCP v2.5.1 unregistered.")
 
 
 if __name__ == "__main__":
