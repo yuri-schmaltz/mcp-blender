@@ -444,25 +444,30 @@ class BLENDERMCP_OT_ResolveSelfIntersections(bpy.types.Operator):
 class BLENDERMCP_OT_MarkFunctionalPart(bpy.types.Operator):
     bl_idname = "blendermcp.mark_functional_part"
     bl_label = "Mark as Functional Part"
-    bl_description = "Add metadata to object for engineering management"
-    
-    role: bpy.props.StringProperty(name="Role", default="Part")
-
+    bl_description = "Tag the active object with a role from the selected preset"
 
     def execute(self, context):
         if not context.active_object:
             self.report({"ERROR"}, "No active object")
             return {"CANCELLED"}
         
+        scene = context.scene
+        preset = scene.blendermcp_part_preset
+        role = scene.blendermcp_part_role
+        
         addon_mod = _get_addon_module()
-        result = addon_mod._call_handler("functional_parts", "mark_as_functional_part", bpy.context.scene, context.active_object.name, role=self.role)
+        result = addon_mod._call_handler(
+            "functional_parts", "mark_as_functional_part",
+            bpy.context.scene, context.active_object.name,
+            role=role, preset=preset,
+        )
         
         if "error" in result:
             self.report({"ERROR"}, result["error"])
             return {"CANCELLED"}
             
         self.report({"INFO"}, result["message"])
-        _update_action_status(context.scene, "Mark Part", True, f"Role: {self.role}")
+        _update_action_status(scene, "Mark Part", True, result["message"])
         return {"FINISHED"}
 
 
