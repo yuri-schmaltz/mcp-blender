@@ -33,6 +33,9 @@ _i18n = _iu.module_from_spec(_i18n_spec)
 _i18n_spec.loader.exec_module(_i18n)
 t = _i18n.t
 
+# Import handlers directly to avoid legacy _call_handler
+from ..handlers import mesh_tools, functional_parts
+
 
 def _get_addon_module():
     """Load the main addon module safely in all Blender loading modes."""
@@ -421,12 +424,13 @@ class BLENDERMCP_OT_ResolveSelfIntersections(bpy.types.Operator):
     bl_description = "Merge internal overlapping shells while preserving shape"
 
     def execute(self, context):
+        from ..handlers import mesh_tools
         if not context.active_object or context.active_object.type != 'MESH':
             self.report({"ERROR"}, "Select a mesh first")
             return {"CANCELLED"}
         
-        addon_mod = _get_addon_module()
-        result = addon_mod._call_handler("mesh_tools", "resolve_self_intersections", bpy.context.scene, context.active_object.name)
+        # Use direct import instead of legacy _call_handler
+        result = mesh_tools.resolve_self_intersections(bpy.context.scene, context.active_object.name)
         
         if "error" in result:
             self.report({"ERROR"}, result["error"])
@@ -447,6 +451,7 @@ class BLENDERMCP_OT_MarkFunctionalPart(bpy.types.Operator):
     bl_description = "Tag the active object with a role from the selected preset"
 
     def execute(self, context):
+        from ..handlers import functional_parts
         if not context.active_object:
             self.report({"ERROR"}, "No active object")
             return {"CANCELLED"}
@@ -455,9 +460,8 @@ class BLENDERMCP_OT_MarkFunctionalPart(bpy.types.Operator):
         preset = scene.blendermcp_part_preset
         role = scene.blendermcp_part_role
         
-        addon_mod = _get_addon_module()
-        result = addon_mod._call_handler(
-            "functional_parts", "mark_as_functional_part",
+        # Use direct import instead of legacy _call_handler
+        result = functional_parts.mark_as_functional_part(
             bpy.context.scene, context.active_object.name,
             role=role, preset=preset,
         )

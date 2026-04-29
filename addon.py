@@ -46,8 +46,15 @@ def _load_socket_server_class():
 
 
 def get_prefs():
-    """Access global addon preferences."""
-    return bpy.context.preferences.addons[_ADDON_PACKAGE].preferences
+    """Access global addon preferences via unified helper."""
+    try:
+        if __package__:
+            from .addon.utils.helpers import get_addon_prefs
+        else:
+            from addon.utils.helpers import get_addon_prefs
+        return get_addon_prefs(__package__)
+    except ImportError:
+        return bpy.context.preferences.addons[_ADDON_PACKAGE].preferences
 
 
 SocketBlenderMCPServer = _load_socket_server_class()
@@ -112,35 +119,7 @@ except ImportError:
     def robust_get(url, **kwargs): return requests.get(url, **kwargs)
     REQ_HEADERS = {"User-Agent": "blender-mcp"}
 
-# Helper for dynamic handler loading
-def _call_handler(module_name, func_name, *args, **kwargs):
-    """Dynamically load and call a handler function."""
-    try:
-        # Robust package detection
-        pkg = __package__
-        if not pkg:
-            # Try to infer from sys.modules or context
-            pkg = "mcp_blender"
-        
-        # Ensure we are using the root package (strip sub-packages if any)
-        # e.g., 'bl_ext.user_default.mcp_blender.addon.ui' -> 'bl_ext.user_default.mcp_blender'
-        if "bl_ext" in pkg:
-            parts = pkg.split('.')
-            if len(parts) >= 3: # bl_ext.repo.extension
-                root_pkg = ".".join(parts[:3])
-            else:
-                root_pkg = parts[0]
-        else:
-            root_pkg = pkg.split('.')[0]
-
-        module_path = f"{root_pkg}.addon.handlers.{module_name}"
-        module = __import__(module_path, fromlist=[func_name])
-        func = getattr(module, func_name)
-        return func(*args, **kwargs)
-    except Exception as e:
-        print(f"Error calling handler {module_name}.{func_name}: {e}")
-        traceback.print_exc()
-        return {"error": f"Handler {module_name} error: {str(e)}"}
+# _call_handler removed in favor of direct imports or router.execute_command
 
 # Load network utilities (retry, fallback, logging)
 try:
@@ -164,131 +143,24 @@ except (ImportError, ValueError):
 # Global cache instance
 _asset_cache = get_asset_cache()
 
-
-def _project_root() -> str:
-    """Return repository root path based on addon.py location."""
-    return os.path.dirname(os.path.abspath(__file__))
-
-
-def _run_command(command: list[str], cwd: str) -> tuple[int, str]:
-    """Run command and return exit code + combined output."""
-    try:
-        completed = subprocess.run(
-            command,
-            cwd=cwd,
-            capture_output=True,
-            text=True,
-            timeout=1200,
-            check=False,
+# Unified helper imports (re-export for backward compatibility with operators.py if needed)
+try:
+    if __package__:
+        from .addon.utils.helpers import (
+            _project_root, _run_command, _uv_blender_mcp_command, 
+            _update_action_status, _logs_path, _open_in_system
         )
-    except FileNotFoundError:
-        return 127, f"Command not found: {command[0]}"
-    except Exception as exc:  # pragma: no cover - defensive path
-        return 1, str(exc)
-
-    output = (completed.stdout or "").strip()
-    err = (completed.stderr or "").strip()
-    combined = "\n".join(part for part in [output, err] if part)
-    return completed.returncode, combined
-
-
-def _uv_command_prefixes() -> list[list[str]]:
-    """Return candidate command prefixes to invoke uv across environments."""
-    candidates = [["uv"], [sys.executable, "-m", "uv"]]
-    if os.name == "nt":
-        candidates.append(["py", "-m", "uv"])
-    return candidates
-
-
-def _resolve_uv_command(cwd: str) -> list[str] | None:
-    """Find a working uv command prefix or return None."""
-    for prefix in _uv_command_prefixes():
-        code, _ = _run_command([*prefix, "--version"], cwd=cwd)
-        if code == 0:
-            return prefix
-    return None
-
-
-def _uv_blender_mcp_command(cwd: str, host: str, port: int, doctor: bool = False) -> list[str] | None:
-    """Build a uv command that works both in repo checkout and installed addon mode."""
-    uv_prefix = _resolve_uv_command(cwd)
-    if uv_prefix is None:
-        return None
-
-    pyproject_path = os.path.join(cwd, "pyproject.toml")
-    if os.path.exists(pyproject_path):
-        cmd = [*uv_prefix, "run", "blender-mcp", "--host", host, "--port", str(port)]
     else:
-        cmd = [*uv_prefix, "tool", "run", "blender-mcp", "--host", host, "--port", str(port)]
-
-    if doctor:
-        cmd.insert(-4, "--doctor")
-    return cmd
-
-
-def _ensure_pip(cwd: str) -> tuple[bool, str]:
-    """Ensure pip is available in current Python runtime."""
-    code, out = _run_command([sys.executable, "-m", "pip", "--version"], cwd=cwd)
-    if code == 0:
-        return True, out
-    code, out = _run_command([sys.executable, "-m", "ensurepip", "--upgrade"], cwd=cwd)
-    if code != 0:
-        return False, out
-    code, out = _run_command([sys.executable, "-m", "pip", "--version"], cwd=cwd)
-    return code == 0, out
-
-
-def _install_runtime_dependencies_with_pip(cwd: str) -> tuple[int, str]:
-    """Install minimal runtime deps when repo metadata is not available."""
-    ok, out = _ensure_pip(cwd)
-    if not ok:
-        return 1, f"pip unavailable: {out}"
-    return _run_command([sys.executable, "-m", "pip", "install", "--upgrade", "requests>=2.25.0"], cwd=cwd)
-
-
-def _mcp_client_config_snippet(client: str, host: str, port: int) -> str:
-    """Generate stdio config snippets for MCP-compatible clients."""
-    args = ["run", "blender-mcp", "--host", host, "--port", str(port)]
-    config = {"mcpServers": {"blender": {"command": "uv", "args": args}}}
-    if client == "claude":
-        return json.dumps(config, indent=2)
-    if client == "cursor":
-        return json.dumps(config, indent=2)
-    if client == "lm_studio":
-        return json.dumps(config, indent=2)
-    if client == "ollama":
-        return (
-            "Use this in your MCP-capable Ollama client (Continue/Open WebUI/etc):\n"
-            + json.dumps(config, indent=2)
+        from addon.utils.helpers import (
+            _project_root, _run_command, _uv_blender_mcp_command, 
+            _update_action_status, _logs_path, _open_in_system
         )
-    return json.dumps(config, indent=2)
-
-
-def _update_action_status(scene, action: str, ok: bool, details: str = "") -> None:
-    """Persist last action result in scene properties for UI visibility."""
-    scene.blendermcp_last_action = action
-    scene.blendermcp_last_action_ok = ok
-    scene.blendermcp_last_action_details = details[:500]
-    scene.blendermcp_last_action_at = time.strftime("%Y-%m-%d %H:%M:%S")
-
-
-def _logs_path() -> str:
-    """Resolve current log path from env or default value."""
-    log_file = os.getenv("BLENDER_MCP_LOG_FILE", "blender_mcp.log")
-    if os.path.isabs(log_file):
-        return log_file
-    return os.path.join(_project_root(), log_file)
-
-
-def _open_in_system(path: str) -> None:
-    """Open path using platform default app/file manager."""
-    if os.name == "nt":
-        os.startfile(path)
-        return
-    if platform.system() == "Darwin":
-        subprocess.Popen(["open", path])
-        return
-    subprocess.Popen(["xdg-open", path])
+except ImportError:
+    # Minimal fallbacks if helpers are missing
+    def _project_root(): return os.path.dirname(os.path.abspath(__file__))
+    def _logs_path(): return os.path.join(_project_root(), "blender_mcp.log")
+    def _update_action_status(*args): pass
+    def _open_in_system(*args): pass
 
 
 try:
