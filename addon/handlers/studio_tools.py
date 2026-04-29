@@ -1,4 +1,6 @@
 """Studio and rendering tools for BlenderMCP."""
+from ..core.router import mcp_command
+
 
 import math
 import os
@@ -6,6 +8,7 @@ import os
 import bpy
 
 
+@mcp_command(name="setup_product_studio", read_only=False)
 def setup_product_studio(scene, theme='CLEAN'):
     """Setup a professional studio environment (piso infinito, lights)."""
     try:
@@ -58,6 +61,7 @@ def setup_product_studio(scene, theme='CLEAN'):
     except Exception as e:
         return {"error": f"Failed to setup studio: {str(e)}"}
 
+@mcp_command(name="render_catalog_angles", read_only=False)
 def render_catalog_angles(scene, output_dir=None):
     """Render the model from 4 standard catalog angles."""
     try:

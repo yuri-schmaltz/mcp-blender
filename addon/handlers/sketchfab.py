@@ -1,4 +1,6 @@
 """Sketchfab API handler for searching and downloading 3D models."""
+from ..core.router import mcp_command
+
 
 import os
 import shutil
@@ -30,6 +32,7 @@ except ImportError:
     pass
 
 
+@mcp_command(name="get_sketchfab_status", read_only=True)
 def get_sketchfab_status(scene):
     """Get the current status of Sketchfab integration"""
     prefs = get_prefs()
@@ -81,6 +84,7 @@ def get_sketchfab_status(scene):
         }
 
 
+@mcp_command(name="search_sketchfab_models", read_only=True)
 def search_sketchfab_models(scene, query, categories=None, count=20, downloadable=True):
     """Search for models on Sketchfab"""
     try:
@@ -121,6 +125,7 @@ def search_sketchfab_models(scene, query, categories=None, count=20, downloadabl
         return {"error": str(e)}
 
 
+@mcp_command(name="download_sketchfab_model", read_only=False)
 def download_sketchfab_model(scene, uid):
     """Download and import a model from Sketchfab"""
     try:

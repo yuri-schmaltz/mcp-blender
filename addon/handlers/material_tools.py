@@ -1,10 +1,13 @@
 """Material setup and texture application tools for BlenderMCP."""
+from ..core.router import mcp_command
+
 
 import traceback
 
 import bpy
 
 
+@mcp_command(name="set_texture", read_only=False)
 def set_texture(object_name, texture_id):
     """Apply a previously downloaded Polyhaven texture to an object by creating a new material"""
     try:

@@ -1,4 +1,6 @@
 """Mesh processing tools for BlenderMCP."""
+from ..core.router import mcp_command
+
 
 from collections import defaultdict
 
@@ -6,6 +8,7 @@ import bmesh
 import bpy
 
 
+@mcp_command(name="separate_loose_parts", read_only=False)
 def separate_loose_parts(scene, object_name, smart_rename=True):
     """Separate a mesh into its disconnected parts and optionally identify wheels/chassis."""
     try:
@@ -104,6 +107,7 @@ def separate_loose_parts(scene, object_name, smart_rename=True):
         return {"error": f"Failed to separate mesh: {str(e)}"}
 
 
+@mcp_command(name="check_mesh_integrity", read_only=False)
 def check_mesh_integrity(scene, object_name):
     """Check mesh for common 3D printing issues (non-manifold, holes, normals)."""
     try:
@@ -139,6 +143,7 @@ def check_mesh_integrity(scene, object_name):
         return {"error": f"Failed to check integrity: {str(e)}"}
 
 
+@mcp_command(name="auto_repair_mesh", read_only=False)
 def auto_repair_mesh(scene, object_name):
     """Try to automatically fix mesh issues (fill holes, normals)."""
     try:
@@ -179,6 +184,7 @@ def auto_repair_mesh(scene, object_name):
         return {"error": f"Failed to auto-repair: {str(e)}"}
 
 
+@mcp_command(name="resolve_self_intersections", read_only=False)
 def resolve_self_intersections(scene, object_name):
     """Resolve self-intersecting faces within the same mesh using the Exact Boolean solver."""
     try:
@@ -219,4 +225,3 @@ def resolve_self_intersections(scene, object_name):
         if bpy.context.mode != 'OBJECT':
             bpy.ops.object.mode_set(mode='OBJECT')
         return {"error": f"Failed to resolve self-intersections: {str(e)}"}
-

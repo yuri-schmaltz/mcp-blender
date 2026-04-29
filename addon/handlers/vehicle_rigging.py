@@ -1,8 +1,11 @@
 """Vehicle rigging tools for BlenderMCP."""
+from ..core.router import mcp_command
+
 
 import bpy
 
 
+@mcp_command(name="setup_simple_vehicle_rig", read_only=False)
 def setup_simple_vehicle_rig(scene, chassis_name, wheel_names):
     """Setup a basic rig for a vehicle with steering and driving controls."""
     try:

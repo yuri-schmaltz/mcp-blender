@@ -1,7 +1,9 @@
+from ..core.router import mcp_command
 import bpy
 import mathutils
 import math
 
+@mcp_command(name="transform_object", read_only=False)
 def transform_object(scene, name, location=None, rotation=None, scale=None, relative=False):
     """
     Transform an object (location, rotation, scale).
@@ -49,6 +51,7 @@ def transform_object(scene, name, location=None, rotation=None, scale=None, rela
     except Exception as e:
         return {"error": str(e)}
 
+@mcp_command(name="add_primitive", read_only=False)
 def add_primitive(scene, type, name=None, location=(0,0,0), scale=(1,1,1)):
     """
     Add a primitive object to the scene.
@@ -89,6 +92,7 @@ def add_primitive(scene, type, name=None, location=(0,0,0), scale=(1,1,1)):
     except Exception as e:
         return {"error": str(e)}
 
+@mcp_command(name="delete_object", read_only=False)
 def delete_object(scene, name):
     """Delete an object by name."""
     try:

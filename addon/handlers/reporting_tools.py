@@ -1,8 +1,11 @@
 """Reporting tools for BlenderMCP."""
+from ..core.router import mcp_command
+
 
 import os
 
 
+@mcp_command(name="generate_print_report", read_only=False)
 def generate_print_report(scene, filepath=None):
     """Generate a technical report about the 3D model (dimensions, volume, parts)."""
     try:

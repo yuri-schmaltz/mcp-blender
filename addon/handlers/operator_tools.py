@@ -1,6 +1,8 @@
+from ..core.router import mcp_command
 import bpy
 import json
 
+@mcp_command(name="list_blender_operators", read_only=False)
 def list_blender_operators(scene, filter_text=""):
     """
     List all available Blender operators, optionally filtered.
@@ -26,6 +28,7 @@ def list_blender_operators(scene, filter_text=""):
                 
     return {"operators": operators}
 
+@mcp_command(name="get_operator_help", read_only=False)
 def get_operator_help(scene, operator_name):
     """
     Get documentation for a specific Blender operator.

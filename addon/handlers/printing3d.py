@@ -1,4 +1,6 @@
 """3D Printing preparation tools for BlenderMCP."""
+from ..core.router import mcp_command
+
 
 import os
 
@@ -6,6 +8,7 @@ import bpy
 import mathutils
 
 
+@mcp_command(name="set_exact_dimensions", read_only=False)
 def set_exact_dimensions(scene, object_name, size_x=None, size_y=None, size_z=None):
     """Set the exact dimensions of an object in metric units (meters by default in Blender).
     If only some axes are provided, the object is scaled proportionally.
@@ -73,6 +76,7 @@ def set_exact_dimensions(scene, object_name, size_x=None, size_y=None, size_z=No
         return {"error": f"Failed to set dimensions: {str(e)}"}
 
 
+@mcp_command(name="apply_print_thickness", read_only=False)
 def apply_print_thickness(scene, object_name, thickness_mm, offset=0.0):
     """Apply generic Solidify modifier to create printer-friendly shells.
     thickness_mm is standard millimeters. Offset determines if thickness goes inward (-1), outward (1) or center (0).
@@ -108,6 +112,7 @@ def apply_print_thickness(scene, object_name, thickness_mm, offset=0.0):
         return {"error": f"Failed to apply thickness: {str(e)}"}
 
 
+@mcp_command(name="apply_boolean_operation", read_only=False)
 def apply_boolean_operation(scene, target_name, tool_name, operation="DIFFERENCE"):
     """Use a tool object to cut (DIFFERENCE), union (UNION), or intersect (INTERSECT) the target object."""
     try:
@@ -142,6 +147,7 @@ def apply_boolean_operation(scene, target_name, tool_name, operation="DIFFERENCE
         return {"error": f"Failed to apply boolean: {str(e)}"}
 
 
+@mcp_command(name="export_for_printing", read_only=False)
 def export_for_printing(scene, object_names=None, filepath=None):
     """Export specified objects (or all selected) directly to an STL file."""
     try:
@@ -196,6 +202,7 @@ def export_for_printing(scene, object_names=None, filepath=None):
         return {"error": f"Failed to export for printing: {str(e)}"}
 
 
+@mcp_command(name="assign_print_color", read_only=False)
 def assign_print_color(scene, object_name, hex_color):
     """Assign a base color to an object for multi-color 3D printing (stored in material base color)."""
     try:
@@ -248,6 +255,7 @@ def assign_print_color(scene, object_name, hex_color):
         return {"error": f"Failed to assign print color: {str(e)}"}
 
 
+@mcp_command(name="auto_layout_for_printing", read_only=False)
 def auto_layout_for_printing(scene, bed_size_x=256, bed_size_y=256, padding_mm=5):
     """Automatically layout all mesh objects flat on the virtual print bed (Z=0) with spacing."""
     try:
@@ -324,6 +332,7 @@ def auto_layout_for_printing(scene, bed_size_x=256, bed_size_y=256, padding_mm=5
         return {"error": f"Failed to auto-layout objects: {str(e)}"}
 
 
+@mcp_command(name="export_3mf_for_multicolor", read_only=False)
 def export_3mf_for_multicolor(scene, filepath=None):
     """Export the scene to a .3mf file, preserving materials for Bambu Studio/PrusaSlicer."""
     try:
@@ -378,6 +387,7 @@ def export_3mf_for_multicolor(scene, filepath=None):
         return {"error": f"Failed to export 3MF: {str(e)}"}
 
 
+@mcp_command(name="batch_export_all_formats", read_only=False)
 def batch_export_all_formats(scene, base_path=None):
     """One-click batch export for all formats (STL, 3MF, Report, Studio)."""
     try:
@@ -415,6 +425,7 @@ def batch_export_all_formats(scene, base_path=None):
         return {"error": f"Failed batch export: {str(e)}"}
 
 
+@mcp_command(name="snap_objects_by_proximity", read_only=False)
 def snap_objects_by_proximity(scene, source_name, target_name, padding_mm=0.0):
     """Align and move source object to the closest face of target object."""
     try:
@@ -459,6 +470,7 @@ def snap_objects_by_proximity(scene, source_name, target_name, padding_mm=0.0):
         return {"error": f"Failed to snap objects: {str(e)}"}
 
 
+@mcp_command(name="set_clearance_tolerance", read_only=False)
 def set_clearance_tolerance(scene, object_name, tolerance_mm=0.2):
     """Apply a small offset to a mesh to ensure it fits into another (positive expands, negative contracts)."""
     try:
@@ -483,4 +495,3 @@ def set_clearance_tolerance(scene, object_name, tolerance_mm=0.2):
         }
     except Exception as e:
         return {"error": f"Failed to set tolerance: {str(e)}"}
-

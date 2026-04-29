@@ -1,7 +1,9 @@
+from ..core.router import mcp_command
 # handlers/scene.py - Handler de cena com robustez e logging
 import logging
 
 
+@mcp_command(name="get_scene_info", read_only=True)
 def get_scene_info():
     """Obtém informações da cena atual do Blender."""
     logger = logging.getLogger("Handler.Scene")

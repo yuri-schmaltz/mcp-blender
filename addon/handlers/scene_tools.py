@@ -1,4 +1,6 @@
 """Scene and render control tools for BlenderMCP."""
+from ..core.router import mcp_command
+
 
 import math
 import mathutils
@@ -9,6 +11,7 @@ from contextlib import redirect_stdout
 import bpy
 
 
+@mcp_command(name="configure_render_settings", read_only=False)
 def configure_render_settings(scene, engine="BLENDER_EEVEE", resolution_x=1920, resolution_y=1080, samples=64, use_gpu=True, transparent_background=False):
     """Configure render settings like engine, resolution, samples, and device."""
     try:
@@ -77,6 +80,7 @@ def configure_render_settings(scene, engine="BLENDER_EEVEE", resolution_x=1920, 
         return {"error": f"Failed to configure render settings: {str(e)}"}
 
 
+@mcp_command(name="setup_camera", read_only=False)
 def setup_camera(scene, focus_object_name=None, location=(0, -10, 5), create_new=False):
     """Set up the active camera, optionally pointing it at a specific object."""
     try:
@@ -122,6 +126,7 @@ def setup_camera(scene, focus_object_name=None, location=(0, -10, 5), create_new
     except Exception as e:
         return {"error": f"Failed to set up camera: {str(e)}"}
 
+@mcp_command(name="get_scene_info", read_only=True)
 def get_scene_info(scene, filter_type=None, filter_name=None, limit=100):
     """Get information about the current Blender scene"""
     try:
@@ -160,6 +165,7 @@ def get_scene_info(scene, filter_type=None, filter_name=None, limit=100):
         traceback.print_exc()
         return {"error": str(e)}
 
+@mcp_command(name="get_active_object", read_only=False)
 def get_active_object(scene):
     """Get the currently active object"""
     obj = bpy.context.view_layer.objects.active
@@ -167,6 +173,7 @@ def get_active_object(scene):
         return {"name": obj.name, "type": obj.type}
     return {"name": None, "message": "No active object"}
 
+@mcp_command(name="set_active_object", read_only=False)
 def set_active_object(scene, name):
     """Set the active object by name"""
     try:
@@ -199,6 +206,7 @@ def _get_aabb(obj):
     return [[*min_corner], [*max_corner]]
 
 
+@mcp_command(name="get_object_info", read_only=True)
 def get_object_info(scene, name):
     """Get detailed information about a specific object"""
     obj = bpy.data.objects.get(name)
@@ -234,6 +242,7 @@ def get_object_info(scene, name):
         }
     return obj_info
 
+@mcp_command(name="get_viewport_screenshot", read_only=True)
 def get_viewport_screenshot(scene, max_size=800, filepath=None, format="png"):
     """
     Capture a screenshot of the current 3D viewport and save it to the specified path.

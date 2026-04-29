@@ -161,21 +161,6 @@ except (ImportError, ValueError):
     log_asset_download = _net_mod.log_asset_download
     validate_sketchfab_key = _net_mod.validate_sketchfab_key
 
-# Load security utilities
-try:
-    if __package__:
-        from .addon.core.security import execute_safely
-    else:
-        from addon.core.security import execute_safely
-except (ImportError, ValueError):
-    _sec_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "addon", "core", "security.py")
-    _sec_spec = importlib.util.spec_from_file_location("_blendermcp_security", _sec_path)
-    _sec_mod = importlib.util.module_from_spec(_sec_spec)
-    if __package__:
-        _sec_mod.__package__ = __package__
-    _sec_spec.loader.exec_module(_sec_mod)
-    execute_safely = _sec_mod.execute_safely
-
 # Global cache instance
 _asset_cache = get_asset_cache()
 
@@ -306,271 +291,24 @@ def _open_in_system(path: str) -> None:
     subprocess.Popen(["xdg-open", path])
 
 
+try:
+    if __package__:
+        from .addon.core.router import execute_command
+        # Initialize handlers
+        from .addon.handlers import load_all_handlers
+    else:
+        from addon.core.router import execute_command
+        from addon.handlers import load_all_handlers
+except Exception as e:
+    import traceback
+    traceback.print_exc()
+    def execute_command(*args, **kwargs):
+        return {"error": f"Router failed to load: {e}"}
+
 class BlenderMCPServer(SocketBlenderMCPServer):
     def __init__(self, host="localhost", port=9876):
         super().__init__(host=host, port=port)
-        self.command_executor = self._execute_command_internal
-
-    def _execute_command_internal(self, command):
-        """Internal command execution with proper context"""
-        cmd_type = command.get("type")
-        params = command.get("params", {})
-        
-        # Base handlers
-        handlers = {
-            "get_scene_info": self.get_scene_info,
-            "get_object_info": self.get_object_info,
-            "get_viewport_screenshot": self.get_viewport_screenshot,
-            "execute_code": self.execute_code,
-            "configure_render_settings": self.configure_render_settings,
-            "setup_camera": self.setup_camera,
-            "get_polyhaven_status": self.get_polyhaven_status,
-            "get_sketchfab_status": self.get_sketchfab_status,
-            "get_ambientcg_status": self.get_ambientcg_status,
-            "set_exact_dimensions": self.set_exact_dimensions,
-            "apply_print_thickness": self.apply_print_thickness,
-            "apply_boolean_operation": self.apply_boolean_operation,
-            "export_for_printing": self.export_for_printing,
-            "assign_print_color": self.assign_print_color,
-            "auto_layout_for_printing": self.auto_layout_for_printing,
-            "export_3mf_for_multicolor": self.export_3mf_for_multicolor,
-            "separate_loose_parts": self.separate_loose_parts,
-            "create_axle_joint": self.create_axle_joint,
-            "create_hinge_joint": self.create_hinge_joint,
-            "create_snap_fit": self.create_snap_fit,
-            "create_ball_joint": self.create_ball_joint,
-            "create_screw_hole": self.create_screw_hole,
-            "snap_objects_by_proximity": self.snap_objects_by_proximity,
-            "set_clearance_tolerance": self.set_clearance_tolerance,
-            "mark_as_functional_part": self.mark_as_functional_part,
-            "list_functional_parts": self.list_functional_parts,
-            "check_mesh_integrity": self.check_mesh_integrity,
-            "auto_repair_mesh": self.auto_repair_mesh,
-            "resolve_self_intersections": self.resolve_self_intersections,
-            "generate_tire_treads": self.generate_tire_treads,
-            "setup_simple_vehicle_rig": self.setup_simple_vehicle_rig,
-            "setup_product_studio": self.setup_product_studio,
-            "render_catalog_angles": self.render_catalog_angles,
-            "generate_print_report": self.generate_print_report,
-            "batch_export_all_formats": self.batch_export_all_formats,
-            # Polyhaven tools
-            "get_polyhaven_categories": self.get_polyhaven_categories,
-            "search_polyhaven_assets": self.search_polyhaven_assets,
-            "download_polyhaven_asset": self.download_polyhaven_asset,
-            "set_texture": self.set_texture,
-            # Sketchfab tools
-            "search_sketchfab_models": self.search_sketchfab_models,
-            "download_sketchfab_model": self.download_sketchfab_model,
-            # AmbientCG tools
-            "search_ambientcg_materials": self.search_ambientcg_materials,
-            "download_ambientcg_material": self.download_ambientcg_material,
-            # Scene manipulation
-            "get_active_object": self.get_active_object,
-            "set_active_object": self.set_active_object,
-            "transform_object": self.transform_object,
-            "add_primitive": self.add_primitive,
-            "delete_object": self.delete_object,
-            # Operator discovery
-            "list_blender_operators": self.list_blender_operators,
-            "get_operator_help": self.get_operator_help,
-            # MCP Compliance
-            "list_tools": self.list_tools,
-        }
-
-        handler = handlers.get(cmd_type)
-        if handler:
-            try:
-                result = handler(**params)
-                
-                # Push Undo state on success for non-read-only commands
-                read_only_cmds = (
-                    "get_scene_info", "get_object_info", "get_polyhaven_categories",
-                    "search_polyhaven_assets", "search_sketchfab_models", "search_ambientcg_materials",
-                    "get_polyhaven_status", "get_sketchfab_status", "get_ambientcg_status", 
-                    "get_viewport_screenshot", "list_tools"
-                )
-                if cmd_type not in read_only_cmds:
-                    try:
-                        # Named Checkpoint: includes first param if available for better history
-                        msg = f"MCP: {cmd_type}"
-                        if params:
-                            first_val = next(iter(params.values()))
-                            msg += f" ({str(first_val)[:20]})"
-                        bpy.ops.ed.undo_push(message=msg)
-                    except: pass
-
-                return {"status": "success", "result": result}
-            except Exception as e:
-                traceback.print_exc()
-                return {"status": "error", "message": str(e)}
-        return {"status": "error", "message": f"Unknown command type: {cmd_type}"}
-
-    # Delegation methods
-    def get_scene_info(self, **kwargs):
-        return _call_handler("scene_tools", "get_scene_info", bpy.context.scene, **kwargs)
-    
-    def get_object_info(self, name):
-        return _call_handler("scene_tools", "get_object_info", bpy.context.scene, name)
-    
-    def get_viewport_screenshot(self, max_size=800, filepath=None, format="png"):
-        return _call_handler("scene_tools", "get_viewport_screenshot", bpy.context.scene, max_size, filepath, format)
-
-    def execute_code(self, code):
-        if not get_prefs().allow_code_execution:
-            return {"error": "Code execution blocked by global preferences. Enable it in Edit > Preferences > Addons > Blender MCP."}
-        try:
-            namespace = {"bpy": bpy, "mathutils": mathutils}
-            capture_buffer = io.StringIO()
-            with redirect_stdout(capture_buffer):
-                execute_safely(code, namespace)
-            return {"executed": True, "result": capture_buffer.getvalue()}
-        except Exception as e:
-            return {"error": str(e)}
-
-    def configure_render_settings(self, **kwargs):
-        return _call_handler("scene_tools", "configure_render_settings", bpy.context.scene, **kwargs)
-
-    def setup_camera(self, **kwargs):
-        return _call_handler("scene_tools", "setup_camera", bpy.context.scene, **kwargs)
-
-    def get_polyhaven_status(self):
-        return _call_handler("polyhaven", "get_polyhaven_status", bpy.context.scene)
-
-    def get_polyhaven_categories(self, asset_type="hdris"):
-        return _call_handler("polyhaven", "get_polyhaven_categories", asset_type)
-
-    def search_polyhaven_assets(self, query, asset_type="hdris"):
-        return _call_handler("polyhaven", "search_polyhaven_assets", query, asset_type)
-
-    def download_polyhaven_asset(self, asset_id, asset_type, resolution="1k"):
-        return _call_handler("polyhaven", "download_polyhaven_asset", bpy.context.scene, asset_id, asset_type, resolution)
-
-    def set_texture(self, object_name, texture_id):
-        return _call_handler("material_tools", "set_texture", object_name, texture_id)
-
-    def get_sketchfab_status(self):
-        return _call_handler("sketchfab", "get_sketchfab_status", bpy.context.scene)
-
-    def search_sketchfab_models(self, query, **kwargs):
-        return _call_handler("sketchfab", "search_sketchfab_models", bpy.context.scene, query, **kwargs)
-
-    def download_sketchfab_model(self, uid):
-        return _call_handler("sketchfab", "download_sketchfab_model", bpy.context.scene, uid)
-
-    def get_ambientcg_status(self):
-        return _call_handler("ambientcg", "get_ambientcg_status", bpy.context.scene)
-
-    def search_ambientcg_materials(self, query="", limit=20):
-        return _call_handler("ambientcg", "search_ambientcg_materials", bpy.context.scene, query, limit)
-
-    def download_ambientcg_material(self, asset_id, resolution="2K", file_format="JPG"):
-        return _call_handler("ambientcg", "download_ambientcg_material", bpy.context.scene, asset_id, resolution, file_format)
-
-    def set_exact_dimensions(self, **kwargs):
-        return _call_handler("printing3d", "set_exact_dimensions", bpy.context.scene, **kwargs)
-
-    def apply_print_thickness(self, **kwargs):
-        return _call_handler("printing3d", "apply_print_thickness", bpy.context.scene, **kwargs)
-
-    def apply_boolean_operation(self, **kwargs):
-        return _call_handler("printing3d", "apply_boolean_operation", bpy.context.scene, **kwargs)
-
-    def export_for_printing(self, **kwargs):
-        return _call_handler("printing3d", "export_for_printing", bpy.context.scene, **kwargs)
-
-    def assign_print_color(self, **kwargs):
-        return _call_handler("printing3d", "assign_print_color", bpy.context.scene, **kwargs)
-
-    def auto_layout_for_printing(self, **kwargs):
-        return _call_handler("printing3d", "auto_layout_for_printing", bpy.context.scene, **kwargs)
-
-    def export_3mf_for_multicolor(self, **kwargs):
-        return _call_handler("printing3d", "export_3mf_for_multicolor", bpy.context.scene, **kwargs)
-
-    def separate_loose_parts(self, **kwargs):
-        return _call_handler("mesh_tools", "separate_loose_parts", bpy.context.scene, **kwargs)
-
-    def create_axle_joint(self, **kwargs):
-        return _call_handler("mechanical_tools", "create_axle_joint", bpy.context.scene, **kwargs)
-
-    def check_mesh_integrity(self, **kwargs):
-        return _call_handler("mesh_tools", "check_mesh_integrity", bpy.context.scene, **kwargs)
-
-    def auto_repair_mesh(self, **kwargs):
-        return _call_handler("mesh_tools", "auto_repair_mesh", bpy.context.scene, **kwargs)
-
-    def resolve_self_intersections(self, **kwargs):
-        return _call_handler("mesh_tools", "resolve_self_intersections", bpy.context.scene, **kwargs)
-
-    def generate_tire_treads(self, **kwargs):
-        return _call_handler("procedural_tools", "generate_tire_treads", bpy.context.scene, **kwargs)
-
-    def setup_simple_vehicle_rig(self, **kwargs):
-        return _call_handler("vehicle_rigging", "setup_simple_vehicle_rig", bpy.context.scene, **kwargs)
-
-    def setup_product_studio(self, **kwargs):
-        return _call_handler("studio_tools", "setup_product_studio", bpy.context.scene, **kwargs)
-
-    def get_active_object(self):
-        return _call_handler("scene_tools", "get_active_object", bpy.context.scene)
-    
-    def set_active_object(self, **kwargs):
-        return _call_handler("scene_tools", "set_active_object", bpy.context.scene, **kwargs)
-
-    def transform_object(self, **kwargs):
-        return _call_handler("transform_tools", "transform_object", bpy.context.scene, **kwargs)
-
-    def add_primitive(self, **kwargs):
-        return _call_handler("transform_tools", "add_primitive", bpy.context.scene, **kwargs)
-
-    def delete_object(self, **kwargs):
-        return _call_handler("transform_tools", "delete_object", bpy.context.scene, **kwargs)
-
-    def list_blender_operators(self, **kwargs):
-        return _call_handler("operator_tools", "list_blender_operators", bpy.context.scene, **kwargs)
-
-    def get_operator_help(self, **kwargs):
-        return _call_handler("operator_tools", "get_operator_help", bpy.context.scene, **kwargs)
-
-    def render_catalog_angles(self, **kwargs):
-        return _call_handler("reporting_tools", "render_catalog_angles", bpy.context.scene, **kwargs)
-
-    def generate_print_report(self, **kwargs):
-        return _call_handler("reporting_tools", "generate_print_report", bpy.context.scene, **kwargs)
-
-    def batch_export_all_formats(self, **kwargs):
-        return _call_handler("printing3d", "batch_export_all_formats", bpy.context.scene, **kwargs)
-
-    def create_hinge_joint(self, **kwargs):
-        return _call_handler("mechanical_tools", "create_hinge_joint", bpy.context.scene, **kwargs)
-
-    def create_snap_fit(self, **kwargs):
-        return _call_handler("mechanical_tools", "create_snap_fit", bpy.context.scene, **kwargs)
-
-    def create_ball_joint(self, **kwargs):
-        return _call_handler("mechanical_tools", "create_ball_joint", bpy.context.scene, **kwargs)
-
-    def create_screw_hole(self, **kwargs):
-        return _call_handler("mechanical_tools", "create_screw_hole", bpy.context.scene, **kwargs)
-
-    def snap_objects_by_proximity(self, **kwargs):
-        return _call_handler("printing3d", "snap_objects_by_proximity", bpy.context.scene, **kwargs)
-
-    def set_clearance_tolerance(self, **kwargs):
-        return _call_handler("printing3d", "set_clearance_tolerance", bpy.context.scene, **kwargs)
-
-    def mark_as_functional_part(self, **kwargs):
-        return _call_handler("functional_parts", "mark_as_functional_part", bpy.context.scene, **kwargs)
-
-    def list_functional_parts(self, **kwargs):
-        return _call_handler("functional_parts", "list_functional_parts", bpy.context.scene, **kwargs)
-
-    def list_tools(self, **kwargs):
-        if tool_schemas:
-            return tool_schemas.get_tools_list()
-        return {"error": "Tool schemas not available"}
-
-    # endregion
+        self.command_executor = execute_command
 
 
 def _get_addon_package():

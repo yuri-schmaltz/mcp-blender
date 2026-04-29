@@ -1,4 +1,6 @@
 """Poly Haven API handler for downloading HDRIs, textures, and models."""
+from ..core.router import mcp_command
+
 
 import os
 import shutil
@@ -32,6 +34,7 @@ def get_prefs():
     return get_addon_prefs(__package__)
 
 
+@mcp_command(name="get_polyhaven_status", read_only=True)
 def get_polyhaven_status(scene):
     """Get the current status of PolyHaven integration"""
     prefs = get_prefs()
@@ -52,6 +55,7 @@ def get_polyhaven_status(scene):
         }
 
 
+@mcp_command(name="get_polyhaven_categories", read_only=True)
 def get_polyhaven_categories(asset_type="hdris"):
     """Get available categories from Poly Haven"""
     try:
@@ -64,6 +68,7 @@ def get_polyhaven_categories(asset_type="hdris"):
         return {"error": str(e)}
 
 
+@mcp_command(name="search_polyhaven_assets", read_only=True)
 def search_polyhaven_assets(query, asset_type="hdris"):
     """Search Poly Haven assets"""
     try:
@@ -127,6 +132,7 @@ def resolve_polyhaven_resolution(asset_id, asset_type, requested_res="4k"):
         return requested_res
 
 
+@mcp_command(name="download_polyhaven_asset", read_only=False)
 def download_polyhaven_asset(scene, asset_id, asset_type="hdris", resolution="4k"):
     """Download and set up a Poly Haven asset"""
     prefs = get_prefs()

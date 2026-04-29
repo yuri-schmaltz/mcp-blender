@@ -1,17 +1,19 @@
-"""API handlers for external services and core functionality."""
-
+"""API handlers for external services."""
 import os
-import pkgutil
 import importlib
+import logging
 
-# Auto-discovery: import all modules in this package to ensure @mcp_tool decorators are executed
-__all__ = []
+logger = logging.getLogger("BlenderMCP.Handlers")
 
-package_dir = os.path.dirname(__file__)
-for _, module_name, _ in pkgutil.iter_modules([package_dir]):
-    if not module_name.startswith('_'):
-        try:
-            importlib.import_module(f".{module_name}", package=__name__)
-            __all__.append(module_name)
-        except Exception as e:
-            print(f"BlenderMCP Auto-discovery error loading handler '{module_name}': {e}")
+def load_all_handlers():
+    """Dynamically loads all handler modules to register their @mcp_command decorators."""
+    handlers_dir = os.path.dirname(__file__)
+    for filename in os.listdir(handlers_dir):
+        if filename.endswith(".py") and not filename.startswith("__"):
+            module_name = filename[:-3]
+            try:
+                importlib.import_module(f".{module_name}", package=__name__)
+            except Exception as e:
+                logger.error(f"Failed to load handler {module_name}: {e}")
+
+load_all_handlers()

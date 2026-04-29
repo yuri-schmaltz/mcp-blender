@@ -1,4 +1,6 @@
 """Mechanical tools for BlenderMCP."""
+from ..core.router import mcp_command
+
 
 import math
 
@@ -6,6 +8,7 @@ import bpy
 import mathutils
 
 
+@mcp_command(name="create_axle_joint", read_only=False)
 def create_axle_joint(scene, chassis_name, wheel_name, axle_diameter=None, clearance=0.2, hole_depth=None):
     """Create a mechanical axle joint (hole in chassis, pin on wheel)."""
     try:
@@ -112,6 +115,7 @@ def create_axle_joint(scene, chassis_name, wheel_name, axle_diameter=None, clear
         return {"error": f"Failed to create axle joint: {str(e)}"}
 
 
+@mcp_command(name="create_hinge_joint", read_only=False)
 def create_hinge_joint(scene, part1_name, part2_name, location=None, axis=(0, 1, 0), diameter=3.0, clearance=0.2):
     """Create a hinge joint between two parts at a specific location."""
     try:
@@ -187,6 +191,7 @@ def create_hinge_joint(scene, part1_name, part2_name, location=None, axis=(0, 1,
         return {"error": f"Failed to create hinge: {str(e)}"}
 
 
+@mcp_command(name="create_snap_fit", read_only=False)
 def create_snap_fit(scene, female_part_name, male_part_name, location=None, width=10.0, height=15.0, thickness=2.0):
     """Create a simple cantilever snap-fit joint between two parts."""
     try:
@@ -255,6 +260,7 @@ def create_snap_fit(scene, female_part_name, male_part_name, location=None, widt
         return {"error": f"Failed to create snap-fit: {str(e)}"}
 
 
+@mcp_command(name="create_ball_joint", read_only=False)
 def create_ball_joint(scene, socket_part_name, ball_part_name, location=None, diameter=10.0, clearance=0.2):
     """Create a ball-and-socket joint between two parts."""
     try:
@@ -311,6 +317,7 @@ def create_ball_joint(scene, socket_part_name, ball_part_name, location=None, di
         return {"error": f"Failed to create ball joint: {str(e)}"}
 
 
+@mcp_command(name="create_screw_hole", read_only=False)
 def create_screw_hole(scene, part1_name, part2_name, location=None, axis=(0,0,1), screw_type="M3", countersink=True):
     """Create aligned screw holes for standard metric screws."""
     try:

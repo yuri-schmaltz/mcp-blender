@@ -1,9 +1,12 @@
 """Procedural modeling tools for BlenderMCP."""
+from ..core.router import mcp_command
+
 
 
 import bpy
 
 
+@mcp_command(name="generate_tire_treads", read_only=False)
 def generate_tire_treads(scene, wheel_name, pattern='OFFROAD'):
     """Generate procedural tire treads on a cylindrical wheel mesh."""
     try:

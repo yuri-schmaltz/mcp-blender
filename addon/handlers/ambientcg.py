@@ -1,4 +1,6 @@
 """AmbientCG API handler for downloading PBR materials."""
+from ..core.router import mcp_command
+
 
 import os
 import shutil
@@ -17,6 +19,7 @@ def get_prefs():
     return get_addon_prefs(__package__)
 
 
+@mcp_command(name="get_ambientcg_status", read_only=True)
 def get_ambientcg_status(scene):
     """Get the current status of AmbientCG integration"""
     prefs = get_prefs()
@@ -37,6 +40,7 @@ def get_ambientcg_status(scene):
         }
 
 
+@mcp_command(name="search_ambientcg_materials", read_only=True)
 def search_ambientcg_materials(scene, query="", limit=20):
     """Search for materials on AmbientCG based on query"""
     try:
@@ -81,6 +85,7 @@ def search_ambientcg_materials(scene, query="", limit=20):
         return friendly_error("AmbientCG search", e)
 
 
+@mcp_command(name="download_ambientcg_material", read_only=False)
 def download_ambientcg_material(scene, asset_id, resolution="2K", file_format="JPG", progress_tracker=None):
     """Download and set up an AmbientCG material"""
     try:

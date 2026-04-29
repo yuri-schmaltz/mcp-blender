@@ -1,4 +1,6 @@
 """Functional part management for BlenderMCP."""
+from ..core.router import mcp_command
+
 
 import bpy
 import json
@@ -113,6 +115,7 @@ def get_role_items(self, context):
     return preset["roles"]
 
 
+@mcp_command(name="mark_as_functional_part", read_only=False)
 def mark_as_functional_part(scene, object_name, role="Generic", preset="GENERIC", metadata=None):
     """Mark an object as a functional part with specific metadata."""
     try:
@@ -150,6 +153,7 @@ def mark_as_functional_part(scene, object_name, role="Generic", preset="GENERIC"
     except Exception as e:
         return {"error": f"Failed to mark part: {str(e)}"}
 
+@mcp_command(name="list_functional_parts", read_only=False)
 def list_functional_parts(scene):
     """List all functional parts in the scene with their properties."""
     try:
