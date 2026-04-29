@@ -166,33 +166,6 @@ class BLENDERMCP_PT_Engineering(bpy.types.Panel):
 
 
 # =============================================================================
-# Sub-Panel: Integrations (Poly Haven, Sketchfab, etc.)
-# =============================================================================
-class BLENDERMCP_PT_Integrations(bpy.types.Panel):
-    bl_label = t("panel_integrations_label")
-    bl_idname = "BLENDERMCP_PT_Integrations"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"
-    bl_category = "MCP"
-    bl_parent_id = "BLENDERMCP_PT_Panel"
-    bl_options = {"DEFAULT_CLOSED"}
-
-    def draw(self, context):
-        layout = self.layout
-        prefs = get_prefs(context)
-        if not prefs:
-            layout.label(text="Preferences not found", icon="ERROR")
-            return
-
-        col = layout.column(align=True)
-        col.label(text="Manage all integrations and API keys in the Addon Preferences.")
-        
-        layout.separator()
-        # Open local Preferences
-        layout.operator("screen.userpref_show", text="Open Addon Settings", icon="PREFERENCES")
-
-
-# =============================================================================
 # Sub-Panel: Setup & Maintenance (Consolidated)
 # =============================================================================
 class BLENDERMCP_PT_Setup(bpy.types.Panel):
@@ -242,6 +215,5 @@ class BLENDERMCP_PT_Setup(bpy.types.Panel):
 PANEL_CLASSES = [
     BLENDERMCP_PT_Panel,
     BLENDERMCP_PT_Engineering,
-    BLENDERMCP_PT_Integrations,
     BLENDERMCP_PT_Setup,
 ]
