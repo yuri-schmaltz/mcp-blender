@@ -161,6 +161,21 @@ except (ImportError, ValueError):
     log_asset_download = _net_mod.log_asset_download
     validate_sketchfab_key = _net_mod.validate_sketchfab_key
 
+# Load security utilities
+try:
+    if __package__:
+        from .addon.core.security import execute_safely
+    else:
+        from addon.core.security import execute_safely
+except (ImportError, ValueError):
+    _sec_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "addon", "core", "security.py")
+    _sec_spec = importlib.util.spec_from_file_location("_blendermcp_security", _sec_path)
+    _sec_mod = importlib.util.module_from_spec(_sec_spec)
+    if __package__:
+        _sec_mod.__package__ = __package__
+    _sec_spec.loader.exec_module(_sec_mod)
+    execute_safely = _sec_mod.execute_safely
+
 # Global cache instance
 _asset_cache = get_asset_cache()
 
@@ -404,10 +419,10 @@ class BlenderMCPServer(SocketBlenderMCPServer):
         if not get_prefs().allow_code_execution:
             return {"error": "Code execution blocked by global preferences. Enable it in Edit > Preferences > Addons > Blender MCP."}
         try:
-            namespace = {"bpy": bpy}
+            namespace = {"bpy": bpy, "mathutils": mathutils}
             capture_buffer = io.StringIO()
             with redirect_stdout(capture_buffer):
-                exec(code, namespace)
+                execute_safely(code, namespace)
             return {"executed": True, "result": capture_buffer.getvalue()}
         except Exception as e:
             return {"error": str(e)}

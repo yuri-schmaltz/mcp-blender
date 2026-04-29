@@ -4,7 +4,7 @@ import os
 import subprocess
 import sys
 
-import bpy
+import bpy  # type: ignore
 
 # Load helpers via filesystem to work in both repo and Blender extension mode.
 import importlib.util as _iu
@@ -310,7 +310,7 @@ class BLENDERMCP_OT_OpenURL(bpy.types.Operator):
     bl_label = "Open URL"
     bl_description = "Open a specific URL in the system browser"
     
-    target_url: bpy.props.StringProperty(name="URL", default="")
+    target_url: bpy.props.StringProperty(name="URL", default="")  # type: ignore
 
 
     def execute(self, context):
@@ -329,7 +329,7 @@ class BLENDERMCP_OT_DownloadProgress(bpy.types.Operator):
     bl_idname = "blendermcp.download_progress"
     bl_label = "Download Progress"
 
-    operation_id: bpy.props.StringProperty(default="")
+    operation_id: bpy.props.StringProperty(default="")  # type: ignore
     _timer = None
     _last_progress = 0
 
@@ -488,7 +488,7 @@ class BLENDERMCP_OT_SendChat(bpy.types.Operator):
         # Actually, in Blender, we can't easily do async without threading
         # For now, we'll do it synchronously for simplicity
         
-        from ..handlers import llm_handler
+        from ..handlers import llm_handler  # type: ignore
 
         result = llm_handler.handle_chat_request(context)
         
