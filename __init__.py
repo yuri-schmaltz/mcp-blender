@@ -52,6 +52,16 @@ class BlenderMCPPreferences(bpy.types.AddonPreferences):
         default="",
     )
 
+    client_target: EnumProperty(
+        name="Target Client",
+        items=[
+            ('lm_studio', "LM Studio", "Local LLM via LM Studio"),
+            ('ollama', "Ollama", "Local LLM via Ollama"),
+            ('custom', "Custom", "Generic OpenAI-compatible API"),
+        ],
+        default='lm_studio',
+    )
+
     # Integration Toggles
     use_polyhaven: BoolProperty(
         name="Use Poly Haven",
@@ -99,6 +109,24 @@ class BlenderMCPPreferences(bpy.types.AddonPreferences):
         col = box.column(align=True)
         col.prop(self, "sketchfab_api_key")
         col.prop(self, "blenderkit_api_key")
+
+        # Section: Setup & Maintenance
+        box = layout.box()
+        box.label(text="Setup & Maintenance", icon="TOOL_SETTINGS")
+        
+        col = box.column(align=True)
+        col.operator("blendermcp.install_dependencies", text="Install Dependencies", icon="IMPORT")
+        col.operator("blendermcp.health_check", text="Health Check", icon="CHECKMARK")
+        
+        box.separator()
+        box.label(text="Advanced (Stdio / Terminal):", icon="CONSOLE")
+        box.prop(self, "client_target")
+        box.operator("blendermcp.copy_mcp_client_config")
+        box.operator("blendermcp.run_mcp_terminal_server")
+        
+        box.separator()
+        box.operator("blendermcp.open_logs", icon="TEXT")
+        box.operator("blendermcp.clear_cache", icon="TRASH")
 
 
 # =============================================================================

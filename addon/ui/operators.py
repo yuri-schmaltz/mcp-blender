@@ -171,7 +171,9 @@ class BLENDERMCP_OT_CopyMCPClientConfig(bpy.types.Operator):
 
     def execute(self, context):
         scene = context.scene
-        client = scene.blendermcp_client_target
+        from .panel import get_prefs
+        prefs = get_prefs(context)
+        client = prefs.client_target if prefs else 'lm_studio'
         snippet = _mcp_client_config_snippet(client, host="localhost", port=int(scene.blendermcp_port))
         context.window_manager.clipboard = snippet
         self.report({"INFO"}, t("msg_copied_config", client=client))

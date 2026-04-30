@@ -22,7 +22,7 @@ def separate_loose_parts(scene, object_name, smart_rename=True):
         # Select and make active
         bpy.ops.object.select_all(action='DESELECT')
         obj.select_set(True)
-        scene.view_layer.objects.active = obj
+        bpy.context.view_layer.objects.active = obj
 
         # Track objects before separation to find the new ones
         pre_objects = set(scene.objects.keys())
@@ -157,7 +157,7 @@ def auto_repair_mesh(scene, object_name):
         # Select and make active
         bpy.ops.object.select_all(action='DESELECT')
         obj.select_set(True)
-        scene.view_layer.objects.active = obj
+        bpy.context.view_layer.objects.active = obj
 
         # Go to Edit Mode
         bpy.ops.object.mode_set(mode='EDIT')
@@ -198,7 +198,7 @@ def resolve_self_intersections(scene, object_name):
         # Select and make active
         bpy.ops.object.select_all(action='DESELECT')
         obj.select_set(True)
-        scene.view_layer.objects.active = obj
+        bpy.context.view_layer.objects.active = obj
 
         # Go to Edit Mode
         bpy.ops.object.mode_set(mode='EDIT')

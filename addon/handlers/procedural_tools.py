@@ -23,7 +23,7 @@ def generate_tire_treads(scene, wheel_name, pattern='OFFROAD'):
         # Ensure object is active
         bpy.ops.object.select_all(action='DESELECT')
         obj.select_set(True)
-        scene.view_layer.objects.active = obj
+        bpy.context.view_layer.objects.active = obj
 
         # 1. Add Subdivision Surface for detail
         subdiv = obj.modifiers.new(name="Tread_Subdiv", type='SUBSURF')

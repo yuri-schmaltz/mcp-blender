@@ -128,55 +128,8 @@ class BLENDERMCP_PT_Engineering(bpy.types.Panel):
             info_box.label(text=f"{obj.name}  →  {preset_tag} / {role_tag}", icon="CHECKMARK")
 
 
-# =============================================================================
-# Sub-Panel: Setup & Maintenance (Consolidated)
-# =============================================================================
-class BLENDERMCP_PT_Setup(bpy.types.Panel):
-    bl_label = t("panel_setup_maint_label")
-    bl_idname = "BLENDERMCP_PT_Setup"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"
-    bl_category = "MCP"
-    bl_parent_id = "BLENDERMCP_PT_Panel"
-    bl_options = {"DEFAULT_CLOSED"}
-
-    def draw(self, context):
-        layout = self.layout
-        scene = context.scene
-
-        # Main Setup
-        col = layout.column(align=True)
-        col.operator("blendermcp.install_dependencies", text=t("btn_install_deps"), icon="IMPORT")
-        col.operator("blendermcp.health_check", text=t("btn_health_check"), icon="CHECKMARK")
-        
-        layout.separator(factor=0.5)
-
-        # Integrations (Security side)
-        prefs = get_prefs(context)
-        if prefs:
-            layout.prop(prefs, "allow_code_execution", text=t("label_remote_code_short"), icon="SCRIPT")
-        else:
-            layout.label(text="Preferences not found", icon="ERROR")
-        
-        layout.separator(factor=0.5)
-        
-        # Advanced Toggle
-        layout.prop(scene, "blendermcp_show_advanced", icon="SETTINGS", toggle=True)
-        
-        if scene.blendermcp_show_advanced:
-            box = layout.box()
-            box.label(text=t("label_advanced_section"), icon="CONSOLE")
-            box.prop(scene, "blendermcp_client_target")
-            box.operator("blendermcp.copy_mcp_client_config")
-            box.operator("blendermcp.run_mcp_terminal_server")
-            box.separator()
-            box.operator("blendermcp.open_logs", icon="TEXT")
-            box.operator("blendermcp.clear_cache", icon="TRASH")
-
-
 # All panel classes in registration order
 PANEL_CLASSES = [
     BLENDERMCP_PT_Panel,
     BLENDERMCP_PT_Engineering,
-    BLENDERMCP_PT_Setup,
 ]

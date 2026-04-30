@@ -243,22 +243,11 @@ def register():
     bpy.types.Scene.blendermcp_port = bpy.props.IntProperty(name="Port", default=9876)
     bpy.types.Scene.blendermcp_chat_prompt = bpy.props.StringProperty(name="Ask AI", default="")
     bpy.types.Scene.blendermcp_chat_status = bpy.props.StringProperty(name="AI Status", default="Ready")
-    bpy.types.Scene.blendermcp_client_target = bpy.props.EnumProperty(
-        name="Target Client",
-        items=[
-            ('lm_studio', "LM Studio", "Local LLM via LM Studio"),
-            ('ollama', "Ollama", "Local LLM via Ollama"),
-            ('custom', "Custom", "Generic OpenAI-compatible API"),
-        ],
-        default='lm_studio',
-    )
-    
     # Action metrics & UX
     bpy.types.Scene.blendermcp_last_action = bpy.props.StringProperty(name="Last Action", default="None")
     bpy.types.Scene.blendermcp_last_action_at = bpy.props.StringProperty(name="At", default="")
     bpy.types.Scene.blendermcp_last_action_details = bpy.props.StringProperty(name="Details", default="")
     bpy.types.Scene.blendermcp_last_action_ok = bpy.props.BoolProperty(name="Status", default=True)
-    bpy.types.Scene.blendermcp_show_advanced = bpy.props.BoolProperty(name="Advanced", default=False)
 
     # Part Preset System
     from .addon.handlers.functional_parts import get_preset_items, get_role_items
