@@ -222,6 +222,9 @@ def get_object_info(scene, name):
         "scale": [obj.scale.x, obj.scale.y, obj.scale.z],
         "visible": obj.visible_get(),
         "materials": [],
+        "collections": [c.name for c in obj.users_collection],
+        "modifiers": [mod.name for mod in getattr(obj, "modifiers", [])],
+        "constraints": [con.name for con in getattr(obj, "constraints", [])],
     }
 
     if obj.type == "MESH":

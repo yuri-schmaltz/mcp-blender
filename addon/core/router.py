@@ -2,6 +2,19 @@ import inspect
 import traceback
 import bpy
 import logging
+import time
+
+try:
+    if __package__:
+        from ..utils.metrics import metrics
+    else:
+        from addon.utils.metrics import metrics
+except ImportError:
+    # Fallback caso a importação falhe
+    class DummyMetrics:
+        def inc(self, name): pass
+        def observe(self, name, value): pass
+    metrics = DummyMetrics()
 
 logger = logging.getLogger("BlenderMCP.Router")
 
@@ -47,7 +60,14 @@ def execute_command(command: dict):
         if "scene" in sig.parameters and "scene" not in params:
             params["scene"] = bpy.context.scene
             
+        start_time = time.time()
         result = func(**params)
+        duration = time.time() - start_time
+        
+        # Metric tracking (Wave 4)
+        metrics.inc(f"cmd_{cmd_type}_count")
+        metrics.observe(f"cmd_{cmd_type}_duration", duration)
+        logger.info(f"MCP Command '{cmd_type}' took {duration:.3f}s")
         
         # Undo history
         if not cmd_info["read_only"]:
