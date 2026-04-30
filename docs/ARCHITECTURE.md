@@ -32,16 +32,24 @@ BlenderMCP is a Model Context Protocol (MCP) server that enables AI assistants t
 
 ## Components
 
-### 1. Blender Addon (`addon.py`, `addon/server.py`)
+### 1. Blender Addon (`addon.py`, `addon/core/router.py`, `addon/handlers/`)
 
-**Purpose**: Socket server running inside Blender that executes commands.
+**Purpose**: Modular system running inside Blender that registers and executes commands via a dynamic registry.
 
-**Key Classes**:
-- `addon.server.BlenderMCPServer`: Socket lifecycle and client handling
-- `addon.py::BlenderMCPServer`: Command router/handlers on top of socket server base
-  - `_server_loop()`: Accepts connections in background thread
-  - `_handle_client()`: Processes commands from MCP server
-  - `execute_command()`: Dispatches to specific handlers
+**Core Components**:
+- `addon.server.BlenderMCPServer`: Base socket server managing lifecycle and client threading.
+- `addon.core.router`: The centralized command registry.
+  - `@mcp_command`: Decorator for registering handler functions.
+  - `execute_command()`: Dynamic executor that performs signature inspection and context injection (`bpy.context.scene`).
+- `addon/handlers/`: Package containing specialized command modules (e.g., `mesh_tools.py`, `scene_tools.py`).
+  - `load_all_handlers()`: Auto-discovery system that imports all handlers on startup.
+
+**Command Execution Logic**:
+1. Socket server receives JSON command.
+2. `router.execute_command` lookups function in global registry.
+3. Inspection of function signature to determine if `scene` is required.
+4. Execution within Blender's main thread (via `bpy.app.timers`).
+5. Automatic `undo_push` for write-enabled commands.
 
 **Command Handlers**:
 - Scene operations: `get_scene_info()`, `get_object_info()`, `get_viewport_screenshot()`
@@ -129,7 +137,8 @@ src/blender_mcp/
    ↓
 5. Blender addon receives command
    │  - JSON deserialization
-   │  - Handler lookup
+   │  - Router lookup (addon/core/router.py)
+   │  - Automated context injection (bpy.context.scene)
    │  - Execute in main thread (bpy.app.timers)
    ↓
 6. Result returned to MCP server
@@ -326,7 +335,7 @@ uvx blender-mcp
 ## Future Improvements
 
 ### Architecture
-- [ ] Refactor `addon.py` into modules (1878 lines → 200-300 each)
+- [x] Refactor `addon.py` into modules (Completed)
 - [ ] Plugin system for external tool integrations
 - [ ] Event streaming for progress updates
 - [ ] Websocket upgrade for bidirectional communication
@@ -372,33 +381,22 @@ uv pip install -e .
 ```python
 @mcp.tool()
 def my_new_tool(ctx: Context, param: str) -> str:
-    """Tool description."""
-    # Validate inputs
-    from blender_mcp.shared.validators import validate_asset_id
-    param = validate_asset_id(param)
-    
-    # Send command to Blender
-    blender = get_blender_connection()
-    result = blender.send_command("my_command", {"param": param})
-    return json.dumps(result)
+    # ... call blender.send_command("my_command", {"param": param})
 ```
 
-2. **Add handler in `addon.py`**:
+2. **Add handler in a file within `addon/handlers/`**:
 ```python
-def my_command(self, param):
-    """Execute the command."""
-    # Use bpy API
+from ..core.router import mcp_command
+
+@mcp_command(name="my_command", read_only=False)
+def my_command(param, scene=None):
+    # Use bpy API with injected scene
     obj = bpy.data.objects.get(param)
     return {"found": obj is not None}
 ```
 
-3. **Register in handlers dict**:
-```python
-handlers = {
-    "my_command": self.my_command,
-    # ... existing handlers
-}
-```
+3. **Auto-registration**:
+The command is automatically registered via the `load_all_handlers()` system in `addon/handlers/__init__.py`. No manual entry in `addon.py` required.
 
 4. **Write tests**:
 ```python
