@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+import sys
 
 import bpy
 from bpy.props import (
@@ -192,6 +193,8 @@ def _load_addon_module():
     module = importlib.util.module_from_spec(spec)
     # Crucial: set __package__ so relative imports like 'from .addon import ...' work
     module.__package__ = pkg
+    # Register in sys.modules so submodules (UI, operators) can find it
+    sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -218,6 +221,7 @@ def register():
     bpy.utils.register_class(BlenderMCPPreferences)
 
     # 2. Load and register the rest of the addon
+    print("BlenderMCP: Loading addon module...")
     _addon_mod = _load_addon_module()
     _addon_mod.register()
 

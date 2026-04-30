@@ -210,16 +210,8 @@ _ADDON_PACKAGE = _get_addon_package()
 
 
 # Blender UI Panel and Operators are now in addon/ui/ package.
-# Load via filesystem to work in all Blender loading modes (repo, extension, legacy).
-import importlib.util as _iu
-
-_ui_init = os.path.join(os.path.dirname(os.path.abspath(__file__)), "addon", "ui", "__init__.py")
-_spec = _iu.spec_from_file_location("_blendermcp_ui", _ui_init)
-_mod = _iu.module_from_spec(_spec)
-if __package__:
-    _mod.__package__ = __package__
-_spec.loader.exec_module(_mod)
-_UI_CLASSES = _mod.UI_CLASSES
+from .addon import ui
+_UI_CLASSES = ui.UI_CLASSES
 
 
 # Registration functions

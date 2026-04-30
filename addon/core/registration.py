@@ -8,8 +8,13 @@ def register_all():
     # Note: BlenderMCPPreferences is usually registered by addon.py/register()
     
     # 2. Register UI Classes
+    print(f"BlenderMCP: Registering {len(UI_CLASSES)} UI classes...")
     for cls in UI_CLASSES:
-        bpy.utils.register_class(cls)
+        try:
+            bpy.utils.register_class(cls)
+            print(f"  [OK] Registered: {cls.__name__}")
+        except Exception as e:
+            print(f"  [ERROR] Failed to register {cls}: {e}")
     
     # 3. Initialize Server Manager
     # This will be handled by addon.py for now to avoid complexity

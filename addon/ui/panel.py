@@ -8,60 +8,23 @@ import importlib.util as _iu
 
 
 def _get_addon_module():
-    """Load the main addon module safely in all Blender loading modes."""
-    # 1. Try via package if available (standard Extension mode)
+    """Load the main addon module safely using package context."""
     if __package__:
-        parts = __package__.split('.')
-        try:
-            # We look for the root module in sys.modules by going up the namespace levels.
-            # In Blender Extensions, this is typically bl_ext.<repo>.<extension_id>
-            # In legacy addons, it is just <addon_id>
-            for i in range(len(parts), 0, -1):
-                root_maybe = ".".join(parts[:i])
-                if root_maybe in sys.modules:
-                    mod = sys.modules[root_maybe]
-                    if hasattr(mod, "BlenderMCPServer"):
-                        return mod
-        except Exception:
-            pass
-
-    # 2. Fallback to filesystem detection (Repo mode or non-standard install)
-    # addon/ui/panel.py -> addon/ui -> addon -> project_root
-    ui_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.dirname(os.path.dirname(ui_dir))
+        # bl_ext.user_default.mcp_blender.addon.ui -> bl_ext.user_default.mcp_blender.addon_entry
+        pkg_root = ".".join(__package__.split('.')[:3])
+        entry_name = f"{pkg_root}.addon_entry"
+        if entry_name in sys.modules:
+            return sys.modules[entry_name]
     
-    # Candidate files for the main entry point
-    for cand in ["addon.py", "__init__.py"]:
-        addon_py = os.path.join(project_root, cand)
-        if os.path.exists(addon_py):
-            # Check if already loaded by Blender (including extension naming)
-            for name, mod in sys.modules.items():
-                if hasattr(mod, "__file__") and mod.__file__ and os.path.abspath(mod.__file__) == os.path.abspath(addon_py):
-                    return mod
-                if "addon_entry" in name and hasattr(mod, "BlenderMCPServer"):
-                    return mod
-            
-            # Load dynamic spec if not already in sys.modules
-            spec = _iu.spec_from_file_location("_blendermcp_addon_ref_panel", addon_py)
-            mod = _iu.module_from_spec(spec)
-            # Propagate root package if possible
-            if __package__:
-                parts = __package__.split('.')
-                if len(parts) >= 3:
-                    mod.__package__ = ".".join(parts[:3])
-                else:
-                    mod.__package__ = parts[0]
-            spec.loader.exec_module(mod)
+    # Fallback to searching in sys.modules
+    for name, mod in sys.modules.items():
+        if name.endswith(".addon_entry") and hasattr(mod, "BlenderMCPServer"):
             return mod
-            
-    raise ImportError("Could not locate BlenderMCP main module (addon.py or __init__.py)")
+    return None
 
 # Import i18n
-_i18n_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "utils", "i18n.py")
-_i18n_spec = _iu.spec_from_file_location("_blendermcp_i18n_panel", _i18n_path)
-_i18n = _iu.module_from_spec(_i18n_spec)
-_i18n_spec.loader.exec_module(_i18n)
-t = _i18n.t
+from ..utils import i18n
+t = i18n.t
 
 
 def get_prefs(context):
