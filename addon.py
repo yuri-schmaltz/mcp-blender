@@ -281,7 +281,7 @@ def register():
         items=get_role_items,
     )
 
-    print(f"BlenderMCP v2.5.1 registered. (package={_ADDON_PACKAGE})")
+    print(f"BlenderMCP v2.6.0 registered. (package={_ADDON_PACKAGE})")
 
 
 
@@ -310,7 +310,7 @@ def unregister():
 
     # NOTE: BlenderMCPPreferences is unregistered by __init__.py
 
-    print("BlenderMCP v2.5.1 unregistered.")
+    print("BlenderMCP v2.6.0 unregistered.")
 
 
 if __name__ == "__main__":
