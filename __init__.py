@@ -36,27 +36,7 @@ class BlenderMCPPreferences(bpy.types.AddonPreferences):
         default=False,
     )
 
-    # API Keys
-    openai_key: StringProperty(
-        name="OpenAI API Key",
-        subtype="PASSWORD",
-        description="Global OpenAI API key",
-        default="",
-    )
 
-    anthropic_key: StringProperty(
-        name="Anthropic API Key",
-        subtype="PASSWORD",
-        description="Global Anthropic API key",
-        default="",
-    )
-
-    google_key: StringProperty(
-        name="Google API Key",
-        subtype="PASSWORD",
-        description="Global Google Gemini API key",
-        default="",
-    )
 
     sketchfab_api_key: StringProperty(
         name="Sketchfab API Key",
@@ -94,46 +74,7 @@ class BlenderMCPPreferences(bpy.types.AddonPreferences):
         default=False,
     )
 
-    # Online LLM Integration
-    llm_provider: EnumProperty(
-        name="Provider",
-        description="Select the online LLM provider to use",
-        items=[
-            ("OPENAI", "OpenAI", "Use OpenAI models"),
-            ("ANTHROPIC", "Anthropic", "Use Anthropic models"),
-            ("GOOGLE", "Google", "Use Google Gemini models"),
-        ],
-        default="OPENAI",
-    )
 
-    openai_model: EnumProperty(
-        name="OpenAI Model",
-        items=[
-            ("gpt-4o", "GPT-4o", ""),
-            ("gpt-4o-mini", "GPT-4o Mini", ""),
-            ("gpt-3.5-turbo", "GPT-3.5 Turbo", ""),
-        ],
-        default="gpt-4o",
-    )
-
-    anthropic_model: EnumProperty(
-        name="Anthropic Model",
-        items=[
-            ("claude-3-5-sonnet-20240620", "Claude 3.5 Sonnet", ""),
-            ("claude-3-opus-20240229", "Claude 3 Opus", ""),
-            ("claude-3-haiku-20240307", "Claude 3 Haiku", ""),
-        ],
-        default="claude-3-5-sonnet-20240620",
-    )
-
-    google_model: EnumProperty(
-        name="Google Model",
-        items=[
-            ("gemini-1.5-pro", "Gemini 1.5 Pro", ""),
-            ("gemini-1.5-flash", "Gemini 1.5 Flash", ""),
-        ],
-        default="gemini-1.5-pro",
-    )
 
     def draw(self, context):
         layout = self.layout
@@ -153,23 +94,6 @@ class BlenderMCPPreferences(bpy.types.AddonPreferences):
         grid.prop(self, "use_ambientcg", text="AmbientCG", icon="MATERIAL")
         grid.prop(self, "use_sketchfab", text="Sketchfab", icon="MESH_MONKEY")
         grid.prop(self, "use_blenderkit", text="BlenderKit", icon="IMAGE_DATA")
-
-        # Section: API Keys
-        box = layout.box()
-        box.label(text="API Keys & LLM Config", icon="CONSOLE")
-
-        col = box.column(align=True)
-        col.prop(self, "llm_provider")
-
-        if self.llm_provider == 'OPENAI':
-            col.prop(self, "openai_key")
-            col.prop(self, "openai_model")
-        elif self.llm_provider == 'ANTHROPIC':
-            col.prop(self, "anthropic_key")
-            col.prop(self, "anthropic_model")
-        elif self.llm_provider == 'GOOGLE':
-            col.prop(self, "google_key")
-            col.prop(self, "google_model")
 
         box.separator()
         col = box.column(align=True)
