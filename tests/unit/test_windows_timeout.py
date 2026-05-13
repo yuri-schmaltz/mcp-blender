@@ -22,12 +22,12 @@ class TestWindowsTimeout(TestCase):
     def test_timeout_on_windows(self):
         """Test that timeout works on Windows"""
         code = """
-import time
-time.sleep(10)  # Sleep longer than timeout
+import time as _time
+_time.sleep(10)  # Sleep longer than timeout
 """
         
         with pytest.raises(TimeoutError) as exc_info:
-            execute_code_safe(code, timeout=1, check_rate_limit=False)
+            execute_code_safe(code, timeout=1, check_rate_limit=False, allowed_modules=['time'])
         
         assert "exceeded" in str(exc_info.value).lower()
         assert "1s timeout" in str(exc_info.value)
@@ -35,12 +35,12 @@ time.sleep(10)  # Sleep longer than timeout
     def test_timeout_on_all_platforms(self):
         """Test that timeout works on all platforms"""
         code = """
-import time
-time.sleep(10)  # Sleep longer than timeout
+import time as _time
+_time.sleep(10)  # Sleep longer than timeout
 """
         
         with pytest.raises(TimeoutError) as exc_info:
-            execute_code_safe(code, timeout=1, check_rate_limit=False)
+            execute_code_safe(code, timeout=1, check_rate_limit=False, allowed_modules=['time'])
         
         assert "exceeded" in str(exc_info.value).lower()
     

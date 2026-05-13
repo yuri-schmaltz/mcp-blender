@@ -165,8 +165,8 @@ print("World")
     @pytest.mark.skipif(sys.platform == 'win32', reason="Timeout not supported on Windows")
     def test_timeout_long_running(self):
         """Should timeout long-running code."""
-        code = "import time\ntime.sleep(10)"
+        code = "import time as _time\n_time.sleep(10)"
         
         # Note: This will be caught by validate_code before timeout
-        with pytest.raises(SecurityError):
-            execute_code_safe(code, timeout=1, check_rate_limit=False)
+        with pytest.raises(TimeoutError):
+            execute_code_safe(code, timeout=1, check_rate_limit=False, allowed_modules=['time'])

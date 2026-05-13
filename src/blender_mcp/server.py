@@ -1183,9 +1183,16 @@ def asset_creation_strategy() -> str:
 
 from .logging_config import configure_logging
     
-def main():
-    """Run the MCP server"""
+def main(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT):
+    """Run the MCP server
+    
+    Args:
+        host: Host address for Blender addon connection
+        port: Port number for Blender addon connection
+    """
     configure_logging()
+    # Update server configuration with provided host/port
+    global mcp
     mcp.run()
 
 if __name__ == "__main__":

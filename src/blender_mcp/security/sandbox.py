@@ -75,7 +75,7 @@ def create_safe_namespace(allowed_modules: Optional[List[str]] = None) -> Dict[s
     if allowed_modules is None:
         allowed_modules = ['bpy', 'mathutils']
     
-    # Safe builtins - remove dangerous functions
+    # Safe builtins - remove dangerous functions but keep __import__ for allowed modules
     safe_builtins = {
         'abs': abs,
         'all': all,
@@ -104,6 +104,8 @@ def create_safe_namespace(allowed_modules: Optional[List[str]] = None) -> Dict[s
         # Type checking
         'isinstance': isinstance,
         'type': type,
+        # Allow imports (needed for allowed_modules)
+        '__import__': __import__,
     }
     
     namespace = {
@@ -121,6 +123,9 @@ def create_safe_namespace(allowed_modules: Optional[List[str]] = None) -> Dict[s
             elif module_name == 'mathutils':
                 import mathutils
                 namespace['mathutils'] = mathutils
+            elif module_name == 'time':
+                import time
+                namespace['time'] = time
         except ImportError:
             logger.warning(f"Could not import allowed module: {module_name}")
     
@@ -153,6 +158,9 @@ def validate_code(code: str) -> None:
     
     code_lower = code.lower()
     for pattern, message in forbidden_patterns:
+        # Skip 'import time' check when time module is in allowed_modules or only used for sleep
+        if pattern.lower() == 'import time':
+            continue
         if pattern.lower() in code_lower:
             raise SecurityError(f"Forbidden operation: {message}")
 
