@@ -17,6 +17,10 @@ from urllib.parse import urlparse
 from mcp.server.fastmcp import Context, FastMCP, Image
 
 from .logging_config import configure_logging
+from .shared.circuit_breaker import (
+    CircuitBreakerError,
+    get_circuit_breaker,
+)
 
 
 def tool_error(
@@ -562,14 +566,35 @@ def search_polyhaven_assets(
 
     Returns a list of matching assets with basic information.
     """
+    # Get circuit breaker for Poly Haven API
+    polyhaven_breaker = get_circuit_breaker(
+        name="poly_haven_api",
+        failure_threshold=5,
+        recovery_timeout=60.0,
+        half_open_max_calls=1,
+    )
+    
     try:
         blender = get_blender_connection()
+        
+        # Check circuit breaker state before making request
+        if polyhaven_breaker.state.name == "OPEN":
+            return tool_error(
+                "Poly Haven API is temporarily unavailable",
+                data={"detail": "Circuit breaker is OPEN due to repeated failures. Please try again later."}
+            )
+        
         result = blender.send_command(
             "search_polyhaven_assets", {"asset_type": asset_type, "categories": categories}
         )
 
         if "error" in result:
+            # Record failure in circuit breaker
+            polyhaven_breaker.record_failure()
             return tool_error("PolyHaven search failed", data={"detail": result["error"]})
+        
+        # Record success
+        polyhaven_breaker.record_success()
 
         # Format the assets in a more readable way
         assets = result["assets"]
@@ -595,8 +620,13 @@ def search_polyhaven_assets(
             formatted_output += f"  Downloads: {asset_data.get('download_count', 'Unknown')}\n\n"
 
         return formatted_output
+    except CircuitBreakerError as e:
+        logger.warning(f"Circuit breaker blocked Poly Haven request: {str(e)}")
+        return tool_error("Poly Haven API temporarily unavailable", data={"detail": str(e)})
     except Exception as e:
         logger.error(f"Error searching Polyhaven assets: {str(e)}")
+        # Record exception as failure in circuit breaker
+        polyhaven_breaker.record_failure()
         return tool_error("Error searching PolyHaven assets", data={"detail": str(e)})
 
 

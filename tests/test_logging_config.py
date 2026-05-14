@@ -47,7 +47,10 @@ class ConfigureLoggingTests(unittest.TestCase):
 
 class ToolErrorTests(unittest.TestCase):
     def test_tool_error_shapes_payload(self) -> None:
-        payload = tool_error("Something broke", data={"step": "connect"})
+        import json
+
+        payload_str = tool_error("Something broke", data={"step": "connect"})
+        payload = json.loads(payload_str)
         self.assertIn("error", payload)
         self.assertEqual(payload["error"]["message"], "Something broke")
         self.assertEqual(payload["error"]["code"], "runtime_error")
