@@ -126,9 +126,9 @@ def create_safe_namespace(allowed_modules: list[str] | None = None) -> dict[str,
 
                 namespace["mathutils"] = mathutils
             elif module_name == "time":
-                import time
+                import time  # type: ignore[import-untyped]
 
-                namespace["time"] = time
+                namespace["time"] = time  # type: ignore[assignment]
         except ImportError:
             logger.warning(f"Could not import allowed module: {module_name}")
 

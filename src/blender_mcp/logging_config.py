@@ -42,10 +42,10 @@ def configure_logging(
     - ``BLENDER_MCP_LOG_FILE``: file path when using the ``file`` handler
     """
 
-    resolved_level = (level or os.getenv("BLENDER_MCP_LOG_LEVEL", DEFAULT_LOG_LEVEL)).upper()
-    resolved_format = log_format or os.getenv("BLENDER_MCP_LOG_FORMAT", DEFAULT_LOG_FORMAT)
+    resolved_level = (level or os.getenv("BLENDER_MCP_LOG_LEVEL") or DEFAULT_LOG_LEVEL).upper()
+    resolved_format = log_format or os.getenv("BLENDER_MCP_LOG_FORMAT") or DEFAULT_LOG_FORMAT
     resolved_handler = (
-        handler_type or os.getenv("BLENDER_MCP_LOG_HANDLER", DEFAULT_HANDLER)
+        handler_type or os.getenv("BLENDER_MCP_LOG_HANDLER") or DEFAULT_HANDLER
     ).lower()
 
     numeric_level = logging.getLevelName(resolved_level)

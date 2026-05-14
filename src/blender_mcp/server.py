@@ -21,11 +21,11 @@ from .logging_config import configure_logging
 
 def tool_error(
     message: str, *, code: str = "runtime_error", data: dict[str, Any] | None = None
-) -> dict[str, Any]:
+) -> str:
     payload: dict[str, Any] = {"error": {"code": code, "message": message}}
     if data:
         payload["error"]["data"] = data
-    return payload
+    return json.dumps(payload)
 
 
 logger = logging.getLogger("BlenderMCPServer")
@@ -126,7 +126,7 @@ class BlenderConnection:
 
     def receive_full_response(self, sock, buffer_size=8192, timeout: float | None = None):
         """Receive the complete response, potentially in multiple chunks"""
-        chunks = []
+        chunks: list[bytes] = []
         sock.settimeout(timeout or self.timeout)
 
         try:
@@ -176,7 +176,7 @@ class BlenderConnection:
 
         raise IncompleteResponseError("No data received")
 
-    def send_command(self, command_type: str, params: dict[str, Any] = None) -> dict[str, Any]:
+    def send_command(self, command_type: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """Send a command to Blender and return the response"""
         command = {"type": command_type, "params": params or {}}
 
@@ -196,6 +196,7 @@ class BlenderConnection:
                     params,
                 )
 
+                assert self.sock is not None
                 self.sock.settimeout(self.timeout)
                 self.sock.sendall(json.dumps(command).encode("utf-8"))
                 logger.info("Command sent, waiting for response...")
@@ -210,7 +211,9 @@ class BlenderConnection:
                     logger.error("Blender error: %s", response.get("message"))
                     raise Exception(response.get("message", "Unknown error from Blender"))
 
-                return response.get("result", {})
+                result = response.get("result", {})
+                assert isinstance(result, dict)
+                return result
             except IncompleteResponseError as e:
                 last_error = e
                 logger.warning(
@@ -547,7 +550,9 @@ def get_polyhaven_categories(ctx: Context, asset_type: str = "hdris") -> str:
 
 
 @mcp.tool()
-def search_polyhaven_assets(ctx: Context, asset_type: str = "all", categories: str = None) -> str:
+def search_polyhaven_assets(
+    ctx: Context, asset_type: str = "all", categories: str | None = None
+) -> str:
     """
     Search for assets on Polyhaven with optional filtering.
 
@@ -597,7 +602,11 @@ def search_polyhaven_assets(ctx: Context, asset_type: str = "all", categories: s
 
 @mcp.tool()
 def download_polyhaven_asset(
-    ctx: Context, asset_id: str, asset_type: str, resolution: str = "1k", file_format: str = None
+    ctx: Context,
+    asset_id: str,
+    asset_type: str,
+    resolution: str = "1k",
+    file_format: str | None = None,
 ) -> str:
     """
     Download and import a Polyhaven asset into Blender.
@@ -827,7 +836,11 @@ def get_sketchfab_status(ctx: Context) -> str:
 
 @mcp.tool()
 def search_sketchfab_models(
-    ctx: Context, query: str, categories: str = None, count: int = 20, downloadable: bool = True
+    ctx: Context,
+    query: str,
+    categories: str | None = None,
+    count: int = 20,
+    downloadable: bool = True,
 ) -> str:
     """
     Search for models on Sketchfab with optional filtering.
