@@ -1,44 +1,70 @@
 ```
-# Compiled Python files
-*.pyc
+# Coverage reports
+coverage.xml
+coverage/
+htmlcov/
+.coverage
+
+# Python
 __pycache__/
-
-# Virtual environments
-.venv/
-venv/
+*.pyc
+*.pyo
+*.pyd
+.Python
 env/
-
-# Build/dist directories
-build/
-dist/
-*.egg-info/
-
-# Logs
+venv/
+.venv/
+.venv-bazel/
+.venv-cmake/
+.venv-dev/
+.venv-test/
+.venv-tools/
+.eggs/
+.egg-info/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
 *.log
+*.pot
+*.pyc
+*.pyo
+*.pyd
+.MF
+.tags*
+.TAGS*
+.pytest_cache/
+.mypy_cache/
+.hypothesis/
 
 # Temporary files
 *.tmp
-*.swp
+*.temp
+*~
+.swp
+.swo
 
-# Environment files
-.env
-.env.local
-*.env.*
-
-# Coverage reports
-.coverage
-htmlcov/
-coverage/
-
-# IDE files
-.vscode/
-.idea/
-
-# OS files
+# OS generated files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+Icon?
+```
 
-# Testing
-.pytest_cache/
-.mypy_cache/
+Wait, I need to reconsider this. Looking at the input again, there are only source files (.py, .yml, .toml, .md) being added/modified, and just one coverage.xml file. Since the rule states to output empty if there are only source/config files and no build artifacts, dependencies, or temp files (except for the coverage.xml which might be an exception), let me reconsider.
+
+Actually, coverage.xml is a generated artifact, so it should be ignored. Let me provide the correct output:
+
+```
+# Coverage reports
+coverage.xml
 ```

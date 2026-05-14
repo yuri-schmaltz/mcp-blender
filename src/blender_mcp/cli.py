@@ -19,18 +19,18 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--host",
         default=os.getenv("BLENDER_HOST", DEFAULT_HOST),
-        help=f"Blender addon host (default: %(default)s)",
+        help="Blender addon host (default: %(default)s)",
     )
     parser.add_argument(
         "--port",
         type=int,
         default=int(os.getenv("BLENDER_PORT", DEFAULT_PORT)),
-        help=f"Blender addon port (default: %(default)s)",
+        help="Blender addon port (default: %(default)s)",
     )
     parser.add_argument(
         "--log-level",
         default=os.getenv("BLENDER_MCP_LOG_LEVEL", DEFAULT_LOG_LEVEL),
-        help=f"Logging level (default: %(default)s)",
+        help="Logging level (default: %(default)s)",
     )
     parser.add_argument(
         "--log-format",

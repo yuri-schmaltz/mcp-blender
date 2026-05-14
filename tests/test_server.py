@@ -241,7 +241,7 @@ def test_send_command_recovers_from_partial_response(stub_socket):
 def test_send_command_retries_after_timeout_and_reconnects(stub_socket):
     failing = stub_socket(
         _StubSocket(
-            recv_side_effects=[socket.timeout()],
+            recv_side_effects=[TimeoutError()],
         )
     )
     recovering = stub_socket(
