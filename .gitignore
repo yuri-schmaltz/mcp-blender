@@ -1,70 +1,62 @@
 ```
-# Coverage reports
-coverage.xml
-coverage/
-htmlcov/
-.coverage
-
 # Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 .Python
-env/
 venv/
 .venv/
-.venv-bazel/
-.venv-cmake/
-.venv-dev/
-.venv-test/
-.venv-tools/
-.eggs/
-.egg-info/
-pip-log.txt
-pip-delete-this-directory.txt
-.tox/
+.env
+.env.local
+.env.*
+
+# Testing
 .coverage
+htmlcov/
 .coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.log
-*.pot
-*.pyc
-*.pyo
-*.pyd
-.MF
-.tags*
-.TAGS*
 .pytest_cache/
 .mypy_cache/
-.hypothesis/
 
-# Temporary files
-*.tmp
-*.temp
-*~
-.swp
-.swo
+# Build artifacts
+build/
+dist/
+*.egg-info/
 
-# OS generated files
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# OS
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
-Icon?
-```
 
-Wait, I need to reconsider this. Looking at the input again, there are only source files (.py, .yml, .toml, .md) being added/modified, and just one coverage.xml file. Since the rule states to output empty if there are only source/config files and no build artifacts, dependencies, or temp files (except for the coverage.xml which might be an exception), let me reconsider.
-
-Actually, coverage.xml is a generated artifact, so it should be ignored. Let me provide the correct output:
-
-```
-# Coverage reports
-coverage.xml
+# Compressed files
+*.zip
+*.gz
+*.tar
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.zst
+*.lz4
+*.lzh
+*.cab
+*.arj
+*.rpm
+*.deb
+*.Z
+*.lz
+*.lzo
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst
 ```
