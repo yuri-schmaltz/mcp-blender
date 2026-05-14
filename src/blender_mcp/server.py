@@ -180,7 +180,9 @@ class BlenderConnection:
 
         raise IncompleteResponseError("No data received")
 
-    def send_command(self, command_type: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+    def send_command(
+        self, command_type: str, params: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """Send a command to Blender and return the response"""
         command = {"type": command_type, "params": params or {}}
 
@@ -573,17 +575,19 @@ def search_polyhaven_assets(
         recovery_timeout=60.0,
         half_open_max_calls=1,
     )
-    
+
     try:
         blender = get_blender_connection()
-        
+
         # Check circuit breaker state before making request
         if polyhaven_breaker.state.name == "OPEN":
             return tool_error(
                 "Poly Haven API is temporarily unavailable",
-                data={"detail": "Circuit breaker is OPEN due to repeated failures. Please try again later."}
+                data={
+                    "detail": "Circuit breaker is OPEN due to repeated failures. Please try again later."
+                },
             )
-        
+
         result = blender.send_command(
             "search_polyhaven_assets", {"asset_type": asset_type, "categories": categories}
         )
@@ -592,7 +596,7 @@ def search_polyhaven_assets(
             # Record failure in circuit breaker
             polyhaven_breaker.record_failure()
             return tool_error("PolyHaven search failed", data={"detail": result["error"]})
-        
+
         # Record success
         polyhaven_breaker.record_success()
 
@@ -649,6 +653,14 @@ def download_polyhaven_asset(
 
     Returns a message indicating success or failure.
     """
+    # Get circuit breaker for Poly Haven API
+    polyhaven_breaker = get_circuit_breaker(
+        name="poly_haven_api",
+        failure_threshold=5,
+        recovery_timeout=60.0,
+        half_open_max_calls=1,
+    )
+
     # Validate inputs
     from blender_mcp.shared.validators import (
         ValidationError,
@@ -673,6 +685,15 @@ def download_polyhaven_asset(
         return tool_error("Invalid resolution", data={"detail": str(e), "resolution": resolution})
 
     try:
+        # Check circuit breaker state before making request
+        if polyhaven_breaker.state.name == "OPEN":
+            return tool_error(
+                "Poly Haven API is temporarily unavailable",
+                data={
+                    "detail": "Circuit breaker is OPEN due to repeated failures. Please try again later."
+                },
+            )
+
         blender = get_blender_connection()
         result = blender.send_command(
             "download_polyhaven_asset",
@@ -685,9 +706,14 @@ def download_polyhaven_asset(
         )
 
         if "error" in result:
+            # Record failure in circuit breaker
+            polyhaven_breaker.record_failure()
             return tool_error(
                 "PolyHaven download failed", data={"detail": result["error"], "asset_id": asset_id}
             )
+
+        # Record success in circuit breaker
+        polyhaven_breaker.record_success()
 
         if result.get("success"):
             message = result.get("message", "Asset downloaded and imported successfully")
@@ -712,8 +738,13 @@ def download_polyhaven_asset(
                     "asset_type": asset_type,
                 },
             )
+    except CircuitBreakerError as e:
+        logger.warning(f"Circuit breaker blocked Poly Haven download: {str(e)}")
+        return tool_error("Poly Haven API temporarily unavailable", data={"detail": str(e)})
     except Exception as e:
         logger.error(f"Error downloading Polyhaven asset: {str(e)}")
+        # Record exception as failure in circuit breaker
+        polyhaven_breaker.record_failure()
         return tool_error(
             "Error downloading PolyHaven asset", data={"detail": str(e), "asset_id": asset_id}
         )
@@ -883,6 +914,14 @@ def search_sketchfab_models(
 
     Returns a formatted list of matching models.
     """
+    # Get circuit breaker for Sketchfab API
+    sketchfab_breaker = get_circuit_breaker(
+        name="sketchfab_api",
+        failure_threshold=5,
+        recovery_timeout=60.0,
+        half_open_max_calls=1,
+    )
+
     # Validate inputs
     if not query or not isinstance(query, str):
         return tool_error("Invalid query", data={"detail": "Query must be a non-empty string"})
@@ -898,6 +937,15 @@ def search_sketchfab_models(
         )
 
     try:
+        # Check circuit breaker state before making request
+        if sketchfab_breaker.state.name == "OPEN":
+            return tool_error(
+                "Sketchfab API is temporarily unavailable",
+                data={
+                    "detail": "Circuit breaker is OPEN due to repeated failures. Please try again later."
+                },
+            )
+
         blender = get_blender_connection()
         logger.info(
             f"Searching Sketchfab models with query: {query}, categories: {categories}, count: {count}, downloadable: {downloadable}"
@@ -913,10 +961,15 @@ def search_sketchfab_models(
         )
 
         if "error" in result:
+            # Record failure in circuit breaker
+            sketchfab_breaker.record_failure()
             logger.error(f"Error from Sketchfab search: {result['error']}")
             return tool_error(
                 "Sketchfab search failed", data={"detail": result["error"], "query": query}
             )
+
+        # Record success in circuit breaker
+        sketchfab_breaker.record_success()
 
         # Safely get results with fallbacks for None
         if result is None:
@@ -963,8 +1016,13 @@ def search_sketchfab_models(
             formatted_output += f"  Downloadable: {is_downloadable}\n\n"
 
         return formatted_output
+    except CircuitBreakerError as e:
+        logger.warning(f"Circuit breaker blocked Sketchfab search: {str(e)}")
+        return tool_error("Sketchfab API temporarily unavailable", data={"detail": str(e)})
     except Exception as e:
         logger.error(f"Error searching Sketchfab models: {str(e)}")
+        # Record exception as failure in circuit breaker
+        sketchfab_breaker.record_failure()
         import traceback
 
         logger.error(traceback.format_exc())
@@ -984,6 +1042,14 @@ def download_sketchfab_model(ctx: Context, uid: str) -> str:
     Returns a message indicating success or failure.
     The model must be downloadable and you must have proper access rights.
     """
+    # Get circuit breaker for Sketchfab API
+    sketchfab_breaker = get_circuit_breaker(
+        name="sketchfab_api",
+        failure_threshold=5,
+        recovery_timeout=60.0,
+        half_open_max_calls=1,
+    )
+
     # Validate UID
     from blender_mcp.shared.validators import ValidationError, validate_asset_id
 
@@ -993,20 +1059,36 @@ def download_sketchfab_model(ctx: Context, uid: str) -> str:
         return tool_error("Invalid model UID", data={"detail": str(e), "uid": uid})
 
     try:
+        # Check circuit breaker state before making request
+        if sketchfab_breaker.state.name == "OPEN":
+            return tool_error(
+                "Sketchfab API is temporarily unavailable",
+                data={
+                    "detail": "Circuit breaker is OPEN due to repeated failures. Please try again later."
+                },
+            )
+
         blender = get_blender_connection()
         logger.info(f"Attempting to download Sketchfab model with UID: {uid}")
 
         result = blender.send_command("download_sketchfab_model", {"uid": uid})
 
         if result is None:
+            # Record failure in circuit breaker
+            sketchfab_breaker.record_failure()
             logger.error("Received None result from Sketchfab download")
             return tool_error("Sketchfab download returned no data", data={"uid": uid})
 
         if "error" in result:
+            # Record failure in circuit breaker
+            sketchfab_breaker.record_failure()
             logger.error(f"Error from Sketchfab download: {result['error']}")
             return tool_error(
                 "Sketchfab download failed", data={"detail": result["error"], "uid": uid}
             )
+
+        # Record success in circuit breaker
+        sketchfab_breaker.record_success()
 
         if result.get("success"):
             imported_objects = result.get("imported_objects", [])
@@ -1017,8 +1099,13 @@ def download_sketchfab_model(ctx: Context, uid: str) -> str:
                 "Failed to download model",
                 data={"detail": result.get("message", "Unknown error"), "uid": uid},
             )
+    except CircuitBreakerError as e:
+        logger.warning(f"Circuit breaker blocked Sketchfab download: {str(e)}")
+        return tool_error("Sketchfab API temporarily unavailable", data={"detail": str(e)})
     except Exception as e:
         logger.error(f"Error downloading Sketchfab model: {str(e)}")
+        # Record exception as failure in circuit breaker
+        sketchfab_breaker.record_failure()
         import traceback
 
         logger.error(traceback.format_exc())
@@ -1052,7 +1139,24 @@ def generate_hyper3d_model_via_text(
 
     Returns a message indicating success or failure.
     """
+    # Get circuit breaker for Hyper3D Rodin API
+    rodin_breaker = get_circuit_breaker(
+        name="hyper3d_rodin_api",
+        failure_threshold=5,
+        recovery_timeout=60.0,
+        half_open_max_calls=1,
+    )
+
     try:
+        # Check circuit breaker state before making request
+        if rodin_breaker.state.name == "OPEN":
+            return tool_error(
+                "Hyper3D Rodin API is temporarily unavailable",
+                data={
+                    "detail": "Circuit breaker is OPEN due to repeated failures. Please try again later."
+                },
+            )
+
         blender = get_blender_connection()
         result = blender.send_command(
             "create_rodin_job",
@@ -1064,6 +1168,8 @@ def generate_hyper3d_model_via_text(
         )
         succeed = result.get("submit_time", False)
         if succeed:
+            # Record success
+            rodin_breaker.record_success()
             return json.dumps(
                 {
                     "task_uuid": result["uuid"],
@@ -1071,9 +1177,16 @@ def generate_hyper3d_model_via_text(
                 }
             )
         else:
+            # Record failure
+            rodin_breaker.record_failure()
             return json.dumps(result)
+    except CircuitBreakerError as e:
+        logger.warning(f"Circuit breaker blocked Hyper3D request: {str(e)}")
+        return tool_error("Hyper3D Rodin API temporarily unavailable", data={"detail": str(e)})
     except Exception as e:
         logger.error(f"Error generating Hyper3D task: {str(e)}")
+        # Record failure
+        rodin_breaker.record_failure()
         return tool_error("Error generating Hyper3D task", data={"detail": str(e)})
 
 
@@ -1097,6 +1210,14 @@ def generate_hyper3d_model_via_images(
     Only one of {input_image_paths, input_image_urls} should be given at a time, depending on the Hyper3D Rodin's current mode.
     Returns a message indicating success or failure.
     """
+    # Get circuit breaker for Hyper3D Rodin API
+    rodin_breaker = get_circuit_breaker(
+        name="hyper3d_rodin_api",
+        failure_threshold=5,
+        recovery_timeout=60.0,
+        half_open_max_calls=1,
+    )
+
     if input_image_paths is not None and input_image_urls is not None:
         return "Error: Provide either local image paths or URLs, not both."
     if input_image_paths is None and input_image_urls is None:
@@ -1121,6 +1242,15 @@ def generate_hyper3d_model_via_images(
             return "Error: not all image URLs are valid!"
         images = input_image_urls.copy()
     try:
+        # Check circuit breaker state before making request
+        if rodin_breaker.state.name == "OPEN":
+            return tool_error(
+                "Hyper3D Rodin API is temporarily unavailable",
+                data={
+                    "detail": "Circuit breaker is OPEN due to repeated failures. Please try again later."
+                },
+            )
+
         blender = get_blender_connection()
         result = blender.send_command(
             "create_rodin_job",
@@ -1132,6 +1262,8 @@ def generate_hyper3d_model_via_images(
         )
         succeed = result.get("submit_time", False)
         if succeed:
+            # Record success
+            rodin_breaker.record_success()
             return json.dumps(
                 {
                     "task_uuid": result["uuid"],
@@ -1139,9 +1271,16 @@ def generate_hyper3d_model_via_images(
                 }
             )
         else:
+            # Record failure
+            rodin_breaker.record_failure()
             return json.dumps(result)
+    except CircuitBreakerError as e:
+        logger.warning(f"Circuit breaker blocked Hyper3D request: {str(e)}")
+        return tool_error("Hyper3D Rodin API temporarily unavailable", data={"detail": str(e)})
     except Exception as e:
         logger.error(f"Error generating Hyper3D task: {str(e)}")
+        # Record failure
+        rodin_breaker.record_failure()
         return tool_error("Error generating Hyper3D task", data={"detail": str(e)})
 
 
@@ -1171,7 +1310,24 @@ def poll_rodin_job_status(
         If status other than "COMPLETED", "IN_PROGRESS", "IN_QUEUE" showed up, the generating process might be failed.
         This is a polling API, so only proceed if the status are finally determined ("COMPLETED" or some failed state).
     """
+    # Get circuit breaker for Hyper3D Rodin API
+    rodin_breaker = get_circuit_breaker(
+        name="hyper3d_rodin_api",
+        failure_threshold=5,
+        recovery_timeout=60.0,
+        half_open_max_calls=1,
+    )
+
     try:
+        # Check circuit breaker state before making request
+        if rodin_breaker.state.name == "OPEN":
+            return tool_error(
+                "Hyper3D Rodin API is temporarily unavailable",
+                data={
+                    "detail": "Circuit breaker is OPEN due to repeated failures. Please try again later."
+                },
+            )
+
         blender = get_blender_connection()
         kwargs = {}
         if subscription_key:
@@ -1183,9 +1339,17 @@ def poll_rodin_job_status(
                 "request_id": request_id,
             }
         result = blender.send_command("poll_rodin_job_status", kwargs)
+
+        # Record success for successful poll
+        rodin_breaker.record_success()
         return result
+    except CircuitBreakerError as e:
+        logger.warning(f"Circuit breaker blocked Rodin poll: {str(e)}")
+        return tool_error("Hyper3D Rodin API temporarily unavailable", data={"detail": str(e)})
     except Exception as e:
         logger.error(f"Error generating Hyper3D task: {str(e)}")
+        # Record failure
+        rodin_breaker.record_failure()
         return tool_error("Error polling Hyper3D task", data={"detail": str(e)})
 
 
