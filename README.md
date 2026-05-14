@@ -14,6 +14,13 @@ BlenderMCP connects Blender to local large language models (LLMs) through the Mo
 
 Give feedback, get inspired, and build on top of the MCP: [Discord](https://discord.gg/z5apgR8TFU)
 
+### Documentation
+
+- **[Security Guide](docs/SECURITY.md)** - Security policies, threat model, and best practices
+- **[Troubleshooting Guide](docs/TROUBLESHOOTING.md)** - Comprehensive solutions for common issues
+- **[Architecture](docs/ARCHITECTURE.md)** - Technical architecture and data flow
+- **[Release Notes](docs/RELEASE.md)** - Version history and changelog
+
 ### Supporters
 
 <div align="center" markdown="1">
