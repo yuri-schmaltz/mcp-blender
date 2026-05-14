@@ -84,9 +84,7 @@ class TestCircuitBreaker:
 
     def test_recovery_timeout_transitions_to_half_open(self):
         """Test that after recovery timeout, circuit transitions to HALF_OPEN."""
-        breaker = CircuitBreaker(
-            name="test", failure_threshold=1, recovery_timeout=0.1
-        )
+        breaker = CircuitBreaker(name="test", failure_threshold=1, recovery_timeout=0.1)
 
         @breaker
         def fail_func():
@@ -106,9 +104,7 @@ class TestCircuitBreaker:
 
     def test_half_open_success_closes_circuit(self):
         """Test that success in HALF_OPEN state closes the circuit."""
-        breaker = CircuitBreaker(
-            name="test", failure_threshold=1, recovery_timeout=0.1
-        )
+        breaker = CircuitBreaker(name="test", failure_threshold=1, recovery_timeout=0.1)
 
         call_count = 0
 
@@ -137,9 +133,7 @@ class TestCircuitBreaker:
 
     def test_half_open_failure_reopens_circuit(self):
         """Test that failure in HALF_OPEN state reopens the circuit."""
-        breaker = CircuitBreaker(
-            name="test", failure_threshold=1, recovery_timeout=0.1
-        )
+        breaker = CircuitBreaker(name="test", failure_threshold=1, recovery_timeout=0.1)
 
         @breaker
         def always_fails():
@@ -221,7 +215,7 @@ class TestCircuitBreaker:
             return "success"
 
         mixed_func(fail=False)
-        
+
         # Catch the exceptions for failing calls
         for _ in range(2):
             try:
@@ -290,7 +284,7 @@ class TestCircuitBreakerRegistry:
         # Get count before adding new breakers
         initial_breakers = get_all_circuit_breakers()
         initial_count = len(initial_breakers)
-        
+
         get_circuit_breaker(name="test_api1")
         get_circuit_breaker(name="test_api2")
 
@@ -313,7 +307,7 @@ class TestCircuitBreakerRegistry:
     def test_get_circuit_breaker_health(self):
         """Test getting health status of all circuit breakers."""
         reset_all_circuit_breakers()
-        
+
         breaker = get_circuit_breaker(name="test_api")
 
         health = get_circuit_breaker_health()

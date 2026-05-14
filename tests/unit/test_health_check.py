@@ -61,7 +61,7 @@ class MockServer:
             try:
                 client_socket, addr = self.server_socket.accept()
                 self._handle_client(client_socket)
-            except socket.timeout:
+            except TimeoutError:
                 continue
             except Exception:
                 break
@@ -101,18 +101,14 @@ class TestHealthCheckResult:
 
     def test_healthy_result(self):
         """Test creating a healthy result."""
-        result = HealthCheckResult(
-            status=HealthStatus.HEALTHY, response_time_ms=50.0
-        )
+        result = HealthCheckResult(status=HealthStatus.HEALTHY, response_time_ms=50.0)
         assert result.status == HealthStatus.HEALTHY
         assert result.response_time_ms == 50.0
         assert result.error is None
 
     def test_unhealthy_result(self):
         """Test creating an unhealthy result."""
-        result = HealthCheckResult(
-            status=HealthStatus.UNHEALTHY, error="Connection failed"
-        )
+        result = HealthCheckResult(status=HealthStatus.UNHEALTHY, error="Connection failed")
         assert result.status == HealthStatus.UNHEALTHY
         assert result.error == "Connection failed"
         assert result.response_time_ms is None
@@ -183,9 +179,7 @@ class TestConnectionHealthChecker:
 
     def test_stats_tracking(self, mock_server):
         """Test that statistics are tracked correctly."""
-        checker = ConnectionHealthChecker(
-            host=mock_server.host, port=mock_server.port, timeout=2.0
-        )
+        checker = ConnectionHealthChecker(host=mock_server.host, port=mock_server.port, timeout=2.0)
 
         # Perform some checks
         checker.check_health()
@@ -200,9 +194,7 @@ class TestConnectionHealthChecker:
 
     def test_reset_stats(self, mock_server):
         """Test resetting statistics."""
-        checker = ConnectionHealthChecker(
-            host=mock_server.host, port=mock_server.port, timeout=2.0
-        )
+        checker = ConnectionHealthChecker(host=mock_server.host, port=mock_server.port, timeout=2.0)
 
         checker.check_health()
         checker.reset_stats()
@@ -300,9 +292,7 @@ class TestHealthCheckerRegistry:
 
     def test_start_health_checker(self):
         """Test starting health checker via registry function."""
-        checker = start_health_checker(
-            host="localhost", port=9990, check_interval=1.0
-        )
+        checker = start_health_checker(host="localhost", port=9990, check_interval=1.0)
         assert checker is not None
         assert checker._running
 
