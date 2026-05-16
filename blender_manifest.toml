@@ -13,4 +13,4 @@ blender_version_min = "4.2.0"
 license = ["SPDX:MIT"]
 
 [permissions]
-network = "Connects to local MCP client/server and external asset providers when enabled."
+network = "Connects to local MCP server and asset providers"
