@@ -81,16 +81,17 @@ def handle_chat_request_headless(prompt, provider, model, api_key, allow_code_ex
             }
         })
 
-        kwargs = {
-            "model": model,
-            "api_key": api_key,
-            "messages": messages,
-            "tools": litellm_tools,
-            "temperature": 0.7,
-        }
-        if base_url:
-            kwargs["base_url"] = base_url
+    kwargs = {
+        "model": model,
+        "api_key": api_key,
+        "messages": messages,
+        "tools": litellm_tools,
+        "temperature": 0.7,
+    }
+    if base_url:
+        kwargs["base_url"] = base_url
 
+    try:
         # Initial call
         response = litellm.completion(**kwargs)
 

@@ -330,7 +330,7 @@ def _load_addon_module():
 bl_info = {
     "name": "Blender MCP",
     "author": "BlenderMCP",
-    "version": (2, 8, 2),
+    "version": (2, 10, 0),
 
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > BlenderMCP",

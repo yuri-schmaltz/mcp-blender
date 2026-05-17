@@ -1,6 +1,6 @@
 [project]
 name = "blender-mcp"
-version = "2.8.2"
+version = "2.10.0"
 description = "Model Context Protocol server for Blender 3D integration"
 readme = "README.md"
 authors = [
