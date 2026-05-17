@@ -173,7 +173,12 @@ def handle_chat_request(context):
         return {"error": "Addon preferences not found"}
 
     provider = prefs.llm_provider
-    model = prefs.llm_model_custom if provider in {'OLLAMA', 'CUSTOM'} else prefs.llm_model
+    if provider == 'OLLAMA':
+        model = prefs.llm_model_custom if prefs.llm_model_ollama == 'MANUAL' else prefs.llm_model_ollama
+    elif provider == 'CUSTOM':
+        model = prefs.llm_model_custom if prefs.llm_model_custom_enum == 'MANUAL' else prefs.llm_model_custom_enum
+    else:
+        model = prefs.llm_model
     base_url = prefs.llm_base_url if provider in {'OLLAMA', 'CUSTOM'} else None
 
     return handle_chat_request_headless(

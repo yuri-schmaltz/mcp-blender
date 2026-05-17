@@ -47,7 +47,12 @@ class WebUIHandler(http.server.BaseHTTPRequestHandler):
                     raise Exception("Preferences not found")
                 
                 provider = prefs.llm_provider
-                model = prefs.llm_model_custom if provider in {'OLLAMA', 'CUSTOM'} else prefs.llm_model
+                if provider == 'OLLAMA':
+                    model = prefs.llm_model_custom if prefs.llm_model_ollama == 'MANUAL' else prefs.llm_model_ollama
+                elif provider == 'CUSTOM':
+                    model = prefs.llm_model_custom if prefs.llm_model_custom_enum == 'MANUAL' else prefs.llm_model_custom_enum
+                else:
+                    model = prefs.llm_model
                 base_url = prefs.llm_base_url if provider in {'OLLAMA', 'CUSTOM'} else None
                 api_key = prefs.llm_api_key
                 allow_code_execution = prefs.allow_code_execution
