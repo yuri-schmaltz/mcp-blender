@@ -77,8 +77,18 @@ def get_ollama_items(self, context):
     
     base_url = self.llm_base_url if self.llm_base_url else "http://localhost:11434"
     
-    if time.time() - _ollama_fetch_time > 10:
-        _ollama_fetch_time = time.time() # Prevent multiple immediate threads
+    # If cache empty, perform quick sync fetch
+    if not _ollama_models_cache:
+        try:
+            with urllib.request.urlopen(base_url.rstrip('/') + '/api/tags', timeout=2) as response:
+                data = json.load(response)
+                _ollama_models_cache = [(m['name'], m['name'], '') for m in data.get('models', [])]
+                _ollama_fetch_time = time.time()
+        except Exception:
+            pass
+    
+    # Refresh in background if stale (>60s)
+    if time.time() - _ollama_fetch_time > 60:
         threading.Thread(target=fetch_ollama_models_thread, args=(base_url,), daemon=True).start()
     
     res = list(_ollama_models_cache)
