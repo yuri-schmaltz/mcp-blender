@@ -60,16 +60,9 @@ def handle_chat_request(context):
     if not api_key:
         return {"error": "Missing API Key in Preferences"}
 
-    # litellm expects standard model names. If the user specifies just "gpt-4o", it works.
-    # If the provider is Google or Anthropic, litellm might need prefixing or the specific model name.
-    # Litellm generally handles 'gpt-4o', 'claude-3-5-sonnet-20240620', 'gemini/gemini-1.5-pro'
-    # We will pass what the user wrote directly to litellm.
-    if provider == 'ANTHROPIC' and not model.startswith('claude'):
-        model = "claude-3-5-sonnet-20240620"
-    if provider == 'GOOGLE' and not model.startswith('gemini'):
-        model = "gemini/gemini-1.5-pro"
+    # litellm expects standard model names. The UI now limits model selection dynamically.
+    # We will pass what the user selected directly to litellm.
 
-    # Set up messages
     messages = [
         {"role": "system", "content": _get_system_prompt()},
         {"role": "user", "content": prompt}

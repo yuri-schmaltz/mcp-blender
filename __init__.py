@@ -16,9 +16,40 @@ from bpy.props import (
 )
 
 
-# =============================================================================
-# Addon Preferences – MUST live in __init__.py for Blender Extensions
-# =============================================================================
+def get_model_items(self, context):
+    provider = self.llm_provider
+    items = []
+    
+    try:
+        import litellm
+        if provider == 'OPENAI':
+            models = litellm.models_by_provider.get('openai', [])
+        elif provider == 'ANTHROPIC':
+            models = litellm.models_by_provider.get('anthropic', [])
+        elif provider == 'GOOGLE':
+            models = litellm.models_by_provider.get('gemini', [])
+        else:
+            models = []
+            
+        for m in sorted(list(models)):
+            items.append((m, m, f"{m} via {provider}"))
+            
+    except Exception:
+        pass
+        
+    if not items:
+        if provider == 'OPENAI':
+            items = [('gpt-4o', 'gpt-4o', ''), ('gpt-3.5-turbo', 'gpt-3.5-turbo', '')]
+        elif provider == 'ANTHROPIC':
+            items = [('claude-3-5-sonnet-20240620', 'claude-3-5-sonnet-20240620', '')]
+        elif provider == 'GOOGLE':
+            items = [('gemini/gemini-1.5-pro', 'gemini/gemini-1.5-pro', '')]
+        else:
+            items = [('default', 'Default', '')]
+            
+    # Blender requires items to be unique and within reasonable limits
+    return items
+
 class BlenderMCPPreferences(bpy.types.AddonPreferences):
     bl_idname = __package__
 
@@ -72,10 +103,10 @@ class BlenderMCPPreferences(bpy.types.AddonPreferences):
         default='OPENAI',
     )
 
-    llm_model: StringProperty(
+    llm_model: EnumProperty(
         name="Model Name",
-        description="LLM Model to use (e.g., gpt-4o, claude-3-5-sonnet-20240620)",
-        default="gpt-4o",
+        description="LLM Model to use",
+        items=get_model_items,
     )
 
     llm_api_key: StringProperty(
