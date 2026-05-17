@@ -25,6 +25,7 @@ dependencies = [
     "mcp[cli]>=1.0.0,<2.0.0",
     "fake-bpy-module>=20230101",  # For type hints
     "requests>=2.25.0",
+    "litellm>=1.0.0",
 ]
 
 [project.optional-dependencies]

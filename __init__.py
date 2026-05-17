@@ -62,6 +62,29 @@ class BlenderMCPPreferences(bpy.types.AddonPreferences):
         default='lm_studio',
     )
 
+    llm_provider: EnumProperty(
+        name="LLM Provider",
+        items=[
+            ('OPENAI', "OpenAI", "Use OpenAI API"),
+            ('ANTHROPIC', "Anthropic", "Use Anthropic API"),
+            ('GOOGLE', "Google Gemini", "Use Google Gemini API"),
+        ],
+        default='OPENAI',
+    )
+
+    llm_model: StringProperty(
+        name="Model Name",
+        description="LLM Model to use (e.g., gpt-4o, claude-3-5-sonnet-20240620)",
+        default="gpt-4o",
+    )
+
+    llm_api_key: StringProperty(
+        name="API Key",
+        subtype="PASSWORD",
+        description="API Key for the selected LLM Provider",
+        default="",
+    )
+
     # Integration Toggles
     use_polyhaven: BoolProperty(
         name="Use Poly Haven",
@@ -95,6 +118,14 @@ class BlenderMCPPreferences(bpy.types.AddonPreferences):
         row = box.row()
         row.prop(self, "port")
         row.prop(self, "allow_code_execution", toggle=True)
+
+        # Section: Embedded Chat Client
+        box = layout.box()
+        box.label(text="Built-in AI Client", icon="COMMUNITY")
+        col = box.column(align=True)
+        col.prop(self, "llm_provider")
+        col.prop(self, "llm_model")
+        col.prop(self, "llm_api_key")
 
         # Section: Integrations
         box = layout.box()

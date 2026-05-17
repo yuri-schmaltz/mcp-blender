@@ -128,8 +128,53 @@ class BLENDERMCP_PT_Engineering(bpy.types.Panel):
             info_box.label(text=f"{obj.name}  →  {preset_tag} / {role_tag}", icon="CHECKMARK")
 
 
+# =============================================================================
+# Sub-Panel: Chat & AI Command Prompt
+# =============================================================================
+class BLENDERMCP_PT_Chat(bpy.types.Panel):
+    bl_label = "Built-in AI Chat"
+    bl_idname = "BLENDERMCP_PT_Chat"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "MCP"
+    bl_parent_id = "BLENDERMCP_PT_Panel"
+
+    def draw(self, context):
+        layout = self.layout
+        scene = context.scene
+        prefs = get_prefs(context)
+
+        # Check if API Key is configured
+        if not prefs or not prefs.llm_api_key:
+            box = layout.box()
+            box.alert = True
+            box.label(text="API Key missing!", icon="ERROR")
+            box.label(text="Please configure in Addon Preferences.")
+            return
+
+        col = layout.column(align=True)
+        col.label(text="Command Prompt:")
+        
+        # We use a large string property if we want multi-line, 
+        # but standard string property is limited. 
+        # For multiline, we just use layout.prop with text=""
+        row = col.row()
+        row.scale_y = 1.5
+        row.prop(scene, "blendermcp_chat_prompt", text="")
+        
+        row = col.row(align=True)
+        row.scale_y = 1.2
+        row.operator("blendermcp.send_chat", text="Send to AI", icon="PLAY")
+        row.operator("blendermcp.clear_chat", text="", icon="TRASH")
+        
+        if scene.blendermcp_chat_status:
+            box = layout.box()
+            box.label(text=scene.blendermcp_chat_status, icon="INFO")
+
+
 # All panel classes in registration order
 PANEL_CLASSES = [
     BLENDERMCP_PT_Panel,
     BLENDERMCP_PT_Engineering,
+    BLENDERMCP_PT_Chat,
 ]

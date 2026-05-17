@@ -1,9 +1,15 @@
 import json
-import re
 import traceback
 import bpy
-import requests
-from ..utils.network import get_session, friendly_error
+
+try:
+    import litellm
+except ImportError:
+    litellm = None
+
+from ..utils.network import friendly_error
+from ..tool_schemas import get_tools_list
+from ..core.router import execute_command
 
 
 def get_prefs():
@@ -19,106 +25,19 @@ def _get_system_prompt():
 You represent the pinnacle of technical excellence and strategic thinking.
 
 CORE MISSION:
-Success is the only option. Your goal is to provide deep, high-performance Python code using the 'bpy' API.
+Success is the only option. Your goal is to provide deep, high-performance Python code and use tools to manipulate Blender.
 Do not be a passive assistant. Be a senior strategic partner.
 
 TECHNICAL GUIDELINES:
 1. CODE QUALITY: Provide only production-grade, efficient Python code.
-2. API BEST PRACTICES: Prefer direct data manipulation (e.g., 'obj.location = ...') over operators ('bpy.ops...') where possible for performance and stability.
+2. API BEST PRACTICES: Prefer direct data manipulation over operators where possible.
 3. CONTEXT AWARENESS: Always use 'bpy.context' to access the current state.
-4. ERROR RESILIENCE: Write code that checks for data existence (e.g., 'if obj:' or 'if "Cube" in bpy.data.objects:') before operating.
-5. FORMATTING: Wrap code in triple backticks: ```python ... ```.
-
-STRATEGIC DIRECTIVES:
-- ANTI-SYCOPHANCY: If a user's request is shallow or technically flawed, critique it constructively and propose a superior alternative.
-- CHAIN OF THOUGHT: For complex tasks, outline your plan before providing the code.
-- DEPTH OVER SPEED: Refuse to give superficial answers. If you need more data (e.g., which object to target), ASK the user.
-- LEVEL ELEVATION: Transform simple inputs into deep, comprehensive results.
-
-AVAILABLE TOOLS:
-- You have full access to 'bpy', 'mathutils', and standard libraries.
-- The project includes handlers for Poly Haven, AmbientCG, and Sketchfab (accessible via custom operators if registered).
+4. ERROR RESILIENCE: Write code that checks for data existence before operating.
+5. TOOLS: You have access to tools. Always prefer using specific tools over executing raw python code when a specific tool is available.
+If no tool fits, you can use the execute_code tool.
 
 Current context: {bpy.context.scene.name} in {bpy.data.filepath if bpy.data.filepath else 'unsaved file'}.
 """
-
-def call_openai(api_key, model, prompt):
-    """Call OpenAI Chat Completions API."""
-    url = "https://api.openai.com/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": _get_system_prompt()},
-            {"role": "user", "content": prompt}
-        ],
-        "temperature": 0.7
-    }
-    
-    session = get_session()
-    response = session.post(url, headers=headers, json=payload, timeout=60)
-    response.raise_for_status()
-    data = response.json()
-    return data['choices'][0]['message']['content']
-
-def call_anthropic(api_key, model, prompt):
-    """Call Anthropic Messages API."""
-    url = "https://api.anthropic.com/v1/messages"
-    headers = {
-        "x-api-key": api_key,
-        "anthropic-version": "2023-06-01",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "model": model,
-        "max_tokens": 4096,
-        "system": _get_system_prompt(),
-        "messages": [
-            {"role": "user", "content": prompt}
-        ]
-    }
-    
-    session = get_session()
-    response = session.post(url, headers=headers, json=payload, timeout=60)
-    response.raise_for_status()
-    data = response.json()
-    return data['content'][0]['text']
-
-def call_google(api_key, model, prompt):
-    """Call Google Gemini API."""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
-    headers = {
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "contents": [{
-            "parts": [{"text": f"{_get_system_prompt()}\n\nUser request: {prompt}"}]
-        }]
-    }
-    
-    session = get_session()
-    response = session.post(url, headers=headers, json=payload, timeout=60)
-    response.raise_for_status()
-    data = response.json()
-    return data['candidates'][0]['content']['parts'][0]['text']
-
-def extract_python_code(text):
-    """Extract python code blocks from markdown text."""
-    pattern = r"```python\s*(.*?)\s*```"
-    matches = re.findall(pattern, text, re.DOTALL)
-    if matches:
-        return "\n\n".join(matches)
-    
-    # Fallback: look for any code block if python one isn't found
-    pattern_generic = r"```\s*(.*?)\s*```"
-    matches_generic = re.findall(pattern_generic, text, re.DOTALL)
-    if matches_generic:
-        return "\n\n".join(matches_generic)
-    
-    return None
 
 def handle_chat_request(context):
     """Main entry point for handling a chat request from the UI."""
@@ -126,71 +45,125 @@ def handle_chat_request(context):
     prefs = get_prefs()
     if not prefs:
         return {"error": "Addon preferences not found"}
-        
-    provider = prefs.llm_provider
+
+    if litellm is None:
+        return {"error": "litellm is not installed. Please run 'Check/Install Dependencies' in the panel."}
+
     prompt = scene.blendermcp_chat_prompt
-    
     if not prompt:
         return {"error": "Prompt is empty"}
 
+    provider = prefs.llm_provider
+    api_key = prefs.llm_api_key
+    model = prefs.llm_model
+
+    if not api_key:
+        return {"error": "Missing API Key in Preferences"}
+
+    # litellm expects standard model names. If the user specifies just "gpt-4o", it works.
+    # If the provider is Google or Anthropic, litellm might need prefixing or the specific model name.
+    # Litellm generally handles 'gpt-4o', 'claude-3-5-sonnet-20240620', 'gemini/gemini-1.5-pro'
+    # We will pass what the user wrote directly to litellm.
+    if provider == 'ANTHROPIC' and not model.startswith('claude'):
+        model = "claude-3-5-sonnet-20240620"
+    if provider == 'GOOGLE' and not model.startswith('gemini'):
+        model = "gemini/gemini-1.5-pro"
+
+    # Set up messages
+    messages = [
+        {"role": "system", "content": _get_system_prompt()},
+        {"role": "user", "content": prompt}
+    ]
+
+    # Convert our internal MCP tool schemas to OpenAI format for litellm
+    tools_list = get_tools_list()
+    litellm_tools = []
+    for t in tools_list:
+        litellm_tools.append({
+            "type": "function",
+            "function": {
+                "name": t["name"],
+                "description": t["description"],
+                "parameters": t["inputSchema"]
+            }
+        })
+
     try:
-        if provider == "OPENAI":
-            key = prefs.openai_key
-            model = prefs.openai_model
-            if not key: return {"error": "Missing OpenAI API Key in Preferences"}
-            response_text = call_openai(key, model, prompt)
-            
-        elif provider == "ANTHROPIC":
-            key = prefs.anthropic_key
-            model = prefs.anthropic_model
-            if not key: return {"error": "Missing Anthropic API Key in Preferences"}
-            response_text = call_anthropic(key, model, prompt)
-            
-        elif provider == "GOOGLE":
-            key = prefs.google_key
-            model = prefs.google_model
-            if not key: return {"error": "Missing Google API Key in Preferences"}
-            response_text = call_google(key, model, prompt)
-        else:
-            return {"error": "Unknown provider"}
-            
-        code = extract_python_code(response_text)
+        # Initial call
+        response = litellm.completion(
+            model=model,
+            api_key=api_key,
+            messages=messages,
+            tools=litellm_tools,
+            temperature=0.7,
+        )
+
+        response_message = response.choices[0].message
         
-        if code:
-            if prefs.allow_code_execution:
-                # Import main addon code execution logic if available, or do it directly
-                # For simplicity, we'll execute it here
-                try:
-                    # Provide a rich namespace for the AI code
-                    import mathutils
-                    namespace = {
-                        "bpy": bpy,
-                        "mathutils": mathutils,
-                        "context": context,
-                        "scene": context.scene,
-                    }
-                    
-                    # Execute the code
-                    exec(code, namespace)
-                    return {
-                        "status": "success", 
-                        "message": "Strategic execution successful.", 
-                        "code": code
-                    }
-                except Exception as e:
-                    error_msg = f"Runtime Error: {type(e).__name__} - {str(e)}"
-                    print(f"BlenderMCP Execution Error:\n{traceback.format_exc()}")
-                    return {
-                        "status": "error", 
-                        "message": error_msg, 
-                        "code": code,
-                        "traceback": traceback.format_exc()
-                    }
-            else:
-                return {"status": "pending", "message": "Code generated but execution is disabled.", "code": code}
-        else:
-            return {"status": "info", "message": response_text}
+        # Check if the model wants to call tools
+        if response_message.tool_calls:
+            messages.append(response_message)
             
+            # Execute each tool call
+            for tool_call in response_message.tool_calls:
+                function_name = tool_call.function.name
+                function_args = json.loads(tool_call.function.arguments)
+                
+                print(f"BlenderMCP Client: Executing Tool -> {function_name}({function_args})")
+                
+                # Use our router to execute the tool
+                # Execute_command expects {"type": "tool_name", "params": {...}}
+                tool_command = {
+                    "type": function_name,
+                    "params": function_args
+                }
+                
+                # Check for code execution safety
+                if function_name == "execute_code" and not prefs.allow_code_execution:
+                    result_content = "Error: Code execution is disabled in preferences."
+                else:
+                    tool_result = execute_command(tool_command)
+                    if tool_result.get("status") == "error":
+                        result_content = f"Error: {tool_result.get('message')}"
+                    else:
+                        result_content = str(tool_result.get("result", "Success"))
+                
+                # Append tool response
+                messages.append({
+                    "tool_call_id": tool_call.id,
+                    "role": "tool",
+                    "name": function_name,
+                    "content": result_content,
+                })
+
+            # Call LLM again with the tool responses
+            second_response = litellm.completion(
+                model=model,
+                api_key=api_key,
+                messages=messages,
+                tools=litellm_tools,
+            )
+            final_message = second_response.choices[0].message.content
+            return {"status": "success", "message": "Tools executed successfully. " + (final_message[:50] if final_message else "")}
+        else:
+            # No tool calls, just a text response
+            # Check if there is python code in the text as a fallback
+            content = response_message.content
+            import re
+            pattern = r"```python\s*(.*?)\s*```"
+            matches = re.findall(pattern, content, re.DOTALL)
+            
+            if matches and prefs.allow_code_execution:
+                code = "\n\n".join(matches)
+                tool_command = {
+                    "type": "execute_code",
+                    "params": {"code": code}
+                }
+                execute_command(tool_command)
+                return {"status": "success", "message": "Python code extracted and executed."}
+                
+            return {"status": "info", "message": "Response received. No actions taken."}
+
     except Exception as e:
         traceback.print_exc()
         return friendly_error(f"LLM Provider ({provider})", e)
