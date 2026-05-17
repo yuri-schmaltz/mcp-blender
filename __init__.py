@@ -61,6 +61,14 @@ class BlenderMCPPreferences(bpy.types.AddonPreferences):
         max=65535,
     )
 
+    webui_port: IntProperty(
+        name="WebUI Port",
+        description="Port for the embedded HTML WebUI server",
+        default=8080,
+        min=1024,
+        max=65535,
+    )
+
     allow_code_execution: BoolProperty(
         name="Allow Remote Code Execution",
         description="WARNING: Allows the LLM to execute arbitrary Python code. Enable only if you trust the requests",
@@ -99,6 +107,8 @@ class BlenderMCPPreferences(bpy.types.AddonPreferences):
             ('OPENAI', "OpenAI", "Use OpenAI API"),
             ('ANTHROPIC', "Anthropic", "Use Anthropic API"),
             ('GOOGLE', "Google Gemini", "Use Google Gemini API"),
+            ('OLLAMA', "Ollama (Local)", "Use local Ollama instance"),
+            ('CUSTOM', "Custom / LM Studio (Local)", "Use any OpenAI-compatible local API"),
         ],
         default='OPENAI',
     )
@@ -107,6 +117,18 @@ class BlenderMCPPreferences(bpy.types.AddonPreferences):
         name="Model Name",
         description="LLM Model to use",
         items=get_model_items,
+    )
+
+    llm_model_custom: StringProperty(
+        name="Model Name",
+        description="Type the model name (e.g., llama3, mistral, etc.)",
+        default="llama3",
+    )
+
+    llm_base_url: StringProperty(
+        name="Base URL",
+        description="Base URL for local providers (e.g., http://localhost:11434 for Ollama, http://localhost:1234/v1 for LM Studio)",
+        default="",
     )
 
     llm_api_key: StringProperty(
@@ -155,8 +177,17 @@ class BlenderMCPPreferences(bpy.types.AddonPreferences):
         box.label(text="Built-in AI Client", icon="COMMUNITY")
         col = box.column(align=True)
         col.prop(self, "llm_provider")
-        col.prop(self, "llm_model")
-        col.prop(self, "llm_api_key")
+        
+        if self.llm_provider in {'OLLAMA', 'CUSTOM'}:
+            col.prop(self, "llm_model_custom")
+            col.prop(self, "llm_base_url")
+            if self.llm_provider == 'CUSTOM':
+                col.prop(self, "llm_api_key", text="API Key (Optional)")
+        else:
+            col.prop(self, "llm_model")
+            col.prop(self, "llm_api_key")
+            
+        col.prop(self, "webui_port")
 
         # Section: Integrations
         box = layout.box()
@@ -216,7 +247,7 @@ def _load_addon_module():
 bl_info = {
     "name": "Blender MCP",
     "author": "BlenderMCP",
-    "version": (2, 7, 0),
+    "version": (2, 8, 0),
 
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > BlenderMCP",
@@ -245,6 +276,11 @@ def unregister():
     if _addon_mod is None:
         _addon_mod = _load_addon_module()
     _addon_mod.unregister()
+
+    # Clean up WebUI server if running
+    if hasattr(bpy.types, "blendermcp_webui_server") and bpy.types.blendermcp_webui_server:
+        bpy.types.blendermcp_webui_server.stop()
+        del bpy.types.blendermcp_webui_server
 
     # Unregister Preferences last
     if hasattr(BlenderMCPPreferences, "bl_rna"):

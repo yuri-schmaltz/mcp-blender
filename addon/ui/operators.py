@@ -497,6 +497,47 @@ class BLENDERMCP_OT_ClearChat(bpy.types.Operator):
         scene.blendermcp_chat_status = ""
         return {"FINISHED"}
 
+# ---------------------------------------------------------------------------
+# Operator: Start WebUI Server
+# ---------------------------------------------------------------------------
+class BLENDERMCP_OT_StartWebUI(bpy.types.Operator):
+    bl_idname = "blendermcp.start_webui"
+    bl_label = "Start WebUI Server"
+    bl_description = "Start the embedded WebUI chat server in the background"
+
+    def execute(self, context):
+        scene = context.scene
+        from .panel import get_prefs
+        prefs = get_prefs(context)
+        port = prefs.webui_port if prefs else 8080
+
+        from ..webui_server import BlenderMCPWebUIServer
+
+        if not hasattr(bpy.types, "blendermcp_webui_server") or not bpy.types.blendermcp_webui_server:
+            bpy.types.blendermcp_webui_server = BlenderMCPWebUIServer(port=port)
+
+        bpy.types.blendermcp_webui_server.port = port
+        bpy.types.blendermcp_webui_server.start()
+        
+        self.report({"INFO"}, f"WebUI started on http://localhost:{port}")
+        return {"FINISHED"}
+
+# ---------------------------------------------------------------------------
+# Operator: Stop WebUI Server
+# ---------------------------------------------------------------------------
+class BLENDERMCP_OT_StopWebUI(bpy.types.Operator):
+    bl_idname = "blendermcp.stop_webui"
+    bl_label = "Stop WebUI Server"
+    bl_description = "Stop the embedded WebUI chat server"
+
+    def execute(self, context):
+        if hasattr(bpy.types, "blendermcp_webui_server") and bpy.types.blendermcp_webui_server:
+            bpy.types.blendermcp_webui_server.stop()
+            del bpy.types.blendermcp_webui_server
+            
+        self.report({"INFO"}, "WebUI stopped")
+        return {"FINISHED"}
+
 
 
 # All operator classes for registration
@@ -515,5 +556,7 @@ OPERATOR_CLASSES = [
     BLENDERMCP_OT_OpenURL,
     BLENDERMCP_OT_SendChat,
     BLENDERMCP_OT_ClearChat,
+    BLENDERMCP_OT_StartWebUI,
+    BLENDERMCP_OT_StopWebUI,
 ]
 

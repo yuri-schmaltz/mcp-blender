@@ -170,6 +170,18 @@ class BLENDERMCP_PT_Chat(bpy.types.Panel):
         if scene.blendermcp_chat_status:
             box = layout.box()
             box.label(text=scene.blendermcp_chat_status, icon="INFO")
+            
+        layout.separator()
+        
+        col = layout.column(align=True)
+        if getattr(bpy.types, "blendermcp_webui_server", None) and bpy.types.blendermcp_webui_server.server:
+            col.operator("blendermcp.stop_webui", text="Stop WebUI Server", icon="CANCEL")
+            
+            # Open WebUI URL
+            op = col.operator("blendermcp.open_url", text="Open WebUI in Browser", icon="URL")
+            op.target_url = f"http://localhost:{prefs.webui_port}"
+        else:
+            col.operator("blendermcp.start_webui", text="Start WebUI Server", icon="WORLD_DATA")
 
 
 # All panel classes in registration order

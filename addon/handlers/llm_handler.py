@@ -39,29 +39,29 @@ If no tool fits, you can use the execute_code tool.
 Current context: {bpy.context.scene.name} in {bpy.data.filepath if bpy.data.filepath else 'unsaved file'}.
 """
 
-def handle_chat_request(context):
-    """Main entry point for handling a chat request from the UI."""
-    scene = context.scene
-    prefs = get_prefs()
-    if not prefs:
-        return {"error": "Addon preferences not found"}
-
+def handle_chat_request_headless(prompt, provider, model, api_key, allow_code_execution, base_url=None, execution_callback=None):
+    """
+    Headless chat request handler. Safe to run in background threads.
+    If execution_callback is provided, tool execution will be deferred to it.
+    execution_callback should accept (tool_command) and return the result synchronously.
+    """
     if litellm is None:
         return {"error": "litellm is not installed. Please run 'Check/Install Dependencies' in the panel."}
 
-    prompt = scene.blendermcp_chat_prompt
     if not prompt:
         return {"error": "Prompt is empty"}
-
-    provider = prefs.llm_provider
-    api_key = prefs.llm_api_key
-    model = prefs.llm_model
-
-    if not api_key:
-        return {"error": "Missing API Key in Preferences"}
-
-    # litellm expects standard model names. The UI now limits model selection dynamically.
-    # We will pass what the user selected directly to litellm.
+        
+    # Local providers usually don't need API keys, but litellm might require a dummy one
+    if not api_key and provider in {'OLLAMA', 'CUSTOM'}:
+        api_key = "sk-1234"
+    elif not api_key:
+        return {"error": "Missing API Key"}
+        
+    # Format model string for litellm
+    if provider == 'OLLAMA':
+        model = f"ollama/{model}"
+    elif provider == 'CUSTOM':
+        model = f"openai/{model}"
 
     messages = [
         {"role": "system", "content": _get_system_prompt()},
@@ -81,15 +81,18 @@ def handle_chat_request(context):
             }
         })
 
-    try:
+        kwargs = {
+            "model": model,
+            "api_key": api_key,
+            "messages": messages,
+            "tools": litellm_tools,
+            "temperature": 0.7,
+        }
+        if base_url:
+            kwargs["base_url"] = base_url
+
         # Initial call
-        response = litellm.completion(
-            model=model,
-            api_key=api_key,
-            messages=messages,
-            tools=litellm_tools,
-            temperature=0.7,
-        )
+        response = litellm.completion(**kwargs)
 
         response_message = response.choices[0].message
         
@@ -102,26 +105,31 @@ def handle_chat_request(context):
                 function_name = tool_call.function.name
                 function_args = json.loads(tool_call.function.arguments)
                 
-                print(f"BlenderMCP Client: Executing Tool -> {function_name}({function_args})")
+                print(f"BlenderMCP AI: Executing Tool -> {function_name}({function_args})")
                 
-                # Use our router to execute the tool
-                # Execute_command expects {"type": "tool_name", "params": {...}}
                 tool_command = {
                     "type": function_name,
                     "params": function_args
                 }
                 
-                # Check for code execution safety
-                if function_name == "execute_code" and not prefs.allow_code_execution:
+                if function_name == "execute_code" and not allow_code_execution:
                     result_content = "Error: Code execution is disabled in preferences."
                 else:
-                    tool_result = execute_command(tool_command)
+                    if execution_callback:
+                        # Defer execution to callback (e.g. main thread dispatcher)
+                        try:
+                            tool_result = execution_callback(tool_command)
+                        except Exception as e:
+                            tool_result = {"status": "error", "message": str(e)}
+                    else:
+                        # Execute directly (unsafe from background thread)
+                        tool_result = execute_command(tool_command)
+                        
                     if tool_result.get("status") == "error":
                         result_content = f"Error: {tool_result.get('message')}"
                     else:
                         result_content = str(tool_result.get("result", "Success"))
                 
-                # Append tool response
                 messages.append({
                     "tool_call_id": tool_call.id,
                     "role": "tool",
@@ -130,33 +138,50 @@ def handle_chat_request(context):
                 })
 
             # Call LLM again with the tool responses
-            second_response = litellm.completion(
-                model=model,
-                api_key=api_key,
-                messages=messages,
-                tools=litellm_tools,
-            )
+            kwargs.pop("temperature", None) # litellm might prefer default here
+            kwargs["messages"] = messages
+            second_response = litellm.completion(**kwargs)
             final_message = second_response.choices[0].message.content
-            return {"status": "success", "message": "Tools executed successfully. " + (final_message[:50] if final_message else "")}
+            return {"status": "success", "message": final_message}
         else:
-            # No tool calls, just a text response
-            # Check if there is python code in the text as a fallback
             content = response_message.content
             import re
             pattern = r"```python\s*(.*?)\s*```"
             matches = re.findall(pattern, content, re.DOTALL)
             
-            if matches and prefs.allow_code_execution:
+            if matches and allow_code_execution:
                 code = "\n\n".join(matches)
-                tool_command = {
-                    "type": "execute_code",
-                    "params": {"code": code}
-                }
-                execute_command(tool_command)
-                return {"status": "success", "message": "Python code extracted and executed."}
+                tool_command = {"type": "execute_code", "params": {"code": code}}
+                if execution_callback:
+                    execution_callback(tool_command)
+                else:
+                    execute_command(tool_command)
+                return {"status": "success", "message": "Python code extracted and executed.\n" + content}
                 
-            return {"status": "info", "message": "Response received. No actions taken."}
+            return {"status": "info", "message": content}
 
     except Exception as e:
         traceback.print_exc()
         return friendly_error(f"LLM Provider ({provider})", e)
+
+
+def handle_chat_request(context):
+    """Main entry point for handling a chat request from the Blender UI."""
+    scene = context.scene
+    prefs = get_prefs()
+    if not prefs:
+        return {"error": "Addon preferences not found"}
+
+    provider = prefs.llm_provider
+    model = prefs.llm_model_custom if provider in {'OLLAMA', 'CUSTOM'} else prefs.llm_model
+    base_url = prefs.llm_base_url if provider in {'OLLAMA', 'CUSTOM'} else None
+
+    return handle_chat_request_headless(
+        prompt=scene.blendermcp_chat_prompt,
+        provider=provider,
+        model=model,
+        api_key=prefs.llm_api_key,
+        allow_code_execution=prefs.allow_code_execution,
+        base_url=base_url,
+        execution_callback=None  # Use direct execution since we are in the main thread
+    )
