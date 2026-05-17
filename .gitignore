@@ -8,6 +8,10 @@ dist/
 wheels/
 *.egg-info
 
+# Build artifacts / releases
+releases/
+*.zip
+
 # Virtual environments
 .venv/
 venv/
