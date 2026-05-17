@@ -91,7 +91,7 @@ except Exception:
 bl_info = {
     "name": "Blender MCP",
     "author": "BlenderMCP",
-    "version": (2, 10, 0),
+    "version": (2, 11, 0),
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > BlenderMCP",
     "description": "Connect Blender to local LLM clients via MCP",
@@ -262,7 +262,7 @@ def register():
         items=get_role_items,
     )
 
-    print(f"BlenderMCP v2.10.0 registered. (package={_ADDON_PACKAGE})")
+    print(f"BlenderMCP v2.11.0 registered. (package={_ADDON_PACKAGE})")
 
 
 
@@ -291,7 +291,7 @@ def unregister():
 
     # NOTE: BlenderMCPPreferences is unregistered by __init__.py
 
-    print("BlenderMCP v2.10.0 unregistered.")
+    print("BlenderMCP v2.11.0 unregistered.")
 
 
 if __name__ == "__main__":

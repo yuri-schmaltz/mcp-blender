@@ -843,6 +843,28 @@ TOOL_SCHEMAS = {
             "required": ["name"]
         }
     },
+
+    # ── AI Mesh Cleaner ────────────────────────────────────────────
+    "ai_mesh_clean": {
+        "description": "Multi-stage pipeline for cleaning AI-generated meshes (from Meshy, Tripo3D, CSM, Rodin, etc.). Removes degenerate geometry, merges overlapping vertices, fixes normals, dissolves flat regions, performs curvature-aware decimation, and polishes shading. Far superior to basic Decimate or Remesh for AI meshes.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Name of the mesh object to clean"},
+                "stages": {"type": "string", "description": "Which stages to run: 'ALL' or comma-separated like '1,2,3'. Stages: 1=Purge, 2=Weld, 3=Normals, 4=PlanarDissolve, 5=SmartDecimate, 6=Polish", "default": "ALL"},
+                "degenerate_threshold": {"type": "number", "description": "Minimum face area (stage 1). Faces smaller than this are removed.", "default": 0.00001},
+                "merge_threshold_factor": {"type": "number", "description": "Merge distance as fraction of bounding box diagonal (stage 2)", "default": 0.001},
+                "max_hole_edges": {"type": "integer", "description": "Maximum edges in a hole to auto-fill (stage 2)", "default": 8},
+                "planar_angle": {"type": "number", "description": "Angle threshold for planar dissolve in degrees (stage 4)", "default": 5.0},
+                "target_face_count": {"type": "integer", "description": "Target number of faces (stage 5). Overrides target_ratio if set."},
+                "target_ratio": {"type": "number", "description": "Target ratio of faces to keep, e.g. 0.3 = 30% (stage 5)", "default": 0.3},
+                "preserve_sharp_angle": {"type": "number", "description": "Angle to preserve sharp edges in degrees (stage 5)", "default": 30.0},
+                "smooth_iterations": {"type": "integer", "description": "Number of smoothing passes (stage 6)", "default": 1},
+                "auto_smooth_angle": {"type": "number", "description": "Auto smooth angle in degrees (stage 6)", "default": 30.0}
+            },
+            "required": ["name"]
+        }
+    },
 }
 
 def get_tools_list():
