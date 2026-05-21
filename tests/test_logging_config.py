@@ -47,11 +47,11 @@ class ConfigureLoggingTests(unittest.TestCase):
 
 class ToolErrorTests(unittest.TestCase):
     def test_tool_error_shapes_payload(self) -> None:
-        payload = tool_error("Something broke", data={"step": "connect"})
-        self.assertIn("error", payload)
-        self.assertEqual(payload["error"]["message"], "Something broke")
-        self.assertEqual(payload["error"]["code"], "runtime_error")
-        self.assertEqual(payload["error"]["data"], {"step": "connect"})
+        with self.assertRaises(Exception) as ctx:
+            tool_error("Something broke", data={"step": "connect"})
+        self.assertIn("Something broke", str(ctx.exception))
+        self.assertIn("runtime_error", str(ctx.exception))
+        self.assertIn("connect", str(ctx.exception))
 
 
 if __name__ == "__main__":

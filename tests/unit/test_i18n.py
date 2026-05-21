@@ -12,17 +12,21 @@ class TestI18n:
 
     def test_default_locale_is_english(self):
         """Default locale should be English."""
-        # Clear LANG env var for test
-        old_lang = os.environ.get("LANG")
-        if "LANG" in os.environ:
-            del os.environ["LANG"]
+        # Clear all locale env vars for test
+        env_vars = ["LANG", "LANGUAGE", "LC_ALL", "LC_MESSAGES"]
+        old_vars = {var: os.environ.get(var) for var in env_vars}
+        for var in env_vars:
+            if var in os.environ:
+                del os.environ[var]
 
-        i18n = I18n()
-        assert i18n.get_locale() == "en"
-
-        # Restore
-        if old_lang:
-            os.environ["LANG"] = old_lang
+        try:
+            i18n = I18n()
+            assert i18n.get_locale() == "en"
+        finally:
+            # Restore
+            for var, val in old_vars.items():
+                if val is not None:
+                    os.environ[var] = val
 
     def test_detect_portuguese_locale(self):
         """Should detect Portuguese from environment."""

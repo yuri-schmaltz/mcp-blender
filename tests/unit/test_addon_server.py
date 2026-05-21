@@ -70,8 +70,18 @@ class _FakeApp:
     timers = _FakeTimers()
 
 
+class _FakeContext:
+    def temp_override(self, **kwargs):
+        from contextlib import contextmanager
+        @contextmanager
+        def _dummy():
+            yield
+        return _dummy()
+
+
 class _FakeBpy:
     app = _FakeApp()
+    context = _FakeContext()
 
 
 def test_stop_cleans_socket_clients_and_threads():

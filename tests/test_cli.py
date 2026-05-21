@@ -19,7 +19,7 @@ def test_cli_entrypoint_runs_without_blender(monkeypatch):
     monkeypatch.setattr(cli, "configure_logging", lambda **_: None)
 
     spec = importlib.util.spec_from_file_location(
-        "blender_mcp_cli", Path(__file__).resolve().parent.parent / "main.py"
+        "blender_mcp_cli", Path(__file__).resolve().parent.parent / "src" / "blender_mcp" / "cli.py"
     )
     cli_entry = importlib.util.module_from_spec(spec)
     assert spec and spec.loader

@@ -191,3 +191,86 @@ def handle_chat_request(context):
         base_url=base_url,
         execution_callback=None  # Use direct execution since we are in the main thread
     )
+
+
+import threading
+import concurrent.futures
+
+def handle_chat_request_async(context, on_complete_callback):
+    """
+    Run chat request in a background thread to prevent UI freezing.
+    Updates status and logs results safely back on the main thread via timers.
+    """
+    scene = context.scene
+    prefs = get_prefs()
+    if not prefs:
+        on_complete_callback({"error": "Addon preferences not found"})
+        return
+
+    provider = prefs.llm_provider
+    if provider == 'OLLAMA':
+        model = prefs.llm_model_custom if prefs.llm_model_ollama == 'MANUAL' else prefs.llm_model_ollama
+    elif provider == 'CUSTOM':
+        model = prefs.llm_model_custom if prefs.llm_model_custom_enum == 'MANUAL' else prefs.llm_model_custom_enum
+    else:
+        model = prefs.llm_model
+    base_url = prefs.llm_base_url if provider in {'OLLAMA', 'CUSTOM'} else None
+    
+    prompt = scene.blendermcp_chat_prompt
+    api_key = prefs.llm_api_key
+    allow_code_execution = prefs.allow_code_execution
+
+    # Safe execute command callback for the background thread to talk to Blender main thread
+    def safe_execute_command(tool_command):
+        future = concurrent.futures.Future()
+        
+        def _run_in_main():
+            try:
+                from ..core.router import execute_command
+                override = {}
+                if hasattr(bpy.context, "window_manager") and bpy.context.window_manager.windows:
+                    win = bpy.context.window_manager.windows[0]
+                    override["window"] = win
+                    override["screen"] = win.screen
+                    for area in win.screen.areas:
+                        if area.type == 'VIEW_3D':
+                            override["area"] = area
+                            for region in area.regions:
+                                if region.type == 'WINDOW':
+                                    override["region"] = region
+                                    break
+                            break
+                with bpy.context.temp_override(**override):
+                    res = execute_command(tool_command)
+                future.set_result(res)
+            except Exception as e:
+                future.set_exception(e)
+            return None
+            
+        bpy.app.timers.register(_run_in_main)
+        return future.result(timeout=120)
+
+    def thread_target():
+        try:
+            result = handle_chat_request_headless(
+                prompt=prompt,
+                provider=provider,
+                model=model,
+                api_key=api_key,
+                allow_code_execution=allow_code_execution,
+                base_url=base_url,
+                execution_callback=safe_execute_command
+            )
+        except Exception as e:
+            result = {"error": str(e)}
+            
+        # Schedule the completion callback to run in Blender's main thread
+        def run_callback_in_main():
+            on_complete_callback(result)
+            return None
+            
+        bpy.app.timers.register(run_callback_in_main)
+
+    thread = threading.Thread(target=thread_target, name="blender-mcp-chat-thread")
+    thread.daemon = True
+    thread.start()

@@ -19,12 +19,12 @@ from blender_mcp.security.sandbox import SecurityError, TimeoutError, execute_co
 class TestWindowsTimeout(TestCase):
     """Test timeout works on Windows using threading.Timer"""
 
-    @skipIf(platform.system() == "Windows", "Only run on Windows")
+    @skipIf(platform.system() != "Windows", "Only run on Windows")
     def test_timeout_on_windows(self):
         """Test that timeout works on Windows"""
         code = """
-import time
-time.sleep(10)  # Sleep longer than timeout
+for i in range(100000000):
+    pass
 """
 
         with pytest.raises(TimeoutError) as exc_info:
