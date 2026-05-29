@@ -70,6 +70,66 @@ def handle_chat_request_headless(prompt, provider, model, api_key, allow_code_ex
 
     # Convert our internal MCP tool schemas to OpenAI format for litellm
     tools_list = get_tools_list()
+    
+    # Filter tools based on mcp_tool_profile preference to optimize context size and speed
+    prefs = get_prefs()
+    profile = getattr(prefs, "mcp_tool_profile", "ALL")
+    
+    if profile != "ALL":
+        essential_tools = {
+            "get_scene_info",
+            "get_active_object",
+            "set_active_object",
+            "get_object_info",
+            "transform_object",
+            "delete_object",
+            "add_primitive",
+            "analyze_viewport_visuals",
+            "execute_code",
+            "get_operator_help",
+            "list_blender_operators",
+            "list_tools"
+        }
+        
+        allowed_tools = set(essential_tools)
+        
+        if profile == "MODELING":
+            allowed_tools.update({
+                "add_modifier", "apply_modifier", "apply_all_modifiers", 
+                "add_array_modifier", "add_mirror_modifier", "add_screw_modifier", 
+                "add_curve_modifier", "apply_boolean_operation", "align_objects", 
+                "distribute_objects", "duplicate_object", "parent_objects", 
+                "join_objects", "set_exact_dimensions", "snap_objects_by_proximity", 
+                "separate_loose_parts", "separate_by_material", "extrude_faces", 
+                "inset_faces", "bevel_edges", "subdivide_mesh", "smooth_mesh", 
+                "spin_mesh", "shade_smooth", "recalculate_normals", "merge_vertices", 
+                "fill_hole", "decimate_mesh", "remesh_voxel", "smart_uv_project", 
+                "mark_sharp_by_angle", "text_to_mesh", "create_collection", "move_to_collection"
+            })
+        elif profile == "MATERIALS":
+            allowed_tools.update({
+                "create_pbr_material", "set_texture", "download_polyhaven_asset", 
+                "download_ambientcg_material", "download_sketchfab_model", 
+                "search_polyhaven_assets", "search_ambientcg_materials", 
+                "search_sketchfab_models", "setup_camera", "setup_three_point_lighting", 
+                "setup_product_studio", "configure_render_settings", "render_catalog_angles", 
+                "animate_rotation", "create_turntable_animation"
+            })
+        elif profile == "PHYSICS":
+            allowed_tools.update({
+                "setup_simple_vehicle_rig", "generate_tire_treads", 
+                "mark_as_functional_part", "list_functional_parts"
+            })
+        elif profile == "PRINTING":
+            allowed_tools.update({
+                "check_mesh_integrity", "auto_repair_mesh", "resolve_self_intersections", 
+                "apply_print_thickness", "assign_print_color", "generate_print_report", 
+                "export_for_printing", "export_model", "ai_mesh_clean"
+            })
+            
+        tools_list = [t for t in tools_list if t["name"] in allowed_tools]
+        print(f"BlenderMCP Embedded Chat: Filtered tools count down to {len(tools_list)} for profile {profile}")
+
     litellm_tools = []
     for t in tools_list:
         litellm_tools.append({

@@ -3,20 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BlenderMCP Chat</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <title>BlenderMCP Chat & 3D Viewport</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Three.js and OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <style>
         :root {
-            --bg-color: #121214;
-            --surface-color: rgba(30, 30, 35, 0.7);
-            --border-color: rgba(255, 255, 255, 0.1);
-            --text-main: #f0f0f0;
-            --text-muted: #a0a0a5;
+            --bg-color: #0c0c0e;
+            --panel-bg: rgba(20, 20, 25, 0.6);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --text-main: #f3f3f5;
+            --text-muted: #8e8e95;
             --accent: #5e6ad2;
             --accent-hover: #727de3;
-            --user-msg: rgba(94, 106, 210, 0.2);
-            --ai-msg: rgba(255, 255, 255, 0.05);
-            --sys-msg: rgba(255, 165, 0, 0.1);
+            --user-msg: rgba(94, 106, 210, 0.15);
+            --ai-msg: rgba(255, 255, 255, 0.03);
+            --sys-msg: rgba(255, 165, 0, 0.08);
+            --header-bg: rgba(12, 12, 14, 0.85);
         }
 
         * {
@@ -29,8 +33,8 @@
             font-family: 'Inter', sans-serif;
             background-color: var(--bg-color);
             background-image: 
-                radial-gradient(circle at 15% 50%, rgba(94, 106, 210, 0.08), transparent 25%),
-                radial-gradient(circle at 85% 30%, rgba(255, 255, 255, 0.03), transparent 25%);
+                radial-gradient(circle at 10% 20%, rgba(94, 106, 210, 0.05), transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(255, 255, 255, 0.02), transparent 30%);
             color: var(--text-main);
             height: 100vh;
             display: flex;
@@ -40,14 +44,21 @@
 
         /* Header */
         header {
-            padding: 1.2rem 2rem;
-            background: rgba(18, 18, 20, 0.8);
-            backdrop-filter: blur(12px);
+            height: 64px;
+            padding: 0 2rem;
+            background: var(--header-bg);
+            backdrop-filter: blur(16px);
             border-bottom: 1px solid var(--border-color);
             display: flex;
             align-items: center;
+            justify-content: space-between;
+            z-index: 100;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
             gap: 12px;
-            z-index: 10;
         }
 
         .logo {
@@ -58,51 +69,82 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: bold;
-            font-size: 18px;
+            font-weight: 600;
+            font-size: 16px;
             color: #fff;
+            box-shadow: 0 0 15px rgba(94, 106, 210, 0.3);
         }
 
         h1 {
-            font-size: 1.2rem;
+            font-size: 1.1rem;
             font-weight: 500;
             letter-spacing: 0.5px;
+        }
+
+        .status-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.03);
+            padding: 6px 12px;
+            border-radius: 20px;
+            border: 1px solid var(--border-color);
         }
 
         .status-dot {
             width: 8px;
             height: 8px;
-            background-color: #4CAF50;
+            background-color: #10b981;
             border-radius: 50%;
-            margin-left: auto;
-            box-shadow: 0 0 8px #4CAF50;
+            box-shadow: 0 0 8px #10b981;
         }
 
-        /* Chat Area */
+        .status-text {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        /* Main Workspace Split Layout */
+        #workspace {
+            display: flex;
+            flex: 1;
+            height: calc(100vh - 64px);
+            overflow: hidden;
+        }
+
+        /* Chat Panel (Left) */
+        #chat-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--border-color);
+            background: rgba(18, 18, 22, 0.3);
+        }
+
         #chat-container {
             flex: 1;
             overflow-y: auto;
-            padding: 2rem;
+            padding: 1.5rem 2rem;
             display: flex;
             flex-direction: column;
-            gap: 1.5rem;
+            gap: 1.25rem;
             scroll-behavior: smooth;
         }
 
         .message {
-            max-width: 80%;
-            padding: 1rem 1.2rem;
+            max-width: 85%;
+            padding: 0.85rem 1.1rem;
             border-radius: 12px;
-            line-height: 1.5;
-            font-size: 0.95rem;
-            animation: fadeIn 0.3s ease-out;
+            line-height: 1.6;
+            font-size: 0.92rem;
+            animation: fadeIn 0.25s ease-out;
             word-wrap: break-word;
         }
 
         .message.user {
             align-self: flex-end;
             background: var(--user-msg);
-            border: 1px solid rgba(94, 106, 210, 0.3);
+            border: 1px solid rgba(94, 106, 210, 0.25);
             border-bottom-right-radius: 4px;
         }
 
@@ -116,92 +158,211 @@
         .message.system {
             align-self: center;
             background: var(--sys-msg);
-            color: #ffa500;
-            font-size: 0.85rem;
+            color: #f59e0b;
+            font-size: 0.8rem;
             text-align: center;
-            padding: 0.5rem 1rem;
+            padding: 0.4rem 1rem;
             border-radius: 20px;
+            border: 1px solid rgba(245, 158, 11, 0.15);
         }
 
         .message pre {
-            background: #000;
+            background: #060608;
             padding: 1rem;
             border-radius: 8px;
             overflow-x: auto;
-            margin-top: 0.8rem;
+            margin-top: 0.75rem;
             border: 1px solid var(--border-color);
         }
 
         .message code {
-            font-family: 'Consolas', 'Monaco', monospace;
-            font-size: 0.85rem;
-            color: #dcdcaa;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.82rem;
+            color: #e2e8f0;
         }
 
         /* Input Area */
         .input-container {
-            padding: 1.5rem 2rem;
-            background: rgba(30, 30, 35, 0.4);
-            backdrop-filter: blur(20px);
+            padding: 1.25rem 2rem;
+            background: rgba(12, 12, 14, 0.7);
+            backdrop-filter: blur(12px);
             border-top: 1px solid var(--border-color);
             display: flex;
-            gap: 1rem;
+            gap: 0.75rem;
+            align-items: flex-end;
         }
 
         textarea {
             flex: 1;
-            background: rgba(0, 0, 0, 0.2);
+            background: rgba(0, 0, 0, 0.25);
             border: 1px solid var(--border-color);
             border-radius: 12px;
-            padding: 1rem;
+            padding: 0.85rem 1rem;
             color: var(--text-main);
-            font-family: 'Inter', sans-serif;
-            font-size: 0.95rem;
+            font-family: inherit;
+            font-size: 0.92rem;
             resize: none;
-            height: 56px;
+            height: 48px;
             transition: all 0.2s ease;
             outline: none;
+            line-height: 1.4;
         }
 
         textarea:focus {
             border-color: var(--accent);
-            box-shadow: 0 0 0 2px rgba(94, 106, 210, 0.2);
+            box-shadow: 0 0 0 2px rgba(94, 106, 210, 0.15);
         }
 
-        button {
+        #send-btn {
             background: var(--accent);
             color: white;
             border: none;
             border-radius: 12px;
+            height: 48px;
             padding: 0 1.5rem;
             font-weight: 500;
-            font-size: 0.95rem;
+            font-size: 0.92rem;
             cursor: pointer;
             transition: all 0.2s ease;
             display: flex;
             align-items: center;
             justify-content: center;
+            gap: 6px;
         }
 
-        button:hover {
+        #send-btn:hover {
             background: var(--accent-hover);
             transform: translateY(-1px);
         }
 
-        button:active {
+        #send-btn:active {
             transform: translateY(1px);
         }
 
-        button:disabled {
-            background: #333;
-            color: #777;
+        #send-btn:disabled {
+            background: #27272a;
+            color: #52525b;
             cursor: not-allowed;
             transform: none;
         }
 
+        /* 3D Viewport Panel (Right) */
+        #viewport-panel {
+            width: 48%;
+            display: flex;
+            flex-direction: column;
+            background: #08080a;
+            position: relative;
+        }
+
+        .viewport-header {
+            height: 52px;
+            padding: 0 1.5rem;
+            background: rgba(18, 18, 22, 0.8);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            z-index: 10;
+        }
+
+        .viewport-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 0.75px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .viewport-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .control-btn {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.78rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        #canvas-container {
+            flex: 1;
+            position: relative;
+            outline: none;
+        }
+
+        /* Sidebar info overlay */
+        #scene-sidebar {
+            position: absolute;
+            top: 64px;
+            right: 12px;
+            width: 200px;
+            max-height: calc(100% - 80px);
+            background: rgba(12, 12, 14, 0.8);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px;
+            z-index: 5;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .sidebar-title {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .object-list-item {
+            font-size: 0.75rem;
+            padding: 4px 6px;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2px;
+            color: #d1d5db;
+        }
+
+        .object-list-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .object-type-badge {
+            font-size: 0.6rem;
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text-muted);
+            padding: 1px 4px;
+            border-radius: 3px;
+        }
+
         /* Animations */
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
+            from { opacity: 0; transform: translateY(8px); }
             to { opacity: 1; transform: translateY(0); }
         }
 
@@ -210,7 +371,7 @@
             display: flex;
             gap: 4px;
             align-items: center;
-            padding: 0.5rem;
+            padding: 0.4rem;
         }
         
         .dot {
@@ -230,50 +391,102 @@
         }
 
         ::-webkit-scrollbar {
-            width: 8px;
+            width: 6px;
+            height: 6px;
         }
         ::-webkit-scrollbar-track {
             background: transparent;
         }
         ::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 3px;
         }
         ::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.12);
         }
     </style>
 </head>
 <body>
     <header>
-        <div class="logo">B</div>
-        <h1>BlenderMCP Chat</h1>
-        <div class="status-dot" title="Connected"></div>
+        <div class="header-left">
+            <div class="logo">B</div>
+            <h1>BlenderMCP Console</h1>
+        </div>
+        <div class="status-container">
+            <div class="status-dot"></div>
+            <span class="status-text" id="connection-status">Connected</span>
+        </div>
     </header>
 
-    <div id="chat-container">
-        <div class="message system">Welcome to BlenderMCP WebUI. Connect to your local Blender instance seamlessly.</div>
-    </div>
+    <div id="workspace">
+        <!-- Chat Interface (Left) -->
+        <div id="chat-panel">
+            <div id="chat-container">
+                <div class="message system">Connected to BlenderMCP Server. Ask to add geometry, fasteners, or analyze structures to see updates in 3D.</div>
+            </div>
 
-    <div class="input-container">
-        <textarea id="prompt-input" placeholder="Type a command for Blender..." rows="1"></textarea>
-        <button id="send-btn">Send</button>
+            <div class="input-container">
+                <textarea id="prompt-input" placeholder="Say 'add a cylinder and size M5 screw'..." rows="1"></textarea>
+                <button id="send-btn">
+                    <span>Send</span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- 3D Viewport Preview (Right) -->
+        <div id="viewport-panel">
+            <div class="viewport-header">
+                <div class="viewport-title">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                    Live 3D Preview (Blender Scene)
+                </div>
+                <div class="viewport-controls">
+                    <button class="control-btn" id="refresh-viewport-btn">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
+                        Sync Scene
+                    </button>
+                    <button class="control-btn" id="reset-cam-btn">Recenter</button>
+                </div>
+            </div>
+            
+            <div id="canvas-container">
+                <!-- Three.js Canvas will be mounted here -->
+            </div>
+
+            <!-- Scene Sidebar list -->
+            <div id="scene-sidebar">
+                <div class="sidebar-title">Outliner</div>
+                <div id="object-list">
+                    <!-- Object list items here -->
+                    <div style="font-size: 0.75rem; color: var(--text-muted); text-align: center; margin-top: 10px;">Empty Scene</div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
         const chatContainer = document.getElementById('chat-container');
         const promptInput = document.getElementById('prompt-input');
         const sendBtn = document.getElementById('send-btn');
+        const objectList = document.getElementById('object-list');
+        const refreshViewportBtn = document.getElementById('refresh-viewport-btn');
+        const resetCamBtn = document.getElementById('reset-cam-btn');
+        const connectionStatus = document.getElementById('connection-status');
+        
         let isWaiting = false;
 
+        // Custom formatting helper for code logs
         function addMessage(content, type) {
             const msgDiv = document.createElement('div');
             msgDiv.className = `message ${type}`;
             
-            // Basic markdown code block formatting
-            const formattedContent = content.replace(/```python\n([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
-                                          .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
-                                          .replace(/\n/g, '<br>');
+            // Format markdown-like code blocks and lists
+            let formattedContent = content
+                .replace(/```python\n([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+                .replace(/```json\n([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+                .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+                .replace(/\n/g, '<br>');
             
             msgDiv.innerHTML = formattedContent;
             chatContainer.appendChild(msgDiv);
@@ -294,9 +507,8 @@
             const prompt = promptInput.value.trim();
             if (!prompt || isWaiting) return;
 
-            // UI Updates
             promptInput.value = '';
-            promptInput.style.height = '56px';
+            promptInput.style.height = '48px';
             addMessage(prompt, 'user');
             
             isWaiting = true;
@@ -321,6 +533,8 @@
                         addMessage(`Error: ${data.message}`, 'system');
                     } else {
                         addMessage(data.message, 'ai');
+                        // Pull updated scene immediately after successful command
+                        syncBlenderScene();
                     }
                 }
             } catch (error) {
@@ -333,7 +547,217 @@
             }
         }
 
-        // Event Listeners
+        // ==========================================
+        // Three.js Viewport Implementation
+        // ==========================================
+        const container = document.getElementById('canvas-container');
+        let renderer, scene, camera, controls;
+        let blenderWorld; // Group that holds all objects from Blender context
+        const renderedObjectsMap = new Map();
+
+        function initViewport() {
+            // Scene Setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0a0d);
+            scene.fog = new THREE.FogExp2(0x0a0a0d, 0.015);
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+            camera.position.set(5, 5, 8);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.shadowMap.enabled = true;
+            container.appendChild(renderer.domElement);
+
+            // Controls
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.maxPolarAngle = Math.PI / 2 + 0.1; // Limit panning below floor slightly
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+
+            const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight1.position.set(10, 15, 10);
+            dirLight1.castShadow = true;
+            scene.add(dirLight1);
+
+            const dirLight2 = new THREE.DirectionalLight(0x5e6ad2, 0.3);
+            dirLight2.position.set(-10, -5, -10);
+            scene.add(dirLight2);
+
+            // Grid & floor matching Blender grid style
+            const gridHelper = new THREE.GridHelper(40, 40, 0x5e6ad2, 0x1e1e24);
+            gridHelper.position.y = -0.01; // Avoid Z-fighting with flat meshes at 0
+            scene.add(gridHelper);
+
+            // Blender World group to handle Euler Z-up translation
+            blenderWorld = new THREE.Group();
+            blenderWorld.rotation.x = -Math.PI / 2; // Rotate Blender's XY horizontal to match XZ in Three
+            scene.add(blenderWorld);
+
+            // Window Resizing
+            const resizeObserver = new ResizeObserver(entries => {
+                if (!entries || entries.length === 0) return;
+                const { width, height } = entries[0].contentRect;
+                camera.aspect = width / height;
+                camera.updateProjectionMatrix();
+                renderer.setSize(width, height);
+            });
+            resizeObserver.observe(container);
+
+            animate();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Color and Material generation
+        function getMaterialForObject(name, type) {
+            if (type === 'LIGHT') {
+                return new THREE.MeshBasicMaterial({ color: 0xffd700, wireframe: true });
+            }
+            if (type === 'CAMERA') {
+                return new THREE.MeshBasicMaterial({ color: 0x5e6ad2, wireframe: true });
+            }
+
+            // Standard Mesh Material with beautiful glass/metal feel
+            let hash = 0;
+            for (let i = 0; i < name.length; i++) {
+                hash = name.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            const hue = Math.abs(hash % 360);
+            const color = new THREE.Color(`hsl(${hue}, 65%, 55%)`);
+
+            return new THREE.MeshStandardMaterial({
+                color: color,
+                roughness: 0.25,
+                metalness: 0.6,
+                transparent: true,
+                opacity: 0.9,
+                side: THREE.DoubleSide
+            });
+        }
+
+        // Sync Scene data from /api/scene
+        async function syncBlenderScene() {
+            try {
+                const response = await fetch('/api/scene');
+                if (!response.ok) throw new Error('Scene fetch failed');
+                
+                const data = await response.json();
+                if (data.status === 'success') {
+                    update3DScene(data.objects);
+                    connectionStatus.textContent = "Connected";
+                    connectionStatus.parentElement.style.borderColor = "var(--border-color)";
+                }
+            } catch (err) {
+                console.error("Failed to sync scene:", err);
+                connectionStatus.textContent = "Offline";
+                connectionStatus.parentElement.style.borderColor = "rgba(239, 68, 68, 0.4)";
+            }
+        }
+
+        function update3DScene(objects) {
+            const currentNames = new Set(objects.map(o => o.name));
+
+            // 1. Remove deleted objects
+            for (const [name, mesh] of renderedObjectsMap.entries()) {
+                if (!currentNames.has(name)) {
+                    blenderWorld.remove(mesh);
+                    renderedObjectsMap.delete(name);
+                }
+            }
+
+            // 2. Add / Update remaining objects
+            objects.forEach(obj => {
+                let mesh = renderedObjectsMap.get(obj.name);
+
+                if (!mesh) {
+                    let geom;
+                    if (obj.shape_guess === 'sphere') {
+                        geom = new THREE.SphereGeometry(0.5, 24, 24);
+                    } else if (obj.shape_guess === 'cylinder') {
+                        geom = new THREE.CylinderGeometry(0.5, 0.5, 1.0, 24);
+                        geom.rotateX(Math.PI / 2); // Align cylinder Z-axis with Blender
+                    } else if (obj.shape_guess === 'cone') {
+                        geom = new THREE.ConeGeometry(0.5, 1.0, 24);
+                        geom.rotateX(Math.PI / 2);
+                    } else if (obj.shape_guess === 'torus') {
+                        geom = new THREE.TorusGeometry(0.4, 0.1, 12, 36);
+                        geom.rotateX(Math.PI / 2);
+                    } else {
+                        geom = new THREE.BoxGeometry(1.0, 1.0, 1.0);
+                    }
+
+                    const mat = getMaterialForObject(obj.name, obj.type);
+                    mesh = new THREE.Mesh(geom, mat);
+                    mesh.name = obj.name;
+                    blenderWorld.add(mesh);
+                    renderedObjectsMap.set(obj.name, mesh);
+                }
+
+                // Update position, rotation, and dimensions in meters
+                mesh.position.set(obj.location[0], obj.location[1], obj.location[2]);
+                mesh.rotation.set(obj.rotation[0], obj.rotation[1], obj.rotation[2], 'XYZ');
+                
+                // Enforce small visual scale if dimensions are empty/0 (like for Cameras/Lights)
+                const sx = Math.max(obj.dimensions[0], 0.25);
+                const sy = Math.max(obj.dimensions[1], 0.25);
+                const sz = Math.max(obj.dimensions[2], 0.25);
+                mesh.scale.set(sx, sy, sz);
+            });
+
+            // 3. Update Outliner List UI
+            objectList.innerHTML = '';
+            if (objects.length === 0) {
+                objectList.innerHTML = '<div style="font-size: 0.75rem; color: var(--text-muted); text-align: center; margin-top: 10px;">Empty Scene</div>';
+            } else {
+                objects.forEach(obj => {
+                    const item = document.createElement('div');
+                    item.className = 'object-list-item';
+                    item.innerHTML = `
+                        <span>${obj.name}</span>
+                        <span class="object-type-badge">${obj.type}</span>
+                    `;
+                    item.addEventListener('click', () => {
+                        // Focus camera on selected object
+                        const mesh = renderedObjectsMap.get(obj.name);
+                        if (mesh) {
+                            // Extract world position
+                            const worldPos = new THREE.Vector3();
+                            mesh.getWorldPosition(worldPos);
+                            
+                            // Move controls target to the object center
+                            controls.target.copy(worldPos);
+                            
+                            // Adjust camera distance nicely
+                            const offset = new THREE.Vector3(3, 3, 4);
+                            camera.position.copy(worldPos).add(offset);
+                        }
+                    });
+                    objectList.appendChild(item);
+                });
+            }
+        }
+
+        // Recenter camera view to scene origin
+        function resetCamera() {
+            controls.target.set(0, 0, 0);
+            camera.position.set(5, 5, 8);
+            controls.update();
+        }
+
+        // ==========================================
+        // Event Listeners & Bootstrapping
+        // ==========================================
         sendBtn.addEventListener('click', sendMessage);
         
         promptInput.addEventListener('keydown', (e) => {
@@ -343,17 +767,56 @@
             }
         });
 
-        // Auto-resize textarea
         promptInput.addEventListener('input', function() {
-            this.style.height = '56px';
+            this.style.height = '48px';
             this.style.height = (this.scrollHeight) + 'px';
-            if (parseInt(this.style.height) > 150) {
+            if (parseInt(this.style.height) > 120) {
                 this.style.overflowY = 'auto';
-                this.style.height = '150px';
+                this.style.height = '120px';
             } else {
                 this.style.overflowY = 'hidden';
             }
         });
+
+        refreshViewportBtn.addEventListener('click', syncBlenderScene);
+        resetCamBtn.addEventListener('click', resetCamera);
+
+        // Initialize threejs viewport
+        initViewport();
+
+        // Initial scene sync
+        syncBlenderScene();
+
+        // Connect to Blender live event stream for instant real-time synchronization
+        function setupLiveStream() {
+            const eventSource = new EventSource('/api/stream');
+            
+            eventSource.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.status === 'success') {
+                        update3DScene(data.objects);
+                        connectionStatus.textContent = "Connected";
+                        connectionStatus.parentElement.style.borderColor = "var(--border-color)";
+                    }
+                } catch (err) {
+                    console.error("Failed to parse live stream data:", err);
+                }
+            };
+            
+            eventSource.onerror = function(err) {
+                console.warn("Live stream disconnected. Reconnecting in 5s...", err);
+                eventSource.close();
+                connectionStatus.textContent = "Offline";
+                connectionStatus.parentElement.style.borderColor = "rgba(239, 68, 68, 0.4)";
+                
+                // Retry setup in 5 seconds
+                setTimeout(setupLiveStream, 5000);
+            };
+        }
+
+        // Start live streaming
+        setupLiveStream();
     </script>
 </body>
 </html>

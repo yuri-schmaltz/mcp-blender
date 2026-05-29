@@ -219,3 +219,114 @@ def test_get_mcp_diagnostics_reports_scene_probe(monkeypatch):
 
     assert payload["connection"]["reachable"] is True
     assert payload["scene_probe"]["object_count"] == 3
+
+
+def test_generate_fastener_calls_blender(monkeypatch):
+    mock_blender = MagicMock()
+    mock_blender.send_command.return_value = {"success": True, "object_name": "Screw"}
+    monkeypatch.setattr(server, "get_blender_connection", lambda: mock_blender)
+
+    res_str = server.generate_fastener(
+        ctx=None,
+        type="SCREW",
+        size="M3",
+        length=12.0,
+        head_type="SOCKET",
+        location=[1, 2, 3],
+        axis=[0, 0, 1]
+    )
+    res = json.loads(res_str)
+    assert res["success"] is True
+    mock_blender.send_command.assert_called_once_with(
+        "generate_fastener",
+        {
+            "type": "SCREW",
+            "size": "M3",
+            "length": 12.0,
+            "head_type": "SOCKET",
+            "location": [1, 2, 3],
+            "axis": [0, 0, 1],
+        }
+    )
+
+
+def test_analyze_structural_properties_calls_blender(monkeypatch):
+    mock_blender = MagicMock()
+    mock_blender.send_command.return_value = {"success": True, "object_name": "Cube"}
+    monkeypatch.setattr(server, "get_blender_connection", lambda: mock_blender)
+
+    res_str = server.analyze_structural_properties(
+        ctx=None,
+        object_name="Cube",
+        material_preset="PLA"
+    )
+    res = json.loads(res_str)
+    assert res["success"] is True
+    mock_blender.send_command.assert_called_once_with(
+        "analyze_structural_properties",
+        {
+            "object_name": "Cube",
+            "material_preset": "PLA",
+        }
+    )
+
+
+def test_blendermcp_list_tools_filtering(monkeypatch):
+    import asyncio
+
+    class DummyTool:
+        def __init__(self, name):
+            self.name = name
+
+    all_tools = [
+        DummyTool("get_scene_info"),
+        DummyTool("apply_boolean_operation"),
+        DummyTool("download_polyhaven_asset"),
+        DummyTool("add_physics_constraint"),
+        DummyTool("analyze_structural_properties"),
+    ]
+
+    mock_blender = MagicMock()
+    mock_blender.send_command.return_value = {"mcp_tool_profile": "PHYSICS"}
+    monkeypatch.setattr(server, "get_blender_connection", lambda: mock_blender)
+
+    async def mock_super_list_tools(*args, **kwargs):
+        return all_tools
+
+    mcp_instance = server.BlenderMCP("TestMCP")
+    monkeypatch.setattr(server.FastMCP, "list_tools", mock_super_list_tools, raising=False)
+
+    async def run_async_test():
+        # Call list_tools
+        filtered_tools = await mcp_instance.list_tools()
+
+        # With PHYSICS profile, it should only return get_scene_info (essential) and add_physics_constraint
+        names = [t.name for t in filtered_tools]
+        assert "get_scene_info" in names
+        assert "add_physics_constraint" in names
+        assert "apply_boolean_operation" not in names
+        assert "download_polyhaven_asset" not in names
+        assert "analyze_structural_properties" not in names
+        assert len(names) == 2
+
+        # Test ALL profile
+        mock_blender.send_command.return_value = {"mcp_tool_profile": "ALL"}
+        filtered_tools = await mcp_instance.list_tools()
+        assert len(filtered_tools) == 5
+
+        # Test MATERIALS profile
+        mock_blender.send_command.return_value = {"mcp_tool_profile": "MATERIALS"}
+        filtered_tools = await mcp_instance.list_tools()
+        names = [t.name for t in filtered_tools]
+        assert "get_scene_info" in names
+        assert "download_polyhaven_asset" in names
+        assert "add_physics_constraint" not in names
+        assert len(names) == 2
+
+        # Test failure / default to ALL
+        mock_blender.send_command.side_effect = Exception("connection lost")
+        filtered_tools = await mcp_instance.list_tools()
+        assert len(filtered_tools) == 5
+
+    asyncio.run(run_async_test())
+

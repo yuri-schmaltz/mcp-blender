@@ -865,6 +865,18 @@ TOOL_SCHEMAS = {
             "required": ["name"]
         }
     },
+
+    # ── Visual Critic ──────────────────────────────────────────────
+    "analyze_viewport_visuals": {
+        "description": "Capture a screenshot of the active 3D viewport and use a local or cloud vision model (like moondream or llava via Ollama) to analyze the scene. Highly useful for checking floating objects, overlapping geometries, clipping, or visual alignment.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "prompt": {"type": "string", "description": "The specific question or instructions for the vision model regarding the viewport visual analysis.", "default": "Describe the current 3D scene from the viewport's perspective. Check for any floating objects, overlapping geometries, clipping, or incorrect physical alignments."},
+                "model": {"type": "string", "description": "The vision model name to query. Defaults to 'moondream' for Ollama.", "default": "moondream"}
+            }
+        }
+    },
 }
 
 def get_tools_list():

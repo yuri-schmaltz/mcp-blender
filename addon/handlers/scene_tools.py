@@ -249,11 +249,20 @@ def get_object_info(scene, name):
 def get_viewport_screenshot(scene, max_size=800, filepath=None, format="png"):
     """
     Capture a screenshot of the current 3D viewport and save it to the specified path.
+    If no filepath is provided, returns a base64-encoded string using RAM-backed temp directory (/dev/shm).
     """
-    try:
-        if not filepath:
-            return {"error": "No filepath provided"}
+    import os
+    import tempfile
+    import uuid
+    import base64
+    
+    is_temp = False
+    if not filepath:
+        temp_dir = "/dev/shm" if os.path.exists("/dev/shm") and os.access("/dev/shm", os.W_OK) else tempfile.gettempdir()
+        filepath = os.path.join(temp_dir, f"blendermcp_shot_{uuid.uuid4().hex}.png")
+        is_temp = True
 
+    try:
         # Find the active 3D viewport
         area = None
         for a in bpy.context.screen.areas:
@@ -286,7 +295,22 @@ def get_viewport_screenshot(scene, max_size=800, filepath=None, format="png"):
         # Cleanup Blender image data
         bpy.data.images.remove(img)
 
+        if is_temp:
+            with open(filepath, "rb") as f:
+                img_data = f.read()
+            img_base64 = base64.b64encode(img_data).decode("utf-8")
+            try:
+                os.remove(filepath)
+            except:
+                pass
+            return {"success": True, "width": width, "height": height, "image_base64": img_base64}
+
         return {"success": True, "width": width, "height": height, "filepath": filepath}
 
     except Exception as e:
+        if is_temp and os.path.exists(filepath):
+            try:
+                os.remove(filepath)
+            except:
+                pass
         return {"error": str(e)}

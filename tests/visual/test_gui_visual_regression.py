@@ -49,7 +49,8 @@ def test_gui_visual_regression(tmp_path, monkeypatch):
 
     if os.getenv("BLENDER_MCP_UPDATE_BASELINE") == "1":
         BASELINE_IMAGE.parent.mkdir(parents=True, exist_ok=True)
-        current_path.replace(BASELINE_IMAGE)
+        import shutil
+        shutil.move(str(current_path), str(BASELINE_IMAGE))
         pytest.skip("Baseline updated. Re-run without BLENDER_MCP_UPDATE_BASELINE=1.")
 
     if not BASELINE_IMAGE.exists():

@@ -225,6 +225,19 @@ class BlenderMCPPreferences(bpy.types.AddonPreferences):
         default="",
     )
 
+    mcp_tool_profile: EnumProperty(
+        name="MCP Tool Profile",
+        description="Filter tools exposed to the AI client to optimize prompt context and speed",
+        items=[
+            ('ALL', "Full (All Tools)", "Expose all 73 tools to the AI"),
+            ('MODELING', "Modeling & Layout", "Expose only essential and modeling/transform tools"),
+            ('MATERIALS', "Materials & Studio", "Expose only PBR materials, textures, and studio lighting tools"),
+            ('PHYSICS', "Mechanics & Simulation", "Expose only rigid body, physics constraints, and joint simulation tools"),
+            ('PRINTING', "3D Printing & CAD", "Expose only mesh analysis, repair, and 3D printing tools"),
+        ],
+        default='ALL',
+    )
+
     # Integration Toggles
     use_polyhaven: BoolProperty(
         name="Use Poly Haven",
@@ -258,6 +271,8 @@ class BlenderMCPPreferences(bpy.types.AddonPreferences):
         row = box.row()
         row.prop(self, "port")
         row.prop(self, "allow_code_execution", toggle=True)
+        col = box.column()
+        col.prop(self, "mcp_tool_profile")
 
         # Section: Embedded Chat Client
         box = layout.box()

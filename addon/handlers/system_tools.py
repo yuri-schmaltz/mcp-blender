@@ -33,3 +33,17 @@ def list_tools(scene=None):
         return tool_schemas.get_tools_list()
     except Exception as e:
         return {"error": f"Tool schemas not available: {e}"}
+
+@mcp_command(name="ping_main", read_only=True)
+def ping_main(scene=None):
+    """Simple ping-pong mechanism to check main thread responsiveness."""
+    return {"status": "pong"}
+
+@mcp_command(name="get_mcp_preferences", read_only=True)
+def get_mcp_preferences(scene=None):
+    """Retrieve active MCP preferences from the addon."""
+    prefs = get_prefs()
+    return {
+        "mcp_tool_profile": getattr(prefs, "mcp_tool_profile", "ALL"),
+        "allow_code_execution": getattr(prefs, "allow_code_execution", False)
+    }

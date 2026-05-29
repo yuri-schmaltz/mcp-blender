@@ -184,26 +184,48 @@ class BlenderMCPServer:
                         command = json.loads(buffer.decode("utf-8"))
                         buffer = b""
 
+                        if isinstance(command, dict) and command.get("type") == "ping_thread":
+                            import os
+                            response = {
+                                "status": "success",
+                                "result": {
+                                    "status": "pong",
+                                    "pid": os.getpid(),
+                                    "is_rendering": getattr(bpy.app, "is_rendering", False) if hasattr(bpy, "app") else False
+                                }
+                            }
+                            client.sendall(json.dumps(response).encode("utf-8"))
+                            continue
+
                         # Execute command in Blender's main thread
                         def execute_wrapper():
                             try:
                                 # Use temp_override to ensure context is available for operators
                                 # This helps when running from timers or background tasks
                                 override = {}
-                                if hasattr(bpy.context, "window_manager") and bpy.context.window_manager.windows:
-                                    win = bpy.context.window_manager.windows[0]
-                                    override["window"] = win
-                                    override["screen"] = win.screen
-                                    for area in win.screen.areas:
-                                        if area.type == 'VIEW_3D':
-                                            override["area"] = area
-                                            for region in area.regions:
-                                                if region.type == 'WINDOW':
-                                                    override["region"] = region
-                                                    break
-                                            break
-                                
-                                with bpy.context.temp_override(**override):
+                                context = getattr(bpy, "context", None)
+                                if context is not None:
+                                    wm = getattr(context, "window_manager", None)
+                                    if wm is not None and getattr(wm, "windows", None):
+                                        win = wm.windows[0]
+                                        override["window"] = win
+                                        override["screen"] = win.screen
+                                        for area in getattr(win.screen, "areas", []):
+                                            if area.type == 'VIEW_3D':
+                                                override["area"] = area
+                                                for region in getattr(area, "regions", []):
+                                                    if region.type == 'WINDOW':
+                                                        override["region"] = region
+                                                        break
+                                                break
+                                    
+                                    temp_override = getattr(context, "temp_override", None)
+                                    if temp_override is not None:
+                                        with temp_override(**override):
+                                            response = self.execute_command(command)
+                                    else:
+                                        response = self.execute_command(command)
+                                else:
                                     response = self.execute_command(command)
                                     
                                 response_json = json.dumps(response)

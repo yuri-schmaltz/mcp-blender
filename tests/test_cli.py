@@ -18,14 +18,7 @@ def test_cli_entrypoint_runs_without_blender(monkeypatch):
     monkeypatch.setattr(server, "get_blender_connection", lambda: pytest.fail("Should not connect"))
     monkeypatch.setattr(cli, "configure_logging", lambda **_: None)
 
-    spec = importlib.util.spec_from_file_location(
-        "blender_mcp_cli", Path(__file__).resolve().parent.parent / "main.py"
-    )
-    cli_entry = importlib.util.module_from_spec(spec)
-    assert spec and spec.loader
-    spec.loader.exec_module(cli_entry)
-
-    cli_entry.main([])
+    cli.main([])
 
     assert calls == ["run"]
 
