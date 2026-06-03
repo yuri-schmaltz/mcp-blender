@@ -21,6 +21,9 @@ def get_prefs():
 def _get_system_prompt():
     """Returns a high-level expert system prompt for the AI assistant."""
     bl_ver = f"{bpy.app.version[0]}.{bpy.app.version[1]}"
+    scene = getattr(bpy.context, "scene", None)
+    scene_name = scene.name if scene else "No active scene"
+    filepath = bpy.data.filepath if bpy.data.filepath else "unsaved file"
     return f"""You are BlenderMCP, a Senior Strategic AI Partner for Blender 3D (v{bl_ver}).
 You represent the pinnacle of technical excellence and strategic thinking.
 
@@ -36,7 +39,7 @@ TECHNICAL GUIDELINES:
 5. TOOLS: You have access to tools. Always prefer using specific tools over executing raw python code when a specific tool is available.
 If no tool fits, you can use the execute_code tool.
 
-Current context: {bpy.context.scene.name} in {bpy.data.filepath if bpy.data.filepath else 'unsaved file'}.
+Current context: {scene_name} in {filepath}.
 """
 
 def handle_chat_request_headless(prompt, provider, model, api_key, allow_code_execution, base_url=None, execution_callback=None):
