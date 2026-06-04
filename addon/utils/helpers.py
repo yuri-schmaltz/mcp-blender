@@ -44,7 +44,7 @@ def get_addon_prefs(caller_package=None):
         The AddonPreferences instance, or None if not found.
     """
     root_pkg = resolve_addon_package(caller_package)
-    if root_pkg in bpy.context.preferences.addons:
+    if bpy.context.preferences and root_pkg in bpy.context.preferences.addons:
         return bpy.context.preferences.addons[root_pkg].preferences
     return None
 
@@ -270,6 +270,35 @@ def _uv_blender_mcp_command(cwd: str, host: str, port: int, doctor: bool = False
     return cmd
 
 
+def extend_sys_path_with_venv():
+    """Auto-detect the virtual environment (.venv) in the repository root and add its site-packages to sys.path."""
+    root = _project_root()
+    for candidate in [root, os.path.dirname(root)]:
+        venv_dir = os.path.join(candidate, ".venv")
+        if os.path.exists(venv_dir):
+            paths_to_add = []
+            # Windows
+            win_site = os.path.join(venv_dir, "Lib", "site-packages")
+            if os.path.exists(win_site):
+                paths_to_add.append(win_site)
+            # Unix (Linux / macOS)
+            unix_lib = os.path.join(venv_dir, "lib")
+            if os.path.exists(unix_lib):
+                try:
+                    for item in os.listdir(unix_lib):
+                        if item.startswith("python"):
+                            unix_site = os.path.join(unix_lib, item, "site-packages")
+                            if os.path.exists(unix_site):
+                                paths_to_add.append(unix_site)
+                except Exception:
+                    pass
+            for path in paths_to_add:
+                if path not in sys.path:
+                    sys.path.insert(0, path)
+                    print(f"[blender-mcp] Added site-packages to sys.path: {path}")
+            break
+
+
 def _ensure_pip(cwd: str) -> tuple[bool, str]:
     """Ensure pip is available in current Python runtime."""
     code, out = _run_command([sys.executable, "-m", "pip", "--version"], cwd=cwd)
@@ -287,7 +316,7 @@ def _install_runtime_dependencies_with_pip(cwd: str) -> tuple[int, str]:
     ok, out = _ensure_pip(cwd)
     if not ok:
         return 1, f"pip unavailable: {out}"
-    return _run_command([sys.executable, "-m", "pip", "install", "--upgrade", "requests>=2.25.0"], cwd=cwd)
+    return _run_command([sys.executable, "-m", "pip", "install", "--upgrade", "requests>=2.25.0", "litellm>=1.0.0"], cwd=cwd)
 
 
 def _mcp_client_config_snippet(client: str, host: str, port: int) -> str:

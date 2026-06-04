@@ -27,7 +27,7 @@ class WebUIHandler(http.server.BaseHTTPRequestHandler):
         elif self.path == '/api/scene':
             try:
                 import concurrent.futures
-                future = concurrent.futures.Future()
+                scene_future = concurrent.futures.Future()
                 
                 def _run_in_main():
                     try:
@@ -38,42 +38,44 @@ class WebUIHandler(http.server.BaseHTTPRequestHandler):
                             "objects": []
                         }
                         
-                        for obj in bpy.context.scene.objects:
-                            obj_data = {
-                                "name": obj.name,
-                                "type": obj.type,
-                                "location": [obj.location.x, obj.location.y, obj.location.z],
-                                "rotation": [obj.rotation_euler.x, obj.rotation_euler.y, obj.rotation_euler.z],
-                                "scale": [obj.scale.x, obj.scale.y, obj.scale.z],
-                                "dimensions": [obj.dimensions.x, obj.dimensions.y, obj.dimensions.z] if hasattr(obj, "dimensions") else [1, 1, 1]
-                            }
-                            
-                            shape_guess = "cube"
-                            name_lower = obj.name.lower()
-                            if "sphere" in name_lower or (obj.type == 'MESH' and hasattr(obj.data, "vertices") and len(obj.data.vertices) == 482):
-                                shape_guess = "sphere"
-                            elif "cylinder" in name_lower or "screw" in name_lower or "bolt" in name_lower or "shaft" in name_lower or "pocket" in name_lower or "hole" in name_lower:
-                                shape_guess = "cylinder"
-                            elif "cone" in name_lower:
-                                shape_guess = "cone"
-                            elif "torus" in name_lower or "bearing" in name_lower or "nut" in name_lower or "washer" in name_lower:
-                                shape_guess = "torus"
-                            elif "light" in name_lower or obj.type == 'LIGHT':
-                                shape_guess = "light"
-                                obj_data["light_type"] = obj.data.type if hasattr(obj, "data") else "POINT"
-                            elif obj.type == 'CAMERA':
-                                shape_guess = "camera"
+                        scene = getattr(bpy.context, "scene", None)
+                        if scene is not None:
+                            for obj in scene.objects:
+                                obj_data = {
+                                    "name": obj.name,
+                                    "type": obj.type,
+                                    "location": [obj.location.x, obj.location.y, obj.location.z],
+                                    "rotation": [obj.rotation_euler.x, obj.rotation_euler.y, obj.rotation_euler.z],
+                                    "scale": [obj.scale.x, obj.scale.y, obj.scale.z],
+                                    "dimensions": [obj.dimensions.x, obj.dimensions.y, obj.dimensions.z] if hasattr(obj, "dimensions") else [1, 1, 1]
+                                }
                                 
-                            obj_data["shape_guess"] = shape_guess
-                            scene_data["objects"].append(obj_data)
-                            
-                        future.set_result(scene_data)
+                                shape_guess = "cube"
+                                name_lower = obj.name.lower()
+                                if "sphere" in name_lower or (obj.type == 'MESH' and hasattr(obj.data, "vertices") and len(obj.data.vertices) == 482):
+                                    shape_guess = "sphere"
+                                elif "cylinder" in name_lower or "screw" in name_lower or "bolt" in name_lower or "shaft" in name_lower or "pocket" in name_lower or "hole" in name_lower:
+                                    shape_guess = "cylinder"
+                                elif "cone" in name_lower:
+                                    shape_guess = "cone"
+                                elif "torus" in name_lower or "bearing" in name_lower or "nut" in name_lower or "washer" in name_lower:
+                                    shape_guess = "torus"
+                                elif "light" in name_lower or obj.type == 'LIGHT':
+                                    shape_guess = "light"
+                                    obj_data["light_type"] = obj.data.type if hasattr(obj, "data") else "POINT"
+                                elif obj.type == 'CAMERA':
+                                    shape_guess = "camera"
+                                    
+                                obj_data["shape_guess"] = shape_guess
+                                scene_data["objects"].append(obj_data)
+                                
+                        scene_future.set_result(scene_data)
                     except Exception as e:
-                        future.set_exception(e)
+                        scene_future.set_exception(e)
                     return None
                 
                 bpy.app.timers.register(_run_in_main)
-                scene_info = future.result(timeout=5.0)
+                scene_info = scene_future.result(timeout=5.0)
                 
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')
@@ -96,30 +98,32 @@ class WebUIHandler(http.server.BaseHTTPRequestHandler):
                 
                 last_version = -1
                 while True:
-                    future = concurrent.futures.Future()
+                    stream_future = concurrent.futures.Future()
                     def _fetch():
                         try:
                             objs = []
-                            for obj in bpy.context.scene.objects:
-                                # Safe property checks
-                                type_str = getattr(obj, "type", "MESH")
-                                loc = getattr(obj, "location", None)
-                                rot = getattr(obj, "rotation_euler", None)
-                                scl = getattr(obj, "scale", None)
-                                dim = getattr(obj, "dimensions", None)
-                                
-                                objs.append({
-                                    "name": obj.name,
-                                    "type": type_str,
-                                    "location": [loc.x, loc.y, loc.z] if loc else [0,0,0],
-                                    "rotation": [rot.x, rot.y, rot.z] if rot else [0,0,0],
-                                    "scale": [scl.x, scl.y, scl.z] if scl else [1,1,1],
-                                    "dimensions": [dim.x, dim.y, dim.z] if dim else [1, 1, 1],
-                                    "shape_guess": "cube"
-                                })
+                            scene = getattr(bpy.context, "scene", None)
+                            if scene is not None:
+                                for obj in scene.objects:
+                                    # Safe property checks
+                                    type_str = getattr(obj, "type", "MESH")
+                                    loc = getattr(obj, "location", None)
+                                    rot = getattr(obj, "rotation_euler", None)
+                                    scl = getattr(obj, "scale", None)
+                                    dim = getattr(obj, "dimensions", None)
+                                    
+                                    objs.append({
+                                        "name": obj.name,
+                                        "type": type_str,
+                                        "location": [loc.x, loc.y, loc.z] if loc else [0,0,0],
+                                        "rotation": [rot.x, rot.y, rot.z] if rot else [0,0,0],
+                                        "scale": [scl.x, scl.y, scl.z] if scl else [1,1,1],
+                                        "dimensions": [dim.x, dim.y, dim.z] if dim else [1, 1, 1],
+                                        "shape_guess": "cube"
+                                    })
                             # Resolve shape guesses
                             for obj_data in objs:
-                                name_lower = obj_data["name"].lower()
+                                name_lower = str(obj_data["name"]).lower()
                                 shape_guess = "cube"
                                 if "sphere" in name_lower:
                                     shape_guess = "sphere"
@@ -130,14 +134,14 @@ class WebUIHandler(http.server.BaseHTTPRequestHandler):
                                 elif "torus" in name_lower or "bearing" in name_lower or "nut" in name_lower or "washer" in name_lower:
                                     shape_guess = "torus"
                                 obj_data["shape_guess"] = shape_guess
-                            future.set_result(objs)
+                            stream_future.set_result(objs)
                         except Exception as e:
-                            future.set_exception(e)
+                            stream_future.set_exception(e)
                         return None
                         
                     bpy.app.timers.register(_fetch)
                     try:
-                        objs = future.result(timeout=1.0)
+                        objs = stream_future.result(timeout=1.0)
                         objs_str = json.dumps(objs)
                         import hashlib
                         h = hashlib.md5(objs_str.encode('utf-8')).hexdigest()
@@ -208,18 +212,22 @@ class WebUIHandler(http.server.BaseHTTPRequestHandler):
                             from .core.router import execute_command
                             # Inject override context if possible, or just let it use default
                             override = {}
-                            if hasattr(bpy.context, "window_manager") and bpy.context.window_manager.windows:
-                                win = bpy.context.window_manager.windows[0]
-                                override["window"] = win
-                                override["screen"] = win.screen
-                                for area in win.screen.areas:
-                                    if area.type == 'VIEW_3D':
-                                        override["area"] = area
-                                        for region in area.regions:
-                                            if region.type == 'WINDOW':
-                                                override["region"] = region
+                            wm = getattr(bpy.context, "window_manager", None)
+                            if wm is not None and hasattr(wm, "windows") and wm.windows:
+                                windows = list(wm.windows)
+                                if windows:
+                                    win = windows[0]
+                                    override["window"] = win
+                                    if hasattr(win, "screen") and win.screen:
+                                        override["screen"] = win.screen
+                                        for area in win.screen.areas:
+                                            if area.type == 'VIEW_3D':
+                                                override["area"] = area
+                                                for region in area.regions:
+                                                    if region.type == 'WINDOW':
+                                                        override["region"] = region
+                                                        break
                                                 break
-                                        break
                             with bpy.context.temp_override(**override):
                                 res = execute_command(tool_command)
                             future.set_result(res)

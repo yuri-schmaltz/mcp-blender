@@ -20,6 +20,16 @@ import mathutils
 import requests
 from bpy.props import IntProperty
 
+# Try to extend sys.path with .venv site-packages at startup
+try:
+    if __package__:
+        from .addon.utils.helpers import extend_sys_path_with_venv
+    else:
+        from addon.utils.helpers import extend_sys_path_with_venv
+    extend_sys_path_with_venv()
+except Exception as e:
+    print(f"[blender-mcp] Failed to run extend_sys_path_with_venv at startup: {e}")
+
 
 def _load_socket_server_class():
     """Load addon/server.py robustly in both legacy addon and extension modes."""
@@ -54,7 +64,9 @@ def get_prefs():
             from addon.utils.helpers import get_addon_prefs
         return get_addon_prefs(__package__)
     except ImportError:
-        return bpy.context.preferences.addons[_ADDON_PACKAGE].preferences
+        if bpy.context.preferences and hasattr(bpy.context.preferences, "addons") and _ADDON_PACKAGE in bpy.context.preferences.addons:
+            return bpy.context.preferences.addons[_ADDON_PACKAGE].preferences
+        return None
 
 
 SocketBlenderMCPServer = _load_socket_server_class()
@@ -75,6 +87,8 @@ try:
     else:
         _progress_path = os.path.join(os.path.dirname(__file__), "src", "blender_mcp", "progress.py")
         _progress_spec = importlib.util.spec_from_file_location("_blendermcp_progress", _progress_path)
+        if _progress_spec is None or _progress_spec.loader is None:
+            raise ImportError("Could not load progress spec or loader")
         _progress_mod = importlib.util.module_from_spec(_progress_spec)
         if __package__:
             _progress_mod.__package__ = __package__
@@ -130,6 +144,8 @@ try:
 except (ImportError, ValueError):
     _net_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "addon", "utils", "network.py")
     _net_spec = importlib.util.spec_from_file_location("_blendermcp_network", _net_path)
+    if _net_spec is None or _net_spec.loader is None:
+        raise ImportError("Could not load network spec or loader")
     _net_mod = importlib.util.module_from_spec(_net_spec)
     if __package__:
         _net_mod.__package__ = __package__
@@ -268,9 +284,16 @@ def register():
 
 def unregister():
     # 1. Stop the server
-    if hasattr(bpy.types, "blendermcp_server") and bpy.types.blendermcp_server:
-        bpy.types.blendermcp_server.stop()
-        del bpy.types.blendermcp_server
+    server = getattr(bpy.types, "blendermcp_server", None)
+    if server is not None:
+        try:
+            server.stop()
+        except Exception:
+            pass
+        try:
+            delattr(bpy.types, "blendermcp_server")
+        except AttributeError:
+            pass
 
     # 2. Call modular unregistration
     try:

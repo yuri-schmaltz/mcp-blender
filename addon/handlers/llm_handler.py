@@ -48,6 +48,15 @@ def handle_chat_request_headless(prompt, provider, model, api_key, allow_code_ex
     If execution_callback is provided, tool execution will be deferred to it.
     execution_callback should accept (tool_command) and return the result synchronously.
     """
+    global litellm
+    if litellm is None:
+        try:
+            from ..utils.helpers import extend_sys_path_with_venv
+            extend_sys_path_with_venv()
+            import litellm
+        except ImportError:
+            litellm = None
+
     if litellm is None:
         return {"error": "litellm is not installed. Please run 'Check/Install Dependencies' in the panel."}
 
@@ -205,9 +214,14 @@ def handle_chat_request_headless(prompt, provider, model, api_key, allow_code_ex
             kwargs.pop("temperature", None) # litellm might prefer default here
             kwargs["messages"] = messages
             second_response = litellm.completion(**kwargs)
-            final_message = second_response.choices[0].message.content
+            final_message_obj = second_response.choices[0].message
+            if getattr(final_message_obj, "refusal", None):
+                return {"status": "error", "message": f"Request refused: {final_message_obj.refusal}"}
+            final_message = final_message_obj.content
             return {"status": "success", "message": final_message}
         else:
+            if getattr(response_message, "refusal", None):
+                return {"status": "error", "message": f"Request refused: {response_message.refusal}"}
             content = response_message.content
             import re
             pattern = r"```python\s*(.*?)\s*```"
@@ -291,18 +305,22 @@ def handle_chat_request_async(context, on_complete_callback):
             try:
                 from ..core.router import execute_command
                 override = {}
-                if hasattr(bpy.context, "window_manager") and bpy.context.window_manager.windows:
-                    win = bpy.context.window_manager.windows[0]
-                    override["window"] = win
-                    override["screen"] = win.screen
-                    for area in win.screen.areas:
-                        if area.type == 'VIEW_3D':
-                            override["area"] = area
-                            for region in area.regions:
-                                if region.type == 'WINDOW':
-                                    override["region"] = region
+                wm = getattr(bpy.context, "window_manager", None)
+                if wm is not None and hasattr(wm, "windows") and wm.windows:
+                    windows = list(wm.windows)
+                    if windows:
+                        win = windows[0]
+                        override["window"] = win
+                        if hasattr(win, "screen") and win.screen:
+                            override["screen"] = win.screen
+                            for area in win.screen.areas:
+                                if area.type == 'VIEW_3D':
+                                    override["area"] = area
+                                    for region in area.regions:
+                                        if region.type == 'WINDOW':
+                                            override["region"] = region
+                                            break
                                     break
-                            break
                 with bpy.context.temp_override(**override):
                     res = execute_command(tool_command)
                 future.set_result(res)

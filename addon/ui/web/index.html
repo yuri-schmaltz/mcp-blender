@@ -482,7 +482,8 @@
             msgDiv.className = `message ${type}`;
             
             // Format markdown-like code blocks and lists
-            let formattedContent = content
+            const textContent = content !== undefined && content !== null ? String(content) : '';
+            let formattedContent = textContent
                 .replace(/```python\n([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
                 .replace(/```json\n([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
                 .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
@@ -525,11 +526,17 @@
                 thinkingDiv.remove();
 
                 if (!response.ok) {
-                    const err = await response.json();
-                    addMessage(`Error: ${err.error || response.statusText}`, 'system');
+                    try {
+                        const err = await response.json();
+                        addMessage(`Error: ${err.error || err.message || response.statusText}`, 'system');
+                    } catch (e) {
+                        addMessage(`Error: ${response.statusText}`, 'system');
+                    }
                 } else {
                     const data = await response.json();
-                    if (data.status === 'error') {
+                    if (data.error) {
+                        addMessage(`Error: ${data.error}`, 'system');
+                    } else if (data.status === 'error') {
                         addMessage(`Error: ${data.message}`, 'system');
                     } else {
                         addMessage(data.message, 'ai');

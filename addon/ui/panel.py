@@ -150,6 +150,27 @@ class BLENDERMCP_PT_Chat(bpy.types.Panel):
         scene = context.scene
         prefs = get_prefs(context)
 
+        # Check if litellm is installed
+        import importlib.util as _iu
+        litellm_installed = False
+        try:
+            if _iu.find_spec("litellm") is not None:
+                litellm_installed = True
+            else:
+                from ..utils.helpers import extend_sys_path_with_venv
+                extend_sys_path_with_venv()
+                if _iu.find_spec("litellm") is not None:
+                    litellm_installed = True
+        except Exception:
+            pass
+
+        if not litellm_installed:
+            box = layout.box()
+            box.alert = True
+            box.label(text="AI Chat: litellm is not installed.", icon="ERROR")
+            box.operator("blendermcp.install_dependencies", text="Install Dependencies", icon="IMPORT")
+            return
+
         # Check if API Key is configured
         if not prefs or (not prefs.llm_api_key and prefs.llm_provider not in {'OLLAMA', 'CUSTOM'}):
             box = layout.box()
