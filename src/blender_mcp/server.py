@@ -22,11 +22,9 @@ from .logging_config import configure_logging
 
 def tool_error(
     message: str, *, code: str = "runtime_error", data: dict[str, Any] | None = None
-) -> dict[str, Any]:
-    payload: dict[str, Any] = {"error": {"code": code, "message": message}}
-    if data:
-        payload["error"]["data"] = data
-    return payload
+) -> Any:
+    details = f" [details: {data}]" if data else ""
+    raise Exception(f"{message} (code: {code}){details}")
 
 
 logger = logging.getLogger("BlenderMCPServer")
@@ -573,8 +571,8 @@ _connection_state = _ConnectionState()
 
 def get_blender_connection():
     """Get or create a persistent Blender connection"""
+    # 1. Fast-path check outside lock
     existing_connection = _connection_state.get_connection()
-    # If we have an existing connection, check if it's still valid.
     if existing_connection is not None:
         try:
             result = existing_connection.send_command("get_polyhaven_status")
@@ -588,38 +586,35 @@ def get_blender_connection():
                 pass
             _connection_state.clear()
 
-    # Double-check after potential concurrent creation.
-    existing_connection = _connection_state.get_connection()
-    if existing_connection is not None:
-        return existing_connection
+    # 2. Acquire lock for connection creation
+    with _connection_state._lock:
+        # Double check inside the lock
+        existing_connection = _connection_state.get_connection()
+        if existing_connection is not None:
+            return existing_connection
 
-    host = os.getenv("BLENDER_HOST", DEFAULT_HOST)
-    port = int(os.getenv("BLENDER_PORT", DEFAULT_PORT))
-    timeout = float(os.getenv("BLENDER_SOCKET_TIMEOUT", DEFAULT_SOCKET_TIMEOUT))
-    connect_attempts = int(os.getenv("BLENDER_CONNECT_ATTEMPTS", DEFAULT_CONNECT_ATTEMPTS))
-    command_attempts = int(os.getenv("BLENDER_COMMAND_ATTEMPTS", DEFAULT_COMMAND_ATTEMPTS))
-    backoff_seconds = float(os.getenv("BLENDER_RETRY_BACKOFF", DEFAULT_RETRY_BACKOFF))
+        host = os.getenv("BLENDER_HOST", DEFAULT_HOST)
+        port = int(os.getenv("BLENDER_PORT", DEFAULT_PORT))
+        timeout = float(os.getenv("BLENDER_SOCKET_TIMEOUT", DEFAULT_SOCKET_TIMEOUT))
+        connect_attempts = int(os.getenv("BLENDER_CONNECT_ATTEMPTS", DEFAULT_CONNECT_ATTEMPTS))
+        command_attempts = int(os.getenv("BLENDER_COMMAND_ATTEMPTS", DEFAULT_COMMAND_ATTEMPTS))
+        backoff_seconds = float(os.getenv("BLENDER_RETRY_BACKOFF", DEFAULT_RETRY_BACKOFF))
 
-    new_connection = BlenderConnection(
-        host=host,
-        port=port,
-        timeout=timeout,
-        connect_attempts=connect_attempts,
-        command_attempts=command_attempts,
-        backoff_seconds=backoff_seconds,
-    )
-    if not new_connection.connect():
-        logger.error("Failed to connect to Blender")
-        raise Exception("Could not connect to Blender. Make sure the Blender addon is running.")
+        new_connection = BlenderConnection(
+            host=host,
+            port=port,
+            timeout=timeout,
+            connect_attempts=connect_attempts,
+            command_attempts=command_attempts,
+            backoff_seconds=backoff_seconds,
+        )
+        if not new_connection.connect():
+            logger.error("Failed to connect to Blender")
+            raise Exception("Could not connect to Blender. Make sure the Blender addon is running.")
 
-    existing_connection = _connection_state.get_connection()
-    if existing_connection is not None:
-        new_connection.disconnect()
-        return existing_connection
-
-    _connection_state.set_connection(new_connection)
-    logger.info("Created new persistent connection to Blender")
-    return new_connection
+        _connection_state.set_connection(new_connection)
+        logger.info("Created new persistent connection to Blender")
+        return new_connection
 
 
 def _prepare_temp_file_path(prefix: str = "blender_screenshot", suffix: str = ".png") -> Path:

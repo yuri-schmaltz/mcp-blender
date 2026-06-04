@@ -15,7 +15,7 @@ def get_prefs():
 @mcp_command(name="execute_code", read_only=False)
 def execute_code(code: str, scene=None):
     prefs = get_prefs()
-    if prefs and not getattr(prefs, "allow_code_execution", False):
+    if not prefs or not getattr(prefs, "allow_code_execution", False):
         return {"error": "Code execution blocked by global preferences. Enable it in Edit > Preferences > Addons > Blender MCP."}
     try:
         namespace = {"bpy": bpy}

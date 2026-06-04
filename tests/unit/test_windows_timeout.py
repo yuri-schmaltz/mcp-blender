@@ -23,8 +23,8 @@ class TestWindowsTimeout(TestCase):
     def test_timeout_on_windows(self):
         """Test that timeout works on Windows"""
         code = """
-import time
-time.sleep(10)  # Sleep longer than timeout
+for i in range(100000000):
+    pass
 """
 
         with pytest.raises(TimeoutError) as exc_info:

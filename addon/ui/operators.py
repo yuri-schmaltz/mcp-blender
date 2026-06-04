@@ -452,34 +452,31 @@ class BLENDERMCP_OT_SendChat(bpy.types.Operator):
         scene = context.scene
         scene.blendermcp_chat_status = t("status_ai_thinking")
 
-        
-        # Use a brief timer to allow UI update before blocking request
-        # Actually, in Blender, we can't easily do async without threading
-        # For now, we'll do it synchronously for simplicity
-        
         from ..handlers import llm_handler  # type: ignore
 
-        result = llm_handler.handle_chat_request(context)
-        
-        if "error" in result:
-            self.report({"ERROR"}, result["error"])
-            scene.blendermcp_chat_status = f"Error: {result['error']}"
-            _update_action_status(scene, "AI Chat", False, result["error"])
-        else:
-            status = result.get("status", "success")
-            msg = result.get("message", "Done")
-            scene.blendermcp_chat_status = msg
-            
-            if status == "success":
-                self.report({"INFO"}, "AI execution completed.")
-                _update_action_status(scene, "AI Chat", True, "Execution success")
-            elif status == "pending":
-                self.report({"WARNING"}, "Code generated (Execution disabled)")
-                _update_action_status(scene, "AI Chat", True, "Code generated")
+        def on_complete(result):
+            if "error" in result:
+                scene.blendermcp_chat_status = f"Error: {result['error']}"
+                _update_action_status(scene, "AI Chat", False, result["error"])
             else:
-                self.report({"INFO"}, "AI response received.")
-                _update_action_status(scene, "AI Chat", True, "Response received")
+                status = result.get("status", "success")
+                msg = result.get("message", "Done")
+                scene.blendermcp_chat_status = msg
                 
+                if status == "success":
+                    _update_action_status(scene, "AI Chat", True, "Execution success")
+                elif status == "pending":
+                    _update_action_status(scene, "AI Chat", True, "Code generated")
+                else:
+                    _update_action_status(scene, "AI Chat", True, "Response received")
+            
+            # Force redraw of View3D areas to update panel labels instantly
+            for screen in bpy.data.screens:
+                for area in screen.areas:
+                    if area.type == 'VIEW_3D':
+                        area.tag_redraw()
+
+        llm_handler.handle_chat_request_async(context, on_complete)
         return {"FINISHED"}
 
 

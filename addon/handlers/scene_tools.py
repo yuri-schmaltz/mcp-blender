@@ -279,21 +279,22 @@ def get_viewport_screenshot(scene, max_size=800, filepath=None, format="png"):
 
         # Load and resize if needed
         img = bpy.data.images.load(filepath)
-        width, height = img.size
+        try:
+            width, height = img.size
 
-        if max(width, height) > max_size:
-            scale = max_size / max(width, height)
-            new_width = int(width * scale)
-            new_height = int(height * scale)
-            img.scale(new_width, new_height)
+            if max(width, height) > max_size:
+                scale = max_size / max(width, height)
+                new_width = int(width * scale)
+                new_height = int(height * scale)
+                img.scale(new_width, new_height)
 
-            # Set format and save
-            img.file_format = format.upper()
-            img.save()
-            width, height = new_width, new_height
-
-        # Cleanup Blender image data
-        bpy.data.images.remove(img)
+                # Set format and save
+                img.file_format = format.upper()
+                img.save()
+                width, height = new_width, new_height
+        finally:
+            # Cleanup Blender image data
+            bpy.data.images.remove(img)
 
         if is_temp:
             with open(filepath, "rb") as f:
