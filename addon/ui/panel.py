@@ -56,6 +56,8 @@ class BLENDERMCP_PT_Panel(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
+        if layout is None:
+            return
         scene = context.scene
 
         # --- Connection Status ---
@@ -96,6 +98,8 @@ class BLENDERMCP_PT_Engineering(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
+        if layout is None:
+            return
         scene = context.scene
 
         # Mesh Cleanup
@@ -141,6 +145,8 @@ class BLENDERMCP_PT_Chat(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
+        if layout is None:
+            return
         scene = context.scene
         prefs = get_prefs(context)
 
