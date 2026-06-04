@@ -145,7 +145,7 @@ class BLENDERMCP_PT_Chat(bpy.types.Panel):
         prefs = get_prefs(context)
 
         # Check if API Key is configured
-        if not prefs or not prefs.llm_api_key:
+        if not prefs or (not prefs.llm_api_key and prefs.llm_provider not in {'OLLAMA', 'CUSTOM'}):
             box = layout.box()
             box.alert = True
             box.label(text="API Key missing!", icon="ERROR")
