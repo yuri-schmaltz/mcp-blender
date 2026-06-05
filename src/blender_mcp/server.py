@@ -505,7 +505,6 @@ class BlenderMCP(FastMCP):
                 "create_ball_joint",
                 "create_hinge_joint",
                 "setup_physics_body",
-                "setup_simple_vehicle_rig",
                 "run_assembly_simulation",
                 "mark_as_functional_part",
                 "list_functional_parts",
@@ -1529,18 +1528,6 @@ def setup_product_studio(ctx: Context, theme: str = "CLEAN") -> str:
     except Exception as e:
         return tool_error("Error setting up studio", data={"detail": str(e)})
 
-
-@mcp.tool()
-def setup_simple_vehicle_rig(ctx: Context, chassis_name: str, wheel_names: list[str]) -> str:
-    """Rig a vehicle with wheels for basic movement simulation."""
-    try:
-        blender = get_blender_connection()
-        result = blender.send_command(
-            "setup_simple_vehicle_rig", {"chassis_name": chassis_name, "wheel_names": wheel_names}
-        )
-        return json.dumps(result, indent=2)
-    except Exception as e:
-        return tool_error("Error rigging vehicle", data={"detail": str(e)})
 
 
 @mcp.tool()

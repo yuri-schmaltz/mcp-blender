@@ -64,15 +64,13 @@ def handle_chat_request_headless(prompt, provider, model, api_key, allow_code_ex
         return {"error": "Prompt is empty"}
         
     # Local providers usually don't need API keys, but litellm might require a dummy one
-    if not api_key and provider in {'OLLAMA', 'CUSTOM'}:
+    if not api_key:
         api_key = "sk-1234"
-    elif not api_key:
-        return {"error": "Missing API Key"}
         
     # Format model string for litellm
     if provider == 'OLLAMA':
         model = f"ollama/{model}"
-    elif provider == 'CUSTOM':
+    else:
         model = f"openai/{model}"
 
     messages = [
@@ -123,20 +121,19 @@ def handle_chat_request_headless(prompt, provider, model, api_key, allow_code_ex
                 "create_pbr_material", "set_texture", "download_polyhaven_asset", 
                 "download_ambientcg_material", "download_sketchfab_model", 
                 "search_polyhaven_assets", "search_ambientcg_materials", 
-                "search_sketchfab_models", "setup_camera", "setup_three_point_lighting", 
+                "search_sketchfab_models", "setup_camera", 
                 "setup_product_studio", "configure_render_settings", "render_catalog_angles", 
                 "animate_rotation", "create_turntable_animation"
             })
         elif profile == "PHYSICS":
             allowed_tools.update({
-                "setup_simple_vehicle_rig", "generate_tire_treads", 
                 "mark_as_functional_part", "list_functional_parts"
             })
         elif profile == "PRINTING":
             allowed_tools.update({
                 "check_mesh_integrity", "auto_repair_mesh", "resolve_self_intersections", 
                 "apply_print_thickness", "assign_print_color", "generate_print_report", 
-                "export_for_printing", "export_model", "ai_mesh_clean"
+                "export_for_printing", "export_model"
             })
             
         tools_list = [t for t in tools_list if t["name"] in allowed_tools]
@@ -253,11 +250,9 @@ def handle_chat_request(context):
     provider = prefs.llm_provider
     if provider == 'OLLAMA':
         model = prefs.llm_model_custom if prefs.llm_model_ollama == 'MANUAL' else prefs.llm_model_ollama
-    elif provider == 'CUSTOM':
-        model = prefs.llm_model_custom if prefs.llm_model_custom_enum == 'MANUAL' else prefs.llm_model_custom_enum
     else:
-        model = prefs.llm_model
-    base_url = prefs.llm_base_url if provider in {'OLLAMA', 'CUSTOM'} else None
+        model = prefs.llm_model_custom if prefs.llm_model_custom_enum == 'MANUAL' else prefs.llm_model_custom_enum
+    base_url = prefs.llm_base_url
 
     return handle_chat_request_headless(
         prompt=scene.blendermcp_chat_prompt,
@@ -287,11 +282,9 @@ def handle_chat_request_async(context, on_complete_callback):
     provider = prefs.llm_provider
     if provider == 'OLLAMA':
         model = prefs.llm_model_custom if prefs.llm_model_ollama == 'MANUAL' else prefs.llm_model_ollama
-    elif provider == 'CUSTOM':
-        model = prefs.llm_model_custom if prefs.llm_model_custom_enum == 'MANUAL' else prefs.llm_model_custom_enum
     else:
-        model = prefs.llm_model
-    base_url = prefs.llm_base_url if provider in {'OLLAMA', 'CUSTOM'} else None
+        model = prefs.llm_model_custom if prefs.llm_model_custom_enum == 'MANUAL' else prefs.llm_model_custom_enum
+    base_url = prefs.llm_base_url
     
     prompt = scene.blendermcp_chat_prompt
     api_key = prefs.llm_api_key

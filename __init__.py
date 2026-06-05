@@ -16,39 +16,6 @@ from bpy.props import (
 )
 
 
-def get_model_items(self, context):
-    provider = self.llm_provider
-    items = []
-    
-    try:
-        import litellm
-        if provider == 'OPENAI':
-            models = litellm.models_by_provider.get('openai', [])
-        elif provider == 'ANTHROPIC':
-            models = litellm.models_by_provider.get('anthropic', [])
-        elif provider == 'GOOGLE':
-            models = litellm.models_by_provider.get('gemini', [])
-        else:
-            models = []
-            
-        for m in sorted(list(models)):
-            items.append((m, m, f"{m} via {provider}"))
-            
-    except Exception:
-        pass
-        
-    if not items:
-        if provider == 'OPENAI':
-            items = [('gpt-4o', 'gpt-4o', ''), ('gpt-3.5-turbo', 'gpt-3.5-turbo', '')]
-        elif provider == 'ANTHROPIC':
-            items = [('claude-3-5-sonnet-20240620', 'claude-3-5-sonnet-20240620', '')]
-        elif provider == 'GOOGLE':
-            items = [('gemini/gemini-1.5-pro', 'gemini/gemini-1.5-pro', '')]
-        else:
-            items = [('default', 'Default', '')]
-            
-    # Blender requires items to be unique and within reasonable limits
-    return items
 
 import threading
 import json
@@ -179,19 +146,10 @@ class BlenderMCPPreferences(bpy.types.AddonPreferences):
     llm_provider: EnumProperty(
         name="LLM Provider",
         items=[
-            ('OPENAI', "OpenAI", "Use OpenAI API"),
-            ('ANTHROPIC', "Anthropic", "Use Anthropic API"),
-            ('GOOGLE', "Google Gemini", "Use Google Gemini API"),
             ('OLLAMA', "Ollama (Local)", "Use local Ollama instance"),
             ('CUSTOM', "Custom / LM Studio (Local)", "Use any OpenAI-compatible local API"),
         ],
-        default='OPENAI',
-    )
-
-    llm_model: EnumProperty(
-        name="Model Name",
-        description="LLM Model to use",
-        items=get_model_items,
+        default='OLLAMA',
     )
 
     llm_model_ollama: EnumProperty(
@@ -291,9 +249,6 @@ class BlenderMCPPreferences(bpy.types.AddonPreferences):
                 col.prop(self, "llm_model_custom")
             col.prop(self, "llm_base_url")
             col.prop(self, "llm_api_key", text="API Key (Optional)")
-        else:
-            col.prop(self, "llm_model")
-            col.prop(self, "llm_api_key")
             
         col.prop(self, "webui_port")
 

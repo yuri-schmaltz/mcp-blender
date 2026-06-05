@@ -118,8 +118,8 @@ def run_tests():
     })
     print(json.dumps(res, indent=2))
     
-    # 3.4 Setup 3-Point Lighting
-    res = call_tool("setup_three_point_lighting", {"target_object_name": "TestCube", "distance": 6.0})
+    # 3.4 Setup Product Studio
+    res = call_tool("setup_product_studio", {"target_name": "TestCube", "backdrop_color": "#FFFFFF"})
     print(json.dumps(res, indent=2))
     
     # 3.5 Setup Turntable Animation

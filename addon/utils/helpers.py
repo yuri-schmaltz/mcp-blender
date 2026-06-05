@@ -340,11 +340,6 @@ def _mcp_client_config_snippet(client: str, host: str, port: int) -> str:
             break
 
     config = {"mcpServers": {"blender": {"command": uvx_cmd, "args": ["blender-mcp"]}}}
-    if client == "ollama":
-        return (
-            "Use this in your MCP-capable Ollama client (Continue/Open WebUI/etc):\n"
-            + json.dumps(config, indent=2)
-        )
     return json.dumps(config, indent=2)
 
 

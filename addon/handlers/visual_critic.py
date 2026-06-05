@@ -84,19 +84,11 @@ def analyze_viewport_visuals(scene, prompt="Describe the current 3D scene from t
                 data_url = f"data:image/png;base64,{img_base64}"
                 
                 # Format model string for litellm
-                model_str = model
-                if provider == 'OPENAI':
-                    model_str = f"openai/{model}" if "/" not in model else model
-                elif provider == 'GOOGLE':
-                    model_str = f"gemini/{model}" if "/" not in model else model
-                elif provider == 'ANTHROPIC':
-                    model_str = f"anthropic/{model}" if "/" not in model else model
-                elif provider == 'CUSTOM':
-                    model_str = f"openai/{model}" if "/" not in model else model
+                model_str = f"openai/{model}" if "/" not in model else model
                 
                 api_key = prefs.llm_api_key
                 # Local providers usually don't need API keys, but litellm might require a dummy one
-                if not api_key and provider in {'CUSTOM'}:
+                if not api_key:
                     api_key = "sk-1234"
                     
                 messages = [

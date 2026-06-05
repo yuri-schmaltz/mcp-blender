@@ -125,13 +125,6 @@ class BLENDERMCP_PT_Chat(bpy.types.Panel):
             box.operator("blendermcp.install_dependencies", text="Install Dependencies", icon="IMPORT")
             return
 
-        # Check if API Key is configured
-        if not prefs or (not prefs.llm_api_key and prefs.llm_provider not in {'OLLAMA', 'CUSTOM'}):
-            box = layout.box()
-            box.alert = True
-            box.label(text="API Key missing!", icon="ERROR")
-            box.label(text="Please configure in Addon Preferences.")
-            return
 
         col = layout.column(align=True)
         col.label(text="Command Prompt:")

@@ -380,65 +380,6 @@ class BLENDERMCP_OT_DownloadProgress(bpy.types.Operator):
             self._timer = None
 
 
-# ---------------------------------------------------------------------------
-# Operator: Resolve Self-Intersections
-# ---------------------------------------------------------------------------
-class BLENDERMCP_OT_ResolveSelfIntersections(bpy.types.Operator):
-    bl_idname = "blendermcp.resolve_self_intersections"
-    bl_label = "Resolve Self-Intersections"
-    bl_description = "Merge internal overlapping shells while preserving shape"
-
-    def execute(self, context):
-        from ..handlers import mesh_tools
-        if not context.active_object or context.active_object.type != 'MESH':
-            self.report({"ERROR"}, "Select a mesh first")
-            return {"CANCELLED"}
-        
-        # Use direct import instead of legacy _call_handler
-        result = mesh_tools.resolve_self_intersections(bpy.context.scene, context.active_object.name)
-        
-        if "error" in result:
-            self.report({"ERROR"}, result["error"])
-            _update_action_status(context.scene, "Resolve Intersections", False, result["error"])
-            return {"CANCELLED"}
-            
-        self.report({"INFO"}, result["message"])
-        _update_action_status(context.scene, "Resolve Intersections", True, result["message"])
-        return {"FINISHED"}
-
-
-# ---------------------------------------------------------------------------
-# Operator: Mark as Functional Part
-# ---------------------------------------------------------------------------
-class BLENDERMCP_OT_MarkFunctionalPart(bpy.types.Operator):
-    bl_idname = "blendermcp.mark_functional_part"
-    bl_label = "Mark as Functional Part"
-    bl_description = "Tag the active object with a role from the selected preset"
-
-    def execute(self, context):
-        from ..handlers import functional_parts
-        if not context.active_object:
-            self.report({"ERROR"}, "No active object")
-            return {"CANCELLED"}
-        
-        scene = context.scene
-        preset = scene.blendermcp_part_preset
-        role = scene.blendermcp_part_role
-        
-        # Use direct import instead of legacy _call_handler
-        result = functional_parts.mark_as_functional_part(
-            bpy.context.scene, context.active_object.name,
-            role=role, preset=preset,
-        )
-        
-        if "error" in result:
-            self.report({"ERROR"}, result["error"])
-            return {"CANCELLED"}
-            
-        self.report({"INFO"}, result["message"])
-        _update_action_status(scene, "Mark Part", True, result["message"])
-        return {"FINISHED"}
-
 
 # ---------------------------------------------------------------------------
 # Operator: Send Chat (Online LLM)
@@ -548,8 +489,6 @@ OPERATOR_CLASSES = [
     BLENDERMCP_OT_OpenLogs,
     BLENDERMCP_OT_ClearCache,
     BLENDERMCP_OT_DownloadProgress,
-    BLENDERMCP_OT_ResolveSelfIntersections,
-    BLENDERMCP_OT_MarkFunctionalPart,
     BLENDERMCP_OT_OpenURL,
     BLENDERMCP_OT_SendChat,
     BLENDERMCP_OT_ClearChat,
