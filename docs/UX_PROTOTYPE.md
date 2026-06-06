@@ -1,4 +1,4 @@
-# ux_adv_prototype.md - Prototipação de UX avançada
+# UX_PROTOTYPE - Prototipação de UX avançada
 
 ## Melhorias sugeridas
 - Estados visuais claros: loading, erro, sucesso, disabled

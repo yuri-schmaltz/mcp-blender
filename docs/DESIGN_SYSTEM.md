@@ -1,4 +1,4 @@
-# design_system.md - Diretrizes iniciais para Design System BlenderMCP
+# DESIGN_SYSTEM - Diretrizes iniciais para Design System BlenderMCP
 
 ## Objetivo
 Garantir consistência visual, acessibilidade e facilidade de manutenção na UI do BlenderMCP.

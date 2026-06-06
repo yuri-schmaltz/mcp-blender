@@ -1,15 +1,15 @@
 """Studio and rendering tools for BlenderMCP."""
-from ..core.router import mcp_command
-
 
 import math
 import os
 
 import bpy
 
+from ..core.router import mcp_command
+
 
 @mcp_command(name="setup_product_studio", read_only=False)
-def setup_product_studio(scene, theme='CLEAN'):
+def setup_product_studio(scene, theme="CLEAN"):
     """Setup a professional studio environment (piso infinito, lights)."""
     try:
         # 1. Create Cyclorama (Infinite floor)
@@ -19,7 +19,9 @@ def setup_product_studio(scene, theme='CLEAN'):
             cyc.name = "Studio_Cyclorama"
 
             # Just create a Large plane and a Background Wall
-            bpy.ops.mesh.primitive_plane_add(size=20, location=(0, 10, 10), rotation=(math.radians(90), 0, 0))
+            bpy.ops.mesh.primitive_plane_add(
+                size=20, location=(0, 10, 10), rotation=(math.radians(90), 0, 0)
+            )
             wall = bpy.context.active_object
             wall.name = "Studio_Wall"
             wall.parent = cyc
@@ -31,21 +33,21 @@ def setup_product_studio(scene, theme='CLEAN'):
                 bpy.data.objects.remove(scene.objects[l_name], do_unlink=True)
 
         # Key Light
-        bpy.ops.object.light_add(type='AREA', location=(5, -5, 5))
+        bpy.ops.object.light_add(type="AREA", location=(5, -5, 5))
         key = bpy.context.active_object
         key.name = "Key_Light"
         key.data.energy = 500
         key.scale = (2, 2, 2)
 
         # Fill Light
-        bpy.ops.object.light_add(type='AREA', location=(-5, -3, 3))
+        bpy.ops.object.light_add(type="AREA", location=(-5, -3, 3))
         fill = bpy.context.active_object
         fill.name = "Fill_Light"
         fill.data.energy = 200
         fill.scale = (3, 3, 3)
 
         # Back Light
-        bpy.ops.object.light_add(type='AREA', location=(0, 5, 5))
+        bpy.ops.object.light_add(type="AREA", location=(0, 5, 5))
         back = bpy.context.active_object
         back.name = "Back_Light"
         back.data.energy = 300
@@ -57,9 +59,13 @@ def setup_product_studio(scene, theme='CLEAN'):
             cam.name = "Studio_Camera"
             scene.camera = cam
 
-        return {"success": True, "message": f"Studio '{theme}' setup complete with 3-point lighting."}
+        return {
+            "success": True,
+            "message": f"Studio '{theme}' setup complete with 3-point lighting.",
+        }
     except Exception as e:
         return {"error": f"Failed to setup studio: {str(e)}"}
+
 
 @mcp_command(name="render_catalog_angles", read_only=False)
 def render_catalog_angles(scene, output_dir=None):
@@ -79,7 +85,7 @@ def render_catalog_angles(scene, output_dir=None):
             "front": (0, -10, 2),
             "side": (-10, 0, 2),
             "perspective": (-7, -7, 4),
-            "top": (0, 0, 15)
+            "top": (0, 0, 15),
         }
 
         renders = []
@@ -92,6 +98,10 @@ def render_catalog_angles(scene, output_dir=None):
             bpy.ops.render.render(write_still=True)
             renders.append(filepath)
 
-        return {"success": True, "message": f"Rendered {len(renders)} angles to {output_dir}", "files": renders}
+        return {
+            "success": True,
+            "message": f"Rendered {len(renders)} angles to {output_dir}",
+            "files": renders,
+        }
     except Exception as e:
         return {"error": f"Failed to render catalog: {str(e)}"}

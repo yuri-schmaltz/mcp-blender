@@ -33,11 +33,9 @@
 
 ## 5. Referências
 - [docs/ARCHITECTURE.md](ARCHITECTURE.md)
-- [docs/ADR-0001-estrutura-modular.md](ADR-0001-estrutura-modular.md)
+- [docs/ADR-0001-modular-structure.md](ADR-0001-modular-structure.md)
 - [addon/ui/checklist_a11y.md](../addon/ui/checklist_a11y.md)
-- [docs/baseline_metrics.md](baseline_metrics.md)
-- [docs/troubleshooting.md](troubleshooting.md)
-- [docs/MARCO_01_AUDITORIA.md](MARCO_01_AUDITORIA.md)
-- [docs/MARCOS_02_04_CONCLUSAO.md](MARCOS_02_04_CONCLUSAO.md)
+- [docs/BASELINE_METRICS.md](BASELINE_METRICS.md)
+- [docs/TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 
 > Atualize este runbook a cada mudança relevante de arquitetura, fluxo ou operação.

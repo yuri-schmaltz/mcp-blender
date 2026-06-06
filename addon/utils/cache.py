@@ -15,7 +15,9 @@ class AssetCache:
         self.ttl_seconds = ttl_days * 24 * 3600
         os.makedirs(cache_dir, exist_ok=True)
 
-    def _get_cache_path(self, asset_id: str, asset_type: str, resolution: str = "", ext: str = "") -> str:
+    def _get_cache_path(
+        self, asset_id: str, asset_type: str, resolution: str = "", ext: str = ""
+    ) -> str:
         """Generate cache file path from asset identifiers and optional extension."""
         import hashlib
 
@@ -26,17 +28,18 @@ class AssetCache:
 
     def get(self, asset_id: str, asset_type: str, resolution: str = "") -> str | None:
         """Retrieve cached asset path if valid, None otherwise. Logs hit/miss/expire and timing."""
-        import logging
         import glob
+        import logging
 
         start = time.time()
         logger = logging.getLogger("AssetCache")
-        
+
         # Search for any file matching this hash (regardless of extension)
         import hashlib
+
         cache_key = f"{asset_id}_{asset_type}_{resolution}"
         cache_hash = hashlib.sha256(cache_key.encode("utf-8")).hexdigest()
-        
+
         pattern = os.path.join(self.cache_dir, f"{cache_hash}*")
         matches = glob.glob(pattern)
 
@@ -69,7 +72,7 @@ class AssetCache:
 
         start = time.time()
         logger = logging.getLogger("AssetCache")
-        
+
         # Preservar a extensão original
         ext = os.path.splitext(source_path)[1]
         cache_path = self._get_cache_path(asset_id, asset_type, resolution, ext)

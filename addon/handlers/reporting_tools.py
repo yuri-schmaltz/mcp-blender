@@ -1,8 +1,8 @@
 """Reporting tools for BlenderMCP."""
-from ..core.router import mcp_command
-
 
 import os
+
+from ..core.router import mcp_command
 
 
 @mcp_command(name="generate_print_report", read_only=False)
@@ -12,7 +12,7 @@ def generate_print_report(scene, filepath=None):
         if not filepath:
             filepath = os.path.join(os.path.expanduser("~"), "blender_mcp_report.txt")
 
-        meshes = [obj for obj in scene.objects if obj.type == 'MESH' and not obj.hide_get()]
+        meshes = [obj for obj in scene.objects if obj.type == "MESH" and not obj.hide_get()]
 
         lines = [
             "========================================",
@@ -20,14 +20,16 @@ def generate_print_report(scene, filepath=None):
             "========================================",
             f"Scene: {scene.name}",
             f"Total Mesh Objects: {len(meshes)}",
-            ""
+            "",
         ]
 
         total_volume = 0
         for obj in meshes:
             dims = obj.dimensions
             lines.append(f"Object: {obj.name}")
-            lines.append(f" - Dimensions (mm): {dims.x*1000:.2f} x {dims.y*1000:.2f} x {dims.z*1000:.2f}")
+            lines.append(
+                f" - Dimensions (mm): {dims.x * 1000:.2f} x {dims.y * 1000:.2f} x {dims.z * 1000:.2f}"
+            )
             # Volume estimation (bounding box volume as proxy or BMesh volume)
             vol = dims.x * dims.y * dims.z
             total_volume += vol

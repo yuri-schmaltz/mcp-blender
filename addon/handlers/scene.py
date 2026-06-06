@@ -1,6 +1,7 @@
-from ..core.router import mcp_command
 # handlers/scene.py - Handler de cena com robustez e logging
 import logging
+
+from ..core.router import mcp_command
 
 
 @mcp_command(name="get_scene_info", read_only=True)

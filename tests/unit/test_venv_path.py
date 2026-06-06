@@ -1,8 +1,8 @@
 import os
 import sys
 import unittest
-from unittest.mock import patch
 from pathlib import Path
+from unittest.mock import patch
 
 # Bootstrap to find addon package
 repo_root = Path(__file__).resolve().parents[2]
@@ -10,6 +10,7 @@ if str(repo_root) not in sys.path:
     sys.path.insert(0, str(repo_root))
 
 from addon.utils import helpers
+
 
 class TestVenvPathExtension(unittest.TestCase):
     def setUp(self):
@@ -52,6 +53,7 @@ class TestVenvPathExtension(unittest.TestCase):
 
         added_path = any("Lib" in p and "site-packages" in p for p in sys.path)
         self.assertTrue(added_path)
+
 
 if __name__ == "__main__":
     unittest.main()

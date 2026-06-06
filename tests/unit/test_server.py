@@ -233,7 +233,7 @@ def test_generate_fastener_calls_blender(monkeypatch):
         length=12.0,
         head_type="SOCKET",
         location=[1, 2, 3],
-        axis=[0, 0, 1]
+        axis=[0, 0, 1],
     )
     res = json.loads(res_str)
     assert res["success"] is True
@@ -246,7 +246,7 @@ def test_generate_fastener_calls_blender(monkeypatch):
             "head_type": "SOCKET",
             "location": [1, 2, 3],
             "axis": [0, 0, 1],
-        }
+        },
     )
 
 
@@ -256,9 +256,7 @@ def test_analyze_structural_properties_calls_blender(monkeypatch):
     monkeypatch.setattr(server, "get_blender_connection", lambda: mock_blender)
 
     res_str = server.analyze_structural_properties(
-        ctx=None,
-        object_name="Cube",
-        material_preset="PLA"
+        ctx=None, object_name="Cube", material_preset="PLA"
     )
     res = json.loads(res_str)
     assert res["success"] is True
@@ -267,7 +265,7 @@ def test_analyze_structural_properties_calls_blender(monkeypatch):
         {
             "object_name": "Cube",
             "material_preset": "PLA",
-        }
+        },
     )
 
 
@@ -329,4 +327,3 @@ def test_blendermcp_list_tools_filtering(monkeypatch):
         assert len(filtered_tools) == 5
 
     asyncio.run(run_async_test())
-

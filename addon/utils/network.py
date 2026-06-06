@@ -1,8 +1,8 @@
 """Network utilities for BlenderMCP: retry logic, session management, and friendly errors."""
 
 import time
-import requests
 
+import requests
 
 # Shared session with connection pooling and default timeout
 _session = None
@@ -13,9 +13,11 @@ def get_session() -> requests.Session:
     global _session
     if _session is None:
         _session = requests.Session()
-        _session.headers.update({
-            "User-Agent": "BlenderMCP/1.3.5 (Blender Addon)",
-        })
+        _session.headers.update(
+            {
+                "User-Agent": "BlenderMCP/1.3.5 (Blender Addon)",
+            }
+        )
     return _session
 
 
@@ -35,14 +37,14 @@ def robust_get(url: str, *, max_retries: int = 2, timeout: int = 30, **kwargs) -
             if response.status_code not in retryable_codes or attempt == max_retries:
                 return response
             # Server overloaded — wait and retry
-            wait = min(2 ** attempt, 4)
+            wait = min(2**attempt, 4)
             print(f"[blender-mcp] HTTP {response.status_code} from {url}, retrying in {wait}s...")
             time.sleep(wait)
         except (requests.ConnectionError, requests.Timeout) as exc:
             last_error = exc
             if attempt == max_retries:
                 raise
-            wait = min(2 ** attempt, 4)
+            wait = min(2**attempt, 4)
             print(f"[blender-mcp] Network error ({type(exc).__name__}), retrying in {wait}s...")
             time.sleep(wait)
 
@@ -54,7 +56,9 @@ def robust_get(url: str, *, max_retries: int = 2, timeout: int = 30, **kwargs) -
 def friendly_error(context: str, exc: Exception) -> dict:
     """Convert an exception into a user-friendly error dict."""
     if isinstance(exc, requests.Timeout):
-        return {"error": f"{context}: Request timed out. Check your internet connection and try again."}
+        return {
+            "error": f"{context}: Request timed out. Check your internet connection and try again."
+        }
     if isinstance(exc, requests.ConnectionError):
         return {"error": f"{context}: Could not connect. Check your internet connection."}
     if isinstance(exc, requests.HTTPError):
@@ -75,7 +79,9 @@ POLYHAVEN_RESOLUTION_FALLBACKS = {
 }
 
 
-def resolve_polyhaven_resolution(files_data: dict, section: str, requested_resolution: str, file_format: str) -> tuple:
+def resolve_polyhaven_resolution(
+    files_data: dict, section: str, requested_resolution: str, file_format: str
+) -> tuple:
     """Try requested resolution, then fall back to lower ones.
 
     Returns (resolution, file_info) or (None, None) if nothing found.
@@ -95,7 +101,9 @@ def resolve_polyhaven_resolution(files_data: dict, section: str, requested_resol
         if res in files_data[section]:
             fmt_data = files_data[section][res]
             if file_format in fmt_data:
-                print(f"[blender-mcp] Resolution {requested_resolution} not available, using {res} instead")
+                print(
+                    f"[blender-mcp] Resolution {requested_resolution} not available, using {res} instead"
+                )
                 return res, fmt_data[file_format]
 
     return None, None
@@ -104,7 +112,10 @@ def resolve_polyhaven_resolution(files_data: dict, section: str, requested_resol
 def validate_sketchfab_key(api_key: str) -> dict:
     """Validate Sketchfab API key and return user info or error."""
     if not api_key or not api_key.strip():
-        return {"valid": False, "error": "API key is empty. Get yours at sketchfab.com/settings/password"}
+        return {
+            "valid": False,
+            "error": "API key is empty. Get yours at sketchfab.com/settings/password",
+        }
 
     try:
         response = robust_get(
@@ -116,7 +127,10 @@ def validate_sketchfab_key(api_key: str) -> dict:
             data = response.json()
             return {"valid": True, "username": data.get("username", "Unknown")}
         if response.status_code == 401:
-            return {"valid": False, "error": "Invalid API key. Check your key at sketchfab.com/settings/password"}
+            return {
+                "valid": False,
+                "error": "Invalid API key. Check your key at sketchfab.com/settings/password",
+            }
         return {"valid": False, "error": f"Sketchfab returned status {response.status_code}"}
     except Exception as exc:
         return {"valid": False, "error": str(exc)}
@@ -126,7 +140,9 @@ def validate_sketchfab_key(api_key: str) -> dict:
 _session_log: list[dict] = []
 
 
-def log_asset_download(source: str, asset_id: str, asset_type: str, resolution: str = "", extra: str = ""):
+def log_asset_download(
+    source: str, asset_id: str, asset_type: str, resolution: str = "", extra: str = ""
+):
     """Log an asset download for the current session."""
     entry = {
         "source": source,
@@ -137,7 +153,9 @@ def log_asset_download(source: str, asset_id: str, asset_type: str, resolution: 
         "time": time.strftime("%H:%M:%S"),
     }
     _session_log.append(entry)
-    print(f"[blender-mcp] Downloaded: {source}/{asset_id} ({asset_type}, {resolution or 'default'})")
+    print(
+        f"[blender-mcp] Downloaded: {source}/{asset_id} ({asset_type}, {resolution or 'default'})"
+    )
 
 
 def get_session_log() -> list[dict]:

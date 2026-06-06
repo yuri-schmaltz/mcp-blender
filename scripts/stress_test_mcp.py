@@ -1,36 +1,32 @@
+import argparse
 import json
+import random
 import socket
 import time
-import random
-import sys
 import traceback
-import argparse
+
 
 class MCPStressTester:
     def __init__(self, host="localhost", port=9876):
         self.host = host
         self.port = port
-        self.stats = {
-            "total_sent": 0,
-            "success": 0,
-            "failed": 0,
-            "latencies": []
-        }
+        self.stats = {"total_sent": 0, "success": 0, "failed": 0, "latencies": []}
 
     def send_command(self, cmd_type, params=None):
         payload = {"type": cmd_type, "params": params or {}}
         t0 = time.time()
         self.stats["total_sent"] += 1
-        
+
         try:
             with socket.create_connection((self.host, self.port), timeout=10.0) as sock:
                 sock.sendall(json.dumps(payload).encode("utf-8"))
-                
+
                 # Receive response
                 buffer = b""
                 while True:
                     chunk = sock.recv(16384)
-                    if not chunk: break
+                    if not chunk:
+                        break
                     buffer += chunk
                     try:
                         resp = json.loads(buffer.decode("utf-8"))
@@ -49,7 +45,7 @@ class MCPStressTester:
 
     def run_suite(self):
         print(f"🚀 Starting Intensive Stress Test on {self.host}:{self.port}")
-        print("="*60)
+        print("=" * 60)
 
         # 1. Connectivity & Basic Info
         print("🔍 [TEST 1] Connectivity & Scene Discovery...")
@@ -74,7 +70,9 @@ class MCPStressTester:
         for i in range(count):
             name = f"StressCube_{i}"
             rot = [random.uniform(0, 360) for _ in range(3)]
-            self.send_command("transform_object", {"name": name, "rotation": rot, "scale": [1.5, 0.5, 1.2]})
+            self.send_command(
+                "transform_object", {"name": name, "rotation": rot, "scale": [1.5, 0.5, 1.2]}
+            )
         print(f"   Done: {count} updates sent.")
 
         # 4. Mesh Integrity & Repairs
@@ -84,7 +82,7 @@ class MCPStressTester:
         resp = self.send_command("check_mesh_integrity", {"object_name": "SuzanneTest"})
         if resp.get("status") == "success":
             print(f"   Integrity Check OK: {resp['result'].get('message')}")
-        
+
         # Test self-intersection resolver
         print("🩹 [TEST 5] Self-Intersection Resolver...")
         resp = self.send_command("resolve_self_intersections", {"object_name": "SuzanneTest"})
@@ -120,26 +118,33 @@ for o in objs:
         self.print_report()
 
     def print_report(self):
-        avg_lat = sum(self.stats["latencies"]) / len(self.stats["latencies"]) if self.stats["latencies"] else 0
-        print("\n" + "="*60)
+        avg_lat = (
+            sum(self.stats["latencies"]) / len(self.stats["latencies"])
+            if self.stats["latencies"]
+            else 0
+        )
+        print("\n" + "=" * 60)
         print("📊 FINAL STRESS TEST REPORT")
-        print("="*60)
+        print("=" * 60)
         print(f"Total Commands Sent: {self.stats['total_sent']}")
         print(f"Successful:         {self.stats['success']}")
         print(f"Failed:             {self.stats['failed']}")
         print(f"Average Latency:    {avg_lat:.2f} ms")
-        print(f"Reliability:        {(self.stats['success']/self.stats['total_sent'])*100:.1f}%")
-        print("="*60)
+        print(
+            f"Reliability:        {(self.stats['success'] / self.stats['total_sent']) * 100:.1f}%"
+        )
+        print("=" * 60)
         if self.stats["failed"] == 0:
             print("🏆 STATUS: EXCELLENCE ACHIEVED (v2.5.1 Robustness Verified)")
         else:
             print("⚠️ STATUS: DEGRADED PERFORMANCE DETECTED")
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="BlenderMCP Exhaustive Stress Tester")
     parser.add_argument("--port", type=int, default=9876, help="MCP Server Port")
     args = parser.parse_args()
-    
+
     tester = MCPStressTester(port=args.port)
     try:
         tester.run_suite()

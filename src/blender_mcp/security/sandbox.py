@@ -59,7 +59,7 @@ class RateLimiter:
                 f"Rate limit exceeded: max {self.max_calls} calls per {self.window.seconds}s"
             )
             raise SecurityError(
-                f"Rate limit exceeded: max {self.max_calls} calls per " f"{self.window.seconds}s"
+                f"Rate limit exceeded: max {self.max_calls} calls per {self.window.seconds}s"
             )
 
         self.calls.append(now)

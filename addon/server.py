@@ -14,8 +14,9 @@ import bpy
 try:
     from .utils.metrics import metrics
 except ImportError:  # pragma: no cover - fallback for legacy direct module loading
-    import os
     import importlib.util as _iu
+    import os
+
     _metrics_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "utils", "metrics.py")
     _metrics_spec = _iu.spec_from_file_location("_blendermcp_metrics", _metrics_path)
     _metrics_mod = _iu.module_from_spec(_metrics_spec)
@@ -61,7 +62,9 @@ class BlenderMCPServer:
             self.socket.listen(1)
 
             # Start server thread
-            self.server_thread = threading.Thread(target=self._server_loop, name="blender-mcp-server")
+            self.server_thread = threading.Thread(
+                target=self._server_loop, name="blender-mcp-server"
+            )
             self.server_thread.daemon = True
             self.server_thread.start()
 
@@ -186,13 +189,16 @@ class BlenderMCPServer:
 
                         if isinstance(command, dict) and command.get("type") == "ping_thread":
                             import os
+
                             response = {
                                 "status": "success",
                                 "result": {
                                     "status": "pong",
                                     "pid": os.getpid(),
-                                    "is_rendering": getattr(bpy.app, "is_rendering", False) if hasattr(bpy, "app") else False
-                                }
+                                    "is_rendering": getattr(bpy.app, "is_rendering", False)
+                                    if hasattr(bpy, "app")
+                                    else False,
+                                },
                             }
                             client.sendall(json.dumps(response).encode("utf-8"))
                             continue
@@ -211,14 +217,14 @@ class BlenderMCPServer:
                                         override["window"] = win
                                         override["screen"] = win.screen
                                         for area in getattr(win.screen, "areas", []):
-                                            if area.type == 'VIEW_3D':
+                                            if area.type == "VIEW_3D":
                                                 override["area"] = area
                                                 for region in getattr(area, "regions", []):
-                                                    if region.type == 'WINDOW':
+                                                    if region.type == "WINDOW":
                                                         override["region"] = region
                                                         break
                                                 break
-                                    
+
                                     temp_override = getattr(context, "temp_override", None)
                                     if temp_override is not None:
                                         with temp_override(**override):
@@ -227,13 +233,15 @@ class BlenderMCPServer:
                                         response = self.execute_command(command)
                                 else:
                                     response = self.execute_command(command)
-                                    
+
                                 response_json = json.dumps(response)
                                 try:
                                     client.sendall(response_json.encode("utf-8"))
                                     metrics.inc("response_sent")
                                 except Exception as e:
-                                    logger.debug(f"Failed to send response - client disconnected: {e}")
+                                    logger.debug(
+                                        f"Failed to send response - client disconnected: {e}"
+                                    )
                                     metrics.inc("response_send_error")
                             except Exception as e:
                                 logger.error(f"Error executing command: {str(e)}")

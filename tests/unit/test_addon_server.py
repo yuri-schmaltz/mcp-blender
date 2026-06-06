@@ -73,9 +73,11 @@ class _FakeApp:
 class _FakeContext:
     def temp_override(self, **kwargs):
         from contextlib import contextmanager
+
         @contextmanager
         def _dummy():
             yield
+
         return _dummy()
 
 

@@ -1,24 +1,12 @@
 # Code created by Siddharth Ahuja: www.github.com/ahujasid © 2025
 
 import importlib.util
-import io
-import json
-import os
-import platform
-import shutil
-import subprocess
-import sys
-import tempfile
-import time
-import traceback
-import zipfile
 import logging
-from contextlib import redirect_stdout, suppress
+import os
+import traceback
 
 import bpy
-import mathutils
 import requests
-from bpy.props import IntProperty
 
 # Try to extend sys.path with .venv site-packages at startup
 try:
@@ -35,11 +23,12 @@ def _load_socket_server_class():
     """Load addon/server.py robustly in both legacy addon and extension modes."""
     addon_pkg_dir = os.path.join(os.path.dirname(__file__), "addon")
     server_path = os.path.join(addon_pkg_dir, "server.py")
-    
+
     # Try relative import first if in a package
     if __package__:
         try:
             from .addon.server import BlenderMCPServer
+
             return BlenderMCPServer
         except (ImportError, ValueError):
             pass
@@ -64,7 +53,11 @@ def get_prefs():
             from addon.utils.helpers import get_addon_prefs
         return get_addon_prefs(__package__)
     except ImportError:
-        if bpy.context.preferences and hasattr(bpy.context.preferences, "addons") and _ADDON_PACKAGE in bpy.context.preferences.addons:
+        if (
+            bpy.context.preferences
+            and hasattr(bpy.context.preferences, "addons")
+            and _ADDON_PACKAGE in bpy.context.preferences.addons
+        ):
             return bpy.context.preferences.addons[_ADDON_PACKAGE].preferences
         return None
 
@@ -85,8 +78,12 @@ try:
     if __package__:
         from .src.blender_mcp.progress import get_progress_tracker
     else:
-        _progress_path = os.path.join(os.path.dirname(__file__), "src", "blender_mcp", "progress.py")
-        _progress_spec = importlib.util.spec_from_file_location("_blendermcp_progress", _progress_path)
+        _progress_path = os.path.join(
+            os.path.dirname(__file__), "src", "blender_mcp", "progress.py"
+        )
+        _progress_spec = importlib.util.spec_from_file_location(
+            "_blendermcp_progress", _progress_path
+        )
         if _progress_spec is None or _progress_spec.loader is None:
             raise ImportError("Could not load progress spec or loader")
         _progress_mod = importlib.util.module_from_spec(_progress_spec)
@@ -116,21 +113,27 @@ bl_info = {
 try:
     if __package__:
         from .addon.utils.cache import get_asset_cache
-        from .addon.utils.network import robust_get
         from .addon.utils.constants import REQ_HEADERS
+        from .addon.utils.network import robust_get
     else:
         from addon.utils.cache import get_asset_cache
-        from addon.utils.network import robust_get
         from addon.utils.constants import REQ_HEADERS
+        from addon.utils.network import robust_get
 except ImportError:
     # Minimal fallback if utils not found (shouldn't happen in production)
-    from contextlib import suppress
     def get_asset_cache():
         class MockCache:
-            def get(self, *args): return None
-            def put(self, *args, **kwargs): return args[2]
+            def get(self, *args):
+                return None
+
+            def put(self, *args, **kwargs):
+                return args[2]
+
         return MockCache()
-    def robust_get(url, **kwargs): return requests.get(url, **kwargs)
+
+    def robust_get(url, **kwargs):
+        return requests.get(url, **kwargs)
+
     REQ_HEADERS = {"User-Agent": "blender-mcp"}
 
 # _call_handler removed in favor of direct imports or router.execute_command
@@ -138,11 +141,25 @@ except ImportError:
 # Load network utilities (retry, fallback, logging)
 try:
     if __package__:
-        from .addon.utils.network import robust_get, resolve_polyhaven_resolution, friendly_error, log_asset_download, validate_sketchfab_key
+        from .addon.utils.network import (
+            friendly_error,
+            log_asset_download,
+            resolve_polyhaven_resolution,
+            robust_get,
+            validate_sketchfab_key,
+        )
     else:
-        from addon.utils.network import robust_get, resolve_polyhaven_resolution, friendly_error, log_asset_download, validate_sketchfab_key
+        from addon.utils.network import (
+            friendly_error,
+            log_asset_download,
+            resolve_polyhaven_resolution,
+            robust_get,
+            validate_sketchfab_key,
+        )
 except (ImportError, ValueError):
-    _net_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "addon", "utils", "network.py")
+    _net_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "addon", "utils", "network.py"
+    )
     _net_spec = importlib.util.spec_from_file_location("_blendermcp_network", _net_path)
     if _net_spec is None or _net_spec.loader is None:
         raise ImportError("Could not load network spec or loader")
@@ -163,35 +180,52 @@ _asset_cache = get_asset_cache()
 try:
     if __package__:
         from .addon.utils.helpers import (
-            _project_root, _run_command, _uv_blender_mcp_command, 
-            _update_action_status, _logs_path, _open_in_system
+            _logs_path,
+            _open_in_system,
+            _project_root,
+            _run_command,
+            _update_action_status,
+            _uv_blender_mcp_command,
         )
     else:
         from addon.utils.helpers import (
-            _project_root, _run_command, _uv_blender_mcp_command, 
-            _update_action_status, _logs_path, _open_in_system
+            _logs_path,
+            _open_in_system,
+            _project_root,
+            _run_command,
+            _update_action_status,
+            _uv_blender_mcp_command,
         )
 except ImportError:
     # Minimal fallbacks if helpers are missing
-    def _project_root(): return os.path.dirname(os.path.abspath(__file__))
-    def _logs_path(): return os.path.join(_project_root(), "blender_mcp.log")
-    def _update_action_status(*args): pass
-    def _open_in_system(*args): pass
+    def _project_root():
+        return os.path.dirname(os.path.abspath(__file__))
+
+    def _logs_path():
+        return os.path.join(_project_root(), "blender_mcp.log")
+
+    def _update_action_status(*args):
+        pass
+
+    def _open_in_system(*args):
+        pass
 
 
 try:
     if __package__:
         from .addon.core.router import execute_command
+
         # Initialize handlers
-        from .addon.handlers import load_all_handlers
     else:
         from addon.core.router import execute_command
-        from addon.handlers import load_all_handlers
-except Exception as e:
+except Exception:
     import traceback
+
     traceback.print_exc()
+
     def execute_command(*args, **kwargs):
         return {"error": f"Router failed to load: {e}"}
+
 
 class BlenderMCPServer(SocketBlenderMCPServer):
     def __init__(self, host="localhost", port=9876):
@@ -201,7 +235,7 @@ class BlenderMCPServer(SocketBlenderMCPServer):
 
 def _get_addon_package():
     """Resolve the root extension/addon package name for bl_idname.
-    
+
     In Blender 4.2+ Extension mode, __package__ is e.g. 'bl_ext.user_default.mcp_blender'.
     In legacy addon mode, it's the addon folder name or empty.
     This must exactly match the key Blender uses in bpy.context.preferences.addons.
@@ -221,12 +255,13 @@ def _get_addon_package():
 _ADDON_PACKAGE = _get_addon_package()
 
 
-# Removed duplicate BlenderMCPPreferences class. 
+# Removed duplicate BlenderMCPPreferences class.
 # The authoritative AddonPreferences class is defined and registered in __init__.py.
 
 
 # Blender UI Panel and Operators are now in addon/ui/ package.
 from .addon import ui
+
 _UI_CLASSES = ui.UI_CLASSES
 
 
@@ -237,17 +272,18 @@ def register():
     logging.basicConfig(
         filename=log_path,
         level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        force=True
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        force=True,
     )
     logging.info("BlenderMCP starting...")
 
     # NOTE: BlenderMCPPreferences is now registered by __init__.py
     # to guarantee correct bl_idname in Blender Extension mode.
-    
+
     # 1. Modular registration of UI and Core components
     try:
         from .addon.core.registration import register_all
+
         register_all()
     except (ImportError, ValueError):
         # Fallback for manual registration if core is not found
@@ -255,18 +291,27 @@ def register():
             bpy.utils.register_class(cls)
 
     # 2. Setup Scene properties (Global context)
-    bpy.types.Scene.blendermcp_server_running = bpy.props.BoolProperty(name="Server Running", default=False)
+    bpy.types.Scene.blendermcp_server_running = bpy.props.BoolProperty(
+        name="Server Running", default=False
+    )
     bpy.types.Scene.blendermcp_port = bpy.props.IntProperty(name="Port", default=9876)
     bpy.types.Scene.blendermcp_chat_prompt = bpy.props.StringProperty(name="Ask AI", default="")
-    bpy.types.Scene.blendermcp_chat_status = bpy.props.StringProperty(name="AI Status", default="Ready")
+    bpy.types.Scene.blendermcp_chat_status = bpy.props.StringProperty(
+        name="AI Status", default="Ready"
+    )
     # Action metrics & UX
-    bpy.types.Scene.blendermcp_last_action = bpy.props.StringProperty(name="Last Action", default="None")
+    bpy.types.Scene.blendermcp_last_action = bpy.props.StringProperty(
+        name="Last Action", default="None"
+    )
     bpy.types.Scene.blendermcp_last_action_at = bpy.props.StringProperty(name="At", default="")
-    bpy.types.Scene.blendermcp_last_action_details = bpy.props.StringProperty(name="Details", default="")
+    bpy.types.Scene.blendermcp_last_action_details = bpy.props.StringProperty(
+        name="Details", default=""
+    )
     bpy.types.Scene.blendermcp_last_action_ok = bpy.props.BoolProperty(name="Status", default=True)
 
     # Part Preset System
     from .addon.handlers.functional_parts import get_preset_items, get_role_items
+
     bpy.types.Scene.blendermcp_part_preset = bpy.props.EnumProperty(
         name="Part Preset",
         description="Select a project type to define available part roles",
@@ -279,7 +324,6 @@ def register():
     )
 
     print(f"BlenderMCP v2.11.0 registered. (package={_ADDON_PACKAGE})")
-
 
 
 def unregister():
@@ -298,6 +342,7 @@ def unregister():
     # 2. Call modular unregistration
     try:
         from .addon.core.registration import unregister_all
+
         unregister_all()
     except (ImportError, ValueError):
         # Fallback cleanup
@@ -305,12 +350,15 @@ def unregister():
             try:
                 if hasattr(cls, "bl_rna"):
                     bpy.utils.unregister_class(cls)
-            except Exception: pass
-        
+            except Exception:
+                pass
+
         mcp_props = [p for p in dir(bpy.types.Scene) if p.startswith("blendermcp_")]
         for prop in mcp_props:
-            try: delattr(bpy.types.Scene, prop)
-            except Exception: pass
+            try:
+                delattr(bpy.types.Scene, prop)
+            except Exception:
+                pass
 
     # NOTE: BlenderMCPPreferences is unregistered by __init__.py
 

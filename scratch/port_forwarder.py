@@ -1,10 +1,11 @@
 import socket
 import threading
 
+
 def handle_client(client_socket):
     ollama_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        ollama_socket.connect(('127.0.0.1', 11434))
+        ollama_socket.connect(("127.0.0.1", 11434))
     except Exception as e:
         print(f"Failed to connect to local Ollama: {e}")
         client_socket.close()
@@ -36,10 +37,11 @@ def handle_client(client_socket):
     t1.start()
     t2.start()
 
+
 def main():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server.bind(('192.168.15.20', 11434))
+    server.bind(("192.168.15.20", 11434))
     server.listen(10)
     print("Port forwarder listening on 192.168.15.20:11434 -> 127.0.0.1:11434")
     try:
@@ -51,5 +53,6 @@ def main():
     finally:
         server.close()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

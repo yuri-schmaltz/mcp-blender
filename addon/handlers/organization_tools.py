@@ -1,5 +1,7 @@
 """Scene organization and utility tools for BlenderMCP."""
+
 import bpy
+
 from ..core.router import mcp_command
 
 
@@ -19,7 +21,11 @@ def duplicate_object(scene, name, linked=False, offset=(0, 0, 0)):
         new_obj.location.y += offset[1]
         new_obj.location.z += offset[2]
 
-        return {"success": True, "message": f"Duplicated '{name}' as '{new_obj.name}'.", "new_name": new_obj.name}
+        return {
+            "success": True,
+            "message": f"Duplicated '{name}' as '{new_obj.name}'.",
+            "new_name": new_obj.name,
+        }
     except Exception as e:
         return {"error": str(e)}
 
@@ -28,11 +34,11 @@ def duplicate_object(scene, name, linked=False, offset=(0, 0, 0)):
 def join_objects(scene, object_names):
     """Join multiple mesh objects into one."""
     try:
-        bpy.ops.object.select_all(action='DESELECT')
+        bpy.ops.object.select_all(action="DESELECT")
         target = None
         for n in object_names:
             obj = scene.objects.get(n)
-            if obj and obj.type == 'MESH':
+            if obj and obj.type == "MESH":
                 obj.select_set(True)
                 if target is None:
                     target = obj
@@ -43,7 +49,11 @@ def join_objects(scene, object_names):
         bpy.context.view_layer.objects.active = target
         bpy.ops.object.join()
 
-        return {"success": True, "message": f"Joined {len(object_names)} objects into '{target.name}'.", "name": target.name}
+        return {
+            "success": True,
+            "message": f"Joined {len(object_names)} objects into '{target.name}'.",
+            "name": target.name,
+        }
     except Exception as e:
         return {"error": str(e)}
 
@@ -66,7 +76,11 @@ def create_collection(scene, collection_name, object_names=None):
                     col.objects.link(obj)
                     moved.append(n)
 
-        return {"success": True, "message": f"Created collection '{collection_name}'. Moved {len(moved)} objects.", "moved": moved}
+        return {
+            "success": True,
+            "message": f"Created collection '{collection_name}'. Moved {len(moved)} objects.",
+            "moved": moved,
+        }
     except Exception as e:
         return {"error": str(e)}
 
@@ -88,7 +102,11 @@ def move_to_collection(scene, object_names, collection_name):
                 col.objects.link(obj)
                 moved.append(n)
 
-        return {"success": True, "message": f"Moved {len(moved)} objects to '{collection_name}'.", "moved": moved}
+        return {
+            "success": True,
+            "message": f"Moved {len(moved)} objects to '{collection_name}'.",
+            "moved": moved,
+        }
     except Exception as e:
         return {"error": str(e)}
 
@@ -109,7 +127,11 @@ def parent_objects(scene, parent_name, child_names):
                 child.matrix_parent_inverse = parent.matrix_world.inverted()
                 parented.append(n)
 
-        return {"success": True, "message": f"Parented {len(parented)} objects to '{parent_name}'.", "children": parented}
+        return {
+            "success": True,
+            "message": f"Parented {len(parented)} objects to '{parent_name}'.",
+            "children": parented,
+        }
     except Exception as e:
         return {"error": str(e)}
 
@@ -136,7 +158,10 @@ def align_objects(scene, object_names, axis="X", align_to="CENTER"):
         for obj in objects:
             obj.location[axis_idx] = avg
 
-        return {"success": True, "message": f"Aligned {len(objects)} objects on {axis} axis to {align_to}."}
+        return {
+            "success": True,
+            "message": f"Aligned {len(objects)} objects on {axis} axis to {align_to}.",
+        }
     except Exception as e:
         return {"error": str(e)}
 
@@ -158,7 +183,10 @@ def distribute_objects(scene, object_names, axis="X", spacing=2.0):
         for i, obj in enumerate(objects):
             obj.location[axis_idx] = start + (i * spacing)
 
-        return {"success": True, "message": f"Distributed {len(objects)} objects along {axis} with {spacing} spacing."}
+        return {
+            "success": True,
+            "message": f"Distributed {len(objects)} objects along {axis} with {spacing} spacing.",
+        }
     except Exception as e:
         return {"error": str(e)}
 
@@ -168,20 +196,23 @@ def smart_uv_project(scene, name, angle_limit=66.0, island_margin=0.02):
     """Unwrap UVs using Smart UV Project."""
     try:
         obj = scene.objects.get(name)
-        if not obj or obj.type != 'MESH':
+        if not obj or obj.type != "MESH":
             return {"error": f"Mesh object '{name}' not found."}
 
-        bpy.ops.object.select_all(action='DESELECT')
+        bpy.ops.object.select_all(action="DESELECT")
         obj.select_set(True)
         bpy.context.view_layer.objects.active = obj
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.mesh.select_all(action='SELECT')
+        bpy.ops.object.mode_set(mode="EDIT")
+        bpy.ops.mesh.select_all(action="SELECT")
         bpy.ops.uv.smart_project(angle_limit=angle_limit, island_margin=island_margin)
-        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.mode_set(mode="OBJECT")
 
-        return {"success": True, "message": f"Smart UV projected '{name}' (angle={angle_limit}°, margin={island_margin})."}
+        return {
+            "success": True,
+            "message": f"Smart UV projected '{name}' (angle={angle_limit}°, margin={island_margin}).",
+        }
     except Exception as e:
-        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.mode_set(mode="OBJECT")
         return {"error": str(e)}
 
 
@@ -200,9 +231,13 @@ def text_to_mesh(scene, text, size=1.0, extrude=0.1, bevel_depth=0.01, font=None
             obj.data.font = bpy.data.fonts[font]
 
         if convert:
-            bpy.ops.object.convert(target='MESH')
+            bpy.ops.object.convert(target="MESH")
 
-        return {"success": True, "message": f"Created 3D text '{text}' (size={size}, extrude={extrude}).", "name": obj.name}
+        return {
+            "success": True,
+            "message": f"Created 3D text '{text}' (size={size}, extrude={extrude}).",
+            "name": obj.name,
+        }
     except Exception as e:
         return {"error": str(e)}
 
@@ -212,18 +247,18 @@ def separate_by_material(scene, name):
     """Separate a mesh into individual objects by material slot."""
     try:
         obj = scene.objects.get(name)
-        if not obj or obj.type != 'MESH':
+        if not obj or obj.type != "MESH":
             return {"error": f"Mesh object '{name}' not found."}
 
-        bpy.ops.object.select_all(action='DESELECT')
+        bpy.ops.object.select_all(action="DESELECT")
         obj.select_set(True)
         bpy.context.view_layer.objects.active = obj
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.mesh.select_all(action='SELECT')
-        bpy.ops.mesh.separate(type='MATERIAL')
-        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.mode_set(mode="EDIT")
+        bpy.ops.mesh.select_all(action="SELECT")
+        bpy.ops.mesh.separate(type="MATERIAL")
+        bpy.ops.object.mode_set(mode="OBJECT")
 
         return {"success": True, "message": f"Separated '{name}' by material."}
     except Exception as e:
-        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.mode_set(mode="OBJECT")
         return {"error": str(e)}

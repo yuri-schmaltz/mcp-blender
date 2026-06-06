@@ -1,19 +1,20 @@
 """BlenderMCP UI Operators - extracted from addon.py for modularity."""
 
+# Load helpers via filesystem to work in both repo and Blender extension mode.
+import importlib.util as _iu
 import os
 import subprocess
 import sys
 
 import bpy  # type: ignore
 
-# Load helpers via filesystem to work in both repo and Blender extension mode.
-import importlib.util as _iu
-
-_helpers_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "utils", "helpers.py")
+_helpers_path = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "utils", "helpers.py"
+)
 _helpers_spec = _iu.spec_from_file_location("_blendermcp_addon_helpers", _helpers_path)
 _helpers = _iu.module_from_spec(_helpers_spec)
 if __package__:
-   _helpers.__package__ = __package__
+    _helpers.__package__ = __package__
 _helpers_spec.loader.exec_module(_helpers)
 
 _project_root = _helpers._project_root
@@ -28,21 +29,21 @@ _open_in_system = _helpers._open_in_system
 
 # Import i18n
 from ..utils import i18n
+
 t = i18n.t
 
 # Import handlers directly to avoid legacy _call_handler
-from ..handlers import mesh_tools, functional_parts
 
 
 def _get_addon_module():
     """Load the main addon module safely using package context."""
     if __package__:
         # bl_ext.user_default.mcp_blender.addon.ui -> bl_ext.user_default.mcp_blender.addon_entry
-        pkg_root = ".".join(__package__.split('.')[:3])
+        pkg_root = ".".join(__package__.split(".")[:3])
         entry_name = f"{pkg_root}.addon_entry"
         if entry_name in sys.modules:
             return sys.modules[entry_name]
-    
+
     # Fallback to searching in sys.modules
     for name, mod in sys.modules.items():
         if name.endswith(".addon_entry") and hasattr(mod, "BlenderMCPServer"):
@@ -68,7 +69,9 @@ class BLENDERMCP_OT_StartServer(bpy.types.Operator):
 
         bpy.types.blendermcp_server.start()
         scene.blendermcp_server_running = True
-        _update_action_status(scene, t("btn_connect"), True, t("msg_server_listening", port=scene.blendermcp_port))
+        _update_action_status(
+            scene, t("btn_connect"), True, t("msg_server_listening", port=scene.blendermcp_port)
+        )
         return {"FINISHED"}
 
 
@@ -91,7 +94,9 @@ class BLENDERMCP_OT_InstallDependencies(bpy.types.Operator):
                     {"ERROR"},
                     "uv not found. Install uv or run from a shell where uv is available.",
                 )
-                _update_action_status(context.scene, "Check/Install Dependencies", False, "uv not found")
+                _update_action_status(
+                    context.scene, "Check/Install Dependencies", False, "uv not found"
+                )
                 return {"CANCELLED"}
 
             code, output = _run_command(
@@ -103,7 +108,9 @@ class BLENDERMCP_OT_InstallDependencies(bpy.types.Operator):
                 if output:
                     print("[blender-mcp] uv sync output:")
                     print(output)
-                _update_action_status(context.scene, "Check/Install Dependencies", False, "uv sync failed")
+                _update_action_status(
+                    context.scene, "Check/Install Dependencies", False, "uv sync failed"
+                )
                 return {"CANCELLED"}
 
             self.report({"INFO"}, t("msg_dependencies_ready"))
@@ -116,7 +123,9 @@ class BLENDERMCP_OT_InstallDependencies(bpy.types.Operator):
             if output:
                 print("[blender-mcp] pip install output:")
                 print(output)
-            _update_action_status(context.scene, "Check/Install Dependencies", False, "pip fallback failed")
+            _update_action_status(
+                context.scene, "Check/Install Dependencies", False, "pip fallback failed"
+            )
             return {"CANCELLED"}
 
         self.report({"INFO"}, t("msg_dependencies_installed_pip"))
@@ -139,7 +148,9 @@ class BLENDERMCP_OT_RunMCPServerTerminal(bpy.types.Operator):
         cmd = _uv_blender_mcp_command(root, host=host, port=port, doctor=False)
         if cmd is None:
             self.report({"ERROR"}, "uv not found. Install uv first.")
-            _update_action_status(context.scene, "Run MCP Server in Terminal", False, "uv not found")
+            _update_action_status(
+                context.scene, "Run MCP Server in Terminal", False, "uv not found"
+            )
             return {"CANCELLED"}
 
         try:
@@ -172,9 +183,12 @@ class BLENDERMCP_OT_CopyMCPClientConfig(bpy.types.Operator):
     def execute(self, context):
         scene = context.scene
         from .panel import get_prefs
+
         prefs = get_prefs(context)
-        client = prefs.client_target if prefs else 'lm_studio'
-        snippet = _mcp_client_config_snippet(client, host="localhost", port=int(scene.blendermcp_port))
+        client = prefs.client_target if prefs else "lm_studio"
+        snippet = _mcp_client_config_snippet(
+            client, host="localhost", port=int(scene.blendermcp_port)
+        )
         context.window_manager.clipboard = snippet
         self.report({"INFO"}, t("msg_copied_config", client=client))
         _update_action_status(scene, t("btn_copy_config"), True, f"Client: {client}")
@@ -208,7 +222,9 @@ class BLENDERMCP_OT_HealthCheck(bpy.types.Operator):
             return {"CANCELLED"}
 
         self.report({"INFO"}, t("msg_health_check_passed"))
-        _update_action_status(context.scene, t("btn_health_check"), True, f"doctor ok for localhost:{port}")
+        _update_action_status(
+            context.scene, t("btn_health_check"), True, f"doctor ok for localhost:{port}"
+        )
         return {"FINISHED"}
 
 
@@ -248,7 +264,9 @@ class BLENDERMCP_OT_ClearCache(bpy.types.Operator):
         addon_mod = _get_addon_module()
         deleted = addon_mod._asset_cache.clear()
         self.report({"INFO"}, t("msg_cleared_cache", count=deleted))
-        _update_action_status(context.scene, t("btn_clear_cache"), True, f"Deleted files: {deleted}")
+        _update_action_status(
+            context.scene, t("btn_clear_cache"), True, f"Deleted files: {deleted}"
+        )
         return {"FINISHED"}
 
 
@@ -277,9 +295,8 @@ class BLENDERMCP_OT_OpenURL(bpy.types.Operator):
     bl_idname = "blendermcp.open_url"
     bl_label = "Open URL"
     bl_description = "Open a specific URL in the system browser"
-    
-    target_url: bpy.props.StringProperty(name="URL", default="")  # type: ignore
 
+    target_url: bpy.props.StringProperty(name="URL", default="")  # type: ignore
 
     def execute(self, context):
         if not self.target_url:
@@ -330,7 +347,9 @@ class BLENDERMCP_OT_DownloadProgress(bpy.types.Operator):
 
             if progress_info.status == "completed":
                 context.window_manager.progress_end()
-                self.report({"INFO"}, t("msg_download_complete", progress=progress_info.format_progress()))
+                self.report(
+                    {"INFO"}, t("msg_download_complete", progress=progress_info.format_progress())
+                )
                 self.cancel(context)
                 return {"FINISHED"}
             elif progress_info.status == "error":
@@ -380,7 +399,6 @@ class BLENDERMCP_OT_DownloadProgress(bpy.types.Operator):
             self._timer = None
 
 
-
 # ---------------------------------------------------------------------------
 # Operator: Send Chat (Online LLM)
 # ---------------------------------------------------------------------------
@@ -403,18 +421,18 @@ class BLENDERMCP_OT_SendChat(bpy.types.Operator):
                 status = result.get("status", "success")
                 msg = result.get("message", "Done")
                 scene.blendermcp_chat_status = msg
-                
+
                 if status == "success":
                     _update_action_status(scene, "AI Chat", True, "Execution success")
                 elif status == "pending":
                     _update_action_status(scene, "AI Chat", True, "Code generated")
                 else:
                     _update_action_status(scene, "AI Chat", True, "Response received")
-            
+
             # Force redraw of View3D areas to update panel labels instantly
             for screen in bpy.data.screens:
                 for area in screen.areas:
-                    if area.type == 'VIEW_3D':
+                    if area.type == "VIEW_3D":
                         area.tag_redraw()
 
         llm_handler.handle_chat_request_async(context, on_complete)
@@ -435,6 +453,7 @@ class BLENDERMCP_OT_ClearChat(bpy.types.Operator):
         scene.blendermcp_chat_status = ""
         return {"FINISHED"}
 
+
 # ---------------------------------------------------------------------------
 # Operator: Start WebUI Server
 # ---------------------------------------------------------------------------
@@ -444,21 +463,25 @@ class BLENDERMCP_OT_StartWebUI(bpy.types.Operator):
     bl_description = "Start the embedded WebUI chat server in the background"
 
     def execute(self, context):
-        scene = context.scene
         from .panel import get_prefs
+
         prefs = get_prefs(context)
         port = prefs.webui_port if prefs else 8080
 
         from ..webui_server import BlenderMCPWebUIServer
 
-        if not hasattr(bpy.types, "blendermcp_webui_server") or not bpy.types.blendermcp_webui_server:
+        if (
+            not hasattr(bpy.types, "blendermcp_webui_server")
+            or not bpy.types.blendermcp_webui_server
+        ):
             bpy.types.blendermcp_webui_server = BlenderMCPWebUIServer(port=port)
 
         bpy.types.blendermcp_webui_server.port = port
         bpy.types.blendermcp_webui_server.start()
-        
+
         self.report({"INFO"}, f"WebUI started on http://localhost:{port}")
         return {"FINISHED"}
+
 
 # ---------------------------------------------------------------------------
 # Operator: Stop WebUI Server
@@ -472,10 +495,9 @@ class BLENDERMCP_OT_StopWebUI(bpy.types.Operator):
         if hasattr(bpy.types, "blendermcp_webui_server") and bpy.types.blendermcp_webui_server:
             bpy.types.blendermcp_webui_server.stop()
             del bpy.types.blendermcp_webui_server
-            
+
         self.report({"INFO"}, "WebUI stopped")
         return {"FINISHED"}
-
 
 
 # All operator classes for registration
@@ -495,4 +517,3 @@ OPERATOR_CLASSES = [
     BLENDERMCP_OT_StartWebUI,
     BLENDERMCP_OT_StopWebUI,
 ]
-

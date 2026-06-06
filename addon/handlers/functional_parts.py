@@ -1,10 +1,8 @@
 """Functional part management for BlenderMCP."""
-from ..core.router import mcp_command
 
-
-import bpy
 import json
 
+from ..core.router import mcp_command
 
 # =============================================================================
 # Part Presets – predefined roles for common project types
@@ -121,20 +119,20 @@ def mark_as_functional_part(scene, object_name, role="Generic", preset="GENERIC"
     try:
         if object_name not in scene.objects:
             return {"error": f"Object '{object_name}' not found."}
-        
+
         obj = scene.objects[object_name]
-        
+
         # Tag the object
         obj["mcp_functional_part"] = True
         obj["mcp_part_role"] = str(role)
         obj["mcp_part_preset"] = str(preset)
-        
+
         if metadata:
             if isinstance(metadata, dict):
                 obj["mcp_part_metadata"] = json.dumps(metadata)
             else:
                 obj["mcp_part_metadata"] = str(metadata)
-        
+
         # Find the human-readable label for the role
         preset_data = PART_PRESETS.get(preset, PART_PRESETS["GENERIC"])
         role_label = role
@@ -142,16 +140,17 @@ def mark_as_functional_part(scene, object_name, role="Generic", preset="GENERIC"
             if r_id == role:
                 role_label = r_name
                 break
-        
+
         return {
             "success": True,
             "message": f"'{object_name}' → {preset_data['label']} / {role_label}",
             "preset": preset,
             "role": role,
-            "metadata": obj.get("mcp_part_metadata", "{}")
+            "metadata": obj.get("mcp_part_metadata", "{}"),
         }
     except Exception as e:
         return {"error": f"Failed to mark part: {str(e)}"}
+
 
 @mcp_command(name="list_functional_parts", read_only=False)
 def list_functional_parts(scene):
@@ -163,25 +162,23 @@ def list_functional_parts(scene):
                 role = obj.get("mcp_part_role", "Unknown")
                 preset = obj.get("mcp_part_preset", "GENERIC")
                 metadata_raw = obj.get("mcp_part_metadata", "{}")
-                
+
                 try:
                     metadata = json.loads(metadata_raw)
                 except:
                     metadata = metadata_raw
-                
-                parts.append({
-                    "name": obj.name,
-                    "role": role,
-                    "preset": preset,
-                    "dimensions_mm": [d * 1000 for d in obj.dimensions],
-                    "location": list(obj.location),
-                    "metadata": metadata
-                })
-        
-        return {
-            "success": True,
-            "parts_count": len(parts),
-            "parts": parts
-        }
+
+                parts.append(
+                    {
+                        "name": obj.name,
+                        "role": role,
+                        "preset": preset,
+                        "dimensions_mm": [d * 1000 for d in obj.dimensions],
+                        "location": list(obj.location),
+                        "metadata": metadata,
+                    }
+                )
+
+        return {"success": True, "parts_count": len(parts), "parts": parts}
     except Exception as e:
         return {"error": f"Failed to list parts: {str(e)}"}

@@ -1,6 +1,4 @@
 """AmbientCG API handler for downloading PBR materials."""
-from ..core.router import mcp_command
-
 
 import os
 import shutil
@@ -9,6 +7,8 @@ import zipfile
 
 import bpy
 
+from ..core.router import mcp_command
+
 # Use the robust networking module
 from ..utils.network import friendly_error, log_asset_download, robust_get
 
@@ -16,6 +16,7 @@ from ..utils.network import friendly_error, log_asset_download, robust_get
 def get_prefs():
     """Access global addon preferences safely."""
     from ..utils.helpers import get_addon_prefs
+
     return get_addon_prefs(__package__)
 
 
@@ -46,7 +47,9 @@ def search_ambientcg_materials(scene, query="", limit=20):
     try:
         prefs = get_prefs()
         if not (prefs and prefs.use_ambientcg):
-            return {"error": "AmbientCG integration is disabled. Please enable it in the Addon Preferences."}
+            return {
+                "error": "AmbientCG integration is disabled. Please enable it in the Addon Preferences."
+            }
 
         url = "https://ambientcg.com/api/v2/full_json"
         params = {
@@ -65,14 +68,22 @@ def search_ambientcg_materials(scene, query="", limit=20):
             results = []
             for asset in data.get("foundAssets", []):
                 resolutions = []
-                for dl in asset.get("downloadFolders", {}).get("default", {}).get("downloadFiletypeCategories", {}).get("zip", {}).get("downloads", []):
+                for dl in (
+                    asset.get("downloadFolders", {})
+                    .get("default", {})
+                    .get("downloadFiletypeCategories", {})
+                    .get("zip", {})
+                    .get("downloads", [])
+                ):
                     resolutions.append(dl.get("attribute"))
 
-                results.append({
-                    "assetId": asset.get("assetId"),
-                    "tags": asset.get("tags", []),
-                    "available_resolutions": [r for r in resolutions if r]
-                })
+                results.append(
+                    {
+                        "assetId": asset.get("assetId"),
+                        "tags": asset.get("tags", []),
+                        "available_resolutions": [r for r in resolutions if r],
+                    }
+                )
 
             return {
                 "results": results,
@@ -80,18 +91,24 @@ def search_ambientcg_materials(scene, query="", limit=20):
                 "returned_count": len(results),
             }
         else:
-            return {"error": f"AmbientCG API returned status {response.status_code}. Try again later."}
+            return {
+                "error": f"AmbientCG API returned status {response.status_code}. Try again later."
+            }
     except Exception as e:
         return friendly_error("AmbientCG search", e)
 
 
 @mcp_command(name="download_ambientcg_material", read_only=False)
-def download_ambientcg_material(scene, asset_id, resolution="2K", file_format="JPG", progress_tracker=None):
+def download_ambientcg_material(
+    scene, asset_id, resolution="2K", file_format="JPG", progress_tracker=None
+):
     """Download and set up an AmbientCG material"""
     try:
         prefs = get_prefs()
         if not (prefs and prefs.use_ambientcg):
-            return {"error": "AmbientCG integration is disabled. Please enable it in the Addon Preferences."}
+            return {
+                "error": "AmbientCG integration is disabled. Please enable it in the Addon Preferences."
+            }
 
         # Validate resolution formatting (AmbientCG uses uppercase K: 1K, 2K, 4K, 8K)
         # LLMs often pass "2k" instead of "2K"
@@ -117,7 +134,9 @@ def download_ambientcg_material(scene, asset_id, resolution="2K", file_format="J
 
             if response.status_code == 404:
                 # Try fallback (AmbientCG sometimes uses different naming or the resolution is missing)
-                return {"error": f"Material '{asset_id}' not found in {resolution}-{file_format}. Try checking the available resolutions from the search results, or try '1K' or '2K' PNG."}
+                return {
+                    "error": f"Material '{asset_id}' not found in {resolution}-{file_format}. Try checking the available resolutions from the search results, or try '1K' or '2K' PNG."
+                }
 
             if response.status_code != 200:
                 return {"error": f"Failed to download material: {response.status_code}"}
@@ -152,7 +171,7 @@ def download_ambientcg_material(scene, asset_id, resolution="2K", file_format="J
                 "Roughness": ["Roughness"],
                 "AO": ["AmbientOcclusion", "AO"],
                 "Displacement": ["Displacement", "Height"],
-                "Metallic": ["Metalness", "Metallic"]
+                "Metallic": ["Metalness", "Metallic"],
             }
 
             for file in extracted_files:
@@ -170,7 +189,9 @@ def download_ambientcg_material(scene, asset_id, resolution="2K", file_format="J
                             break
 
             if "Color" not in maps and "Normal" not in maps:
-                 return {"error": f"Downloaded the archive but could not identify PBR texture maps. Found files: {extracted_files}"}
+                return {
+                    "error": f"Downloaded the archive but could not identify PBR texture maps. Found files: {extracted_files}"
+                }
 
             # Create Material in Blender
             mat_name = f"ACG_{asset_id}_{resolution}"
@@ -273,11 +294,12 @@ def download_ambientcg_material(scene, asset_id, resolution="2K", file_format="J
                 "success": True,
                 "message": msg,
                 "material_name": mat_name,
-                "maps_loaded": list(maps.keys())
+                "maps_loaded": list(maps.keys()),
             }
 
         except Exception as e:
             import traceback
+
             traceback.print_exc()
             return {"error": f"Failed to set up material in Blender: {str(e)}"}
         finally:

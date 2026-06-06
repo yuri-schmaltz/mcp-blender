@@ -2,11 +2,10 @@
 
 import json
 import os
-import platform
-import sys
 
 # Shared instance
 _i18n = None
+
 
 class AddonI18n:
     def __init__(self):
@@ -19,6 +18,7 @@ class AddonI18n:
         # Try Blender's internal locale if available (usually requires bpy)
         try:
             import bpy
+
             # Map Blender language to our codes
             b_lang = bpy.app.translations.locale
             if b_lang.startswith("pt"):
@@ -35,14 +35,14 @@ class AddonI18n:
                 return "pt_BR"
             if val.startswith("en"):
                 return "en"
-        
+
         return "en"
 
     def _get_translations_path(self):
         """Find the translations directory, supporting both local dev and packaged extension."""
         # addon/utils/i18n.py -> addon/utils -> addon -> root (level 2)
         this_dir = os.path.dirname(os.path.abspath(__file__))
-        
+
         # 1. Try local dev structure (translations at root)
         root_dev = os.path.dirname(os.path.dirname(this_dir))
         path_dev = os.path.join(root_dev, "translations")
@@ -62,7 +62,7 @@ class AddonI18n:
     def _load_translations(self):
         """Load JSON files for current and default locales."""
         base_path = self._get_translations_path()
-        
+
         # Always load English as fallback
         en_path = os.path.join(base_path, "en.json")
         self.translations["en"] = self._load_json(en_path)
@@ -78,7 +78,7 @@ class AddonI18n:
         if not os.path.exists(path):
             return {}
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
             return {}
@@ -90,13 +90,14 @@ class AddonI18n:
         if text is None:
             # Fallback to English
             text = self.translations.get("en", {}).get(key, key)
-        
+
         if kwargs:
             try:
                 return text.format(**kwargs)
             except Exception:
                 return text
         return text
+
 
 def t(key, **kwargs):
     global _i18n

@@ -7,8 +7,7 @@ import os
 _ui_dir = os.path.dirname(os.path.abspath(__file__))
 
 
-from . import operators
-from . import panel
+from . import operators, panel
 
 _operators_mod = operators
 _panel_mod = panel

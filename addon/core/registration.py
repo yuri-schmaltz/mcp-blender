@@ -1,12 +1,13 @@
 import bpy
+
 from ..ui import UI_CLASSES
-from .server_manager import BlenderMCPServerManager
+
 
 def register_all():
     """Register all addon components in the correct order."""
     # 1. Register Preferences
     # Note: BlenderMCPPreferences is usually registered by addon.py/register()
-    
+
     # 2. Register UI Classes
     print(f"BlenderMCP: Registering {len(UI_CLASSES)} UI classes...")
     for cls in UI_CLASSES:
@@ -15,11 +16,12 @@ def register_all():
             print(f"  [OK] Registered: {cls.__name__}")
         except Exception as e:
             print(f"  [ERROR] Failed to register {cls}: {e}")
-    
+
     # 3. Initialize Server Manager
     # This will be handled by addon.py for now to avoid complexity
-    
+
     print("BlenderMCP: Core components registered.")
+
 
 def unregister_all():
     """Unregister all addon components and cleanup."""
@@ -38,5 +40,5 @@ def unregister_all():
             delattr(bpy.types.Scene, prop)
         except Exception:
             pass
-            
+
     print("BlenderMCP: Core components unregistered.")

@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
+import json
 import os
+import shutil
 import subprocess
 import sys
-import shutil
-import json
+
 
 def print_header(text):
     print("\n" + "=" * 60)
     print(f" {text}".center(60))
     print("=" * 60 + "\n")
 
+
 def check_command(cmd):
     return shutil.which(cmd) is not None
+
 
 def run_command(cmd):
     try:
@@ -21,6 +24,7 @@ def run_command(cmd):
         return False, e.stderr.strip()
     except Exception as e:
         return False, str(e)
+
 
 def get_blender_command():
     """Detect blender command, prioritizing native, then flatpak."""
@@ -37,12 +41,13 @@ def get_blender_command():
 
     return None, None
 
+
 def main():
     print_header("Blender MCP v2.0.0 - Unified Installer")
 
     # 1. System Dependency Checks
     print("[1/4] Checking system dependencies...")
-    
+
     uv_available = check_command("uv")
     if uv_available:
         print("  [OK] 'uv' found.")
@@ -69,10 +74,14 @@ def main():
         else:
             print("  [ACTION REQUIRED] 'requests' is missing in Blender.")
             if blender_type == "Flatpak":
-                print("                    Special Note for Flatpak: Run 'Install Dependencies' inside ")
+                print(
+                    "                    Special Note for Flatpak: Run 'Install Dependencies' inside "
+                )
                 print("                    the Blender MCP panel, as the sandbox is restricted.")
             else:
-                print("                    Run 'Install Dependencies' inside the Blender MCP panel.")
+                print(
+                    "                    Run 'Install Dependencies' inside the Blender MCP panel."
+                )
     else:
         print("  [SKIP] Skipping Blender environment check (blender not found).")
 
@@ -101,17 +110,17 @@ def main():
     if choice in ["1", "2", "3", "4"]:
         targets = {"1": "claude", "2": "cursor", "3": "lm-studio", "4": "custom"}
         client = targets[choice]
-        
+
         # Path to this repo
         repo_path = os.path.abspath(os.path.dirname(__file__))
-        
+
         # Simple snippet generation logic (similar to helpers.py)
         if client == "claude":
             snippet = {
                 "mcpServers": {
                     "blender": {
                         "command": "uv",
-                        "args": ["--directory", repo_path, "run", "blender-mcp"]
+                        "args": ["--directory", repo_path, "run", "blender-mcp"],
                     }
                 }
             }
@@ -132,6 +141,7 @@ def main():
         print("1. Open Blender.")
         print("2. Install the addon: Edit > Preferences > Addons > Install (select addon/ folder).")
     print("3. Connect and start creating!")
+
 
 if __name__ == "__main__":
     try:

@@ -1,8 +1,5 @@
 import bpy
 import requests
-import json
-import os
-import time
 
 # BlenderKit API URL
 BASE_API_URL = "https://www.blenderkit.com/api/v1"
@@ -11,9 +8,11 @@ BASE_API_URL = "https://www.blenderkit.com/api/v1"
 def get_prefs():
     """Access global addon preferences safely."""
     from ..utils.helpers import get_addon_prefs
+
     return get_addon_prefs(__package__)
 
-def search_blenderkit(scene, query, asset_type='model', free_only=True):
+
+def search_blenderkit(scene, query, asset_type="model", free_only=True):
     """
     Search BlenderKit for assets.
     """
@@ -21,12 +20,7 @@ def search_blenderkit(scene, query, asset_type='model', free_only=True):
     if not (prefs and prefs.use_blenderkit):
         return {"error": "BlenderKit integration is disabled in Preferences."}
     url = f"{BASE_API_URL}/search/"
-    params = {
-        "query": query,
-        "asset_type": asset_type,
-        "order": "-_score",
-        "page_size": 10
-    }
+    params = {"query": query, "asset_type": asset_type, "order": "-_score", "page_size": 10}
     if free_only:
         params["free_only"] = True
 
@@ -34,32 +28,35 @@ def search_blenderkit(scene, query, asset_type='model', free_only=True):
         response = requests.get(url, params=params, timeout=10)
         response.raise_for_status()
         data = response.json()
-        
+
         results = []
         for asset in data.get("results", []):
-            results.append({
-                "id": asset.get("id"),
-                "name": asset.get("name"),
-                "description": asset.get("description"),
-                "thumbnail": asset.get("thumbnail_small"),
-                "author": asset.get("author", {}).get("firstName", ""),
-                "is_free": asset.get("isFree"),
-                "asset_type": asset.get("assetType")
-            })
-        
+            results.append(
+                {
+                    "id": asset.get("id"),
+                    "name": asset.get("name"),
+                    "description": asset.get("description"),
+                    "thumbnail": asset.get("thumbnail_small"),
+                    "author": asset.get("author", {}).get("firstName", ""),
+                    "is_free": asset.get("isFree"),
+                    "asset_type": asset.get("assetType"),
+                }
+            )
+
         return {"results": results}
     except Exception as e:
         return {"error": str(e)}
 
+
 def import_blenderkit_asset(scene, asset_id):
     """
     Import a BlenderKit asset into the scene.
-    NOTE: Downloads require authentication. 
+    NOTE: Downloads require authentication.
     If official BlenderKit addon is installed, we try to use it.
     """
     # 1. Check if official BlenderKit addon is active
     addon_active = "blenderkit" in bpy.context.preferences.addons
-    
+
     if addon_active:
         try:
             # We try to use the BlenderKit operator if possible.
@@ -77,23 +74,22 @@ def import_blenderkit_asset(scene, asset_id):
     # 2. Manual download (Complex - requires token and handling .blend append)
     # For now, we'll return a message that specialized import is in progress
     # or requires the official addon for best results.
-    
+
     # Let's try to get more details for the LLM to decide
     url = f"{BASE_API_URL}/assets/{asset_id}/"
     try:
         response = requests.get(url, timeout=10)
         response.raise_for_status()
         asset_data = response.json()
-        
+
         # If the user provided a token in our addon, we could use it here.
-        prefs = get_prefs()
-        token = prefs.blenderkit_api_key if prefs else ""
-        
+        get_prefs()
+
         return {
             "message": f"Asset {asset_data.get('name')} found. Specialized download logic is being initialized. "
-                       f"Please ensure the official BlenderKit addon is installed for optimal results.",
+            f"Please ensure the official BlenderKit addon is installed for optimal results.",
             "asset_name": asset_data.get("name"),
-            "asset_id": asset_id
+            "asset_id": asset_id,
         }
     except Exception as e:
         return {"error": str(e)}

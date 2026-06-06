@@ -249,7 +249,7 @@ class BlenderConnection:
 
         assert last_error is not None
         raise Exception(
-            "Blender did not respond after " f"{self.command_attempts} attempts: {last_error}"
+            f"Blender did not respond after {self.command_attempts} attempts: {last_error}"
         )
 
     def ping_status(self) -> dict[str, Any]:
@@ -266,7 +266,7 @@ class BlenderConnection:
             "main_thread_alive": False,
             "pid": None,
             "is_rendering": False,
-            "error": None
+            "error": None,
         }
         if not self.sock:
             try:
@@ -276,16 +276,16 @@ class BlenderConnection:
             except Exception as e:
                 status["error"] = str(e)
                 return status
-                
+
         # 1. Test socket thread responsiveness (ping_thread)
         try:
             self.sock.settimeout(1.0)
             ping_cmd = {"type": "ping_thread", "params": {}}
             self.sock.sendall(json.dumps(ping_cmd).encode("utf-8"))
-            
+
             response_data = self.receive_full_response(self.sock, timeout=1.0)
             response = json.loads(response_data.decode("utf-8"))
-            
+
             if response.get("status") == "success":
                 result = response.get("result", {})
                 status["socket_alive"] = True
@@ -293,7 +293,7 @@ class BlenderConnection:
                 status["is_rendering"] = result.get("is_rendering", False)
         except Exception as e:
             status["error"] = f"ping_thread failed: {e}"
-            self.disconnect() # Reset connection
+            self.disconnect()  # Reset connection
             return status
 
         # 2. Test main thread responsiveness (ping_main)
@@ -302,10 +302,10 @@ class BlenderConnection:
                 self.sock.settimeout(2.0)
                 ping_cmd = {"type": "ping_main", "params": {}}
                 self.sock.sendall(json.dumps(ping_cmd).encode("utf-8"))
-                
+
                 response_data = self.receive_full_response(self.sock, timeout=2.0)
                 response = json.loads(response_data.decode("utf-8"))
-                
+
                 if response.get("status") == "success":
                     res = response.get("result", {})
                     if res.get("status") == "pong":
@@ -313,7 +313,7 @@ class BlenderConnection:
             except Exception as e:
                 status["main_thread_alive"] = False
                 status["error"] = f"ping_main timed out/failed: {e}"
-                
+
         return status
 
 
@@ -327,22 +327,22 @@ class BlenderWatchdog(threading.Thread):
         self.running = False
         self.unresponsive_since = None
         self.blender_proc_command = None
-        
+
     def start_watchdog(self, run_command_args=None):
         self.blender_proc_command = run_command_args
         self.running = True
         self.start()
-        
+
     def stop_watchdog(self):
         self.running = False
-        
+
     def run(self):
         logger.info("BlenderWatchdog thread started")
         while self.running:
             time.sleep(self.check_interval)
             if not self.running:
                 break
-            
+
             try:
                 status = self.connection.ping_status()
             except Exception as e:
@@ -352,76 +352,85 @@ class BlenderWatchdog(threading.Thread):
                     "main_thread_alive": False,
                     "pid": None,
                     "is_rendering": False,
-                    "error": str(e)
+                    "error": str(e),
                 }
-            
+
             if status["socket_alive"]:
                 if status["main_thread_alive"] or status["is_rendering"]:
                     self.unresponsive_since = None
                 else:
                     if self.unresponsive_since is None:
                         self.unresponsive_since = time.time()
-                    
+
                     elapsed = time.time() - self.unresponsive_since
                     logger.warning(f"Blender main thread is unresponsive for {elapsed:.1f}s")
-                    
+
                     if elapsed >= self.max_unresponsive_seconds:
                         logger.error("Blender main thread has exceeded max unresponsive limit!")
                         self.handle_unresponsive(status["pid"])
             else:
                 if self.unresponsive_since is None:
                     self.unresponsive_since = time.time()
-                
+
                 elapsed = time.time() - self.unresponsive_since
                 logger.warning(f"Blender socket connection is dead/unresponsive for {elapsed:.1f}s")
-                
+
                 if elapsed >= self.max_unresponsive_seconds:
-                    logger.error("Blender connection is dead and has exceeded max unresponsive limit!")
+                    logger.error(
+                        "Blender connection is dead and has exceeded max unresponsive limit!"
+                    )
                     self.handle_unresponsive(status["pid"])
 
     def handle_unresponsive(self, pid):
         logger.error("WATCHDOG: Attempting Blender crash recovery...")
-        self.unresponsive_since = None # Reset counter
-        
+        self.unresponsive_since = None  # Reset counter
+
         if pid:
             try:
                 import signal
+
                 logger.info(f"WATCHDOG: Sending SIGKILL to Blender PID {pid}")
                 os.kill(pid, signal.SIGKILL)
             except Exception as e:
                 logger.error(f"WATCHDOG: Failed to kill Blender process: {e}")
-                
+
         if self.blender_proc_command:
             try:
                 import subprocess
-                logger.info(f"WATCHDOG: Restarting Blender with command: {self.blender_proc_command}")
+
+                logger.info(
+                    f"WATCHDOG: Restarting Blender with command: {self.blender_proc_command}"
+                )
                 subprocess.Popen(
                     self.blender_proc_command,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
-                    start_new_session=True
+                    start_new_session=True,
                 )
                 logger.info("WATCHDOG: Blender restart process spawned successfully.")
             except Exception as e:
                 logger.error(f"WATCHDOG: Failed to restart Blender: {e}")
         else:
-            logger.warning("WATCHDOG: Auto-restart command not configured (BLENDER_LAUNCH_COMMAND). Please restart Blender manually.")
+            logger.warning(
+                "WATCHDOG: Auto-restart command not configured (BLENDER_LAUNCH_COMMAND). Please restart Blender manually."
+            )
 
 
 @asynccontextmanager
 async def server_lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
     """Manage server startup and shutdown lifecycle"""
     logger.info("BlenderMCP server starting up")
-    
+
     connection = get_blender_connection()
-    
+
     launch_cmd_str = os.getenv("BLENDER_LAUNCH_COMMAND")
     blender_args = None
     if launch_cmd_str:
         import shlex
+
         blender_args = shlex.split(launch_cmd_str)
         logger.info(f"Watchdog auto-restart configured with command: {blender_args}")
-        
+
     watchdog = BlenderWatchdog(connection, check_interval=5.0, max_unresponsive_seconds=15.0)
     watchdog.start_watchdog(blender_args)
 
@@ -442,7 +451,7 @@ class BlenderMCP(FastMCP):
     async def list_tools(self) -> list[Any]:
         # Get all tools from the superclass
         tools = await super().list_tools()
-        
+
         # Determine the current tool profile
         try:
             blender = get_blender_connection()
@@ -451,11 +460,11 @@ class BlenderMCP(FastMCP):
         except Exception as e:
             logger.warning(f"Could not retrieve tool profile from Blender, defaulting to ALL: {e}")
             profile = "ALL"
-            
+
         logger.info(f"Filtering tools for profile: {profile}")
         if profile == "ALL":
             return tools
-            
+
         # Define allowed tools per profile
         essential_tools = {
             "get_scene_info",
@@ -471,60 +480,68 @@ class BlenderMCP(FastMCP):
             "list_blender_operators",
             "get_mcp_diagnostics",
         }
-        
+
         allowed_tools = set(essential_tools)
-        
+
         if profile == "MODELING":
-            allowed_tools.update({
-                "apply_boolean_operation",
-                "set_exact_dimensions",
-                "snap_objects_by_proximity",
-                "separate_loose_parts",
-            })
+            allowed_tools.update(
+                {
+                    "apply_boolean_operation",
+                    "set_exact_dimensions",
+                    "snap_objects_by_proximity",
+                    "separate_loose_parts",
+                }
+            )
         elif profile == "MATERIALS":
-            allowed_tools.update({
-                "download_ambientcg_material",
-                "download_polyhaven_asset",
-                "download_sketchfab_model",
-                "get_polyhaven_categories",
-                "get_polyhaven_status",
-                "get_sketchfab_status",
-                "import_blenderkit_asset",
-                "search_ambientcg_materials",
-                "search_blenderkit",
-                "search_polyhaven_assets",
-                "search_sketchfab_models",
-                "set_texture",
-                "setup_camera",
-                "setup_product_studio",
-            })
+            allowed_tools.update(
+                {
+                    "download_ambientcg_material",
+                    "download_polyhaven_asset",
+                    "download_sketchfab_model",
+                    "get_polyhaven_categories",
+                    "get_polyhaven_status",
+                    "get_sketchfab_status",
+                    "import_blenderkit_asset",
+                    "search_ambientcg_materials",
+                    "search_blenderkit",
+                    "search_polyhaven_assets",
+                    "search_sketchfab_models",
+                    "set_texture",
+                    "setup_camera",
+                    "setup_product_studio",
+                }
+            )
         elif profile == "PHYSICS":
-            allowed_tools.update({
-                "add_physics_constraint",
-                "create_axle_joint",
-                "create_ball_joint",
-                "create_hinge_joint",
-                "setup_physics_body",
-                "run_assembly_simulation",
-                "mark_as_functional_part",
-                "list_functional_parts",
-            })
+            allowed_tools.update(
+                {
+                    "add_physics_constraint",
+                    "create_axle_joint",
+                    "create_ball_joint",
+                    "create_hinge_joint",
+                    "setup_physics_body",
+                    "run_assembly_simulation",
+                    "mark_as_functional_part",
+                    "list_functional_parts",
+                }
+            )
         elif profile == "PRINTING":
-            allowed_tools.update({
-                "analyze_structural_properties",
-                "apply_print_thickness",
-                "assign_print_color",
-                "auto_layout_for_printing",
-                "auto_repair_mesh",
-                "check_mesh_integrity",
-                "create_screw_hole",
-                "create_snap_fit",
-                "export_for_printing",
-                "generate_fastener",
-                "resolve_self_intersections",
-                "set_clearance_tolerance",
-            })
-            
+            allowed_tools.update(
+                {
+                    "analyze_structural_properties",
+                    "apply_print_thickness",
+                    "assign_print_color",
+                    "auto_layout_for_printing",
+                    "auto_repair_mesh",
+                    "check_mesh_integrity",
+                    "create_screw_hole",
+                    "create_snap_fit",
+                    "export_for_printing",
+                    "generate_fastener",
+                    "resolve_self_intersections",
+                    "set_clearance_tolerance",
+                }
+            )
+
         filtered = [t for t in tools if t.name in allowed_tools]
         logger.info(f"Exposing {len(filtered)} out of {len(tools)} tools for profile {profile}")
         return filtered
@@ -534,6 +551,7 @@ class BlenderMCP(FastMCP):
 mcp = BlenderMCP("BlenderMCP", lifespan=server_lifespan)
 
 # Resource endpoints
+
 
 class _ConnectionState:
     """Thread-safe state for persistent addon connection and feature flags."""
@@ -666,10 +684,12 @@ def _read_file_with_retry(path: Path, attempts: int = 3, delay: float = 0.2) -> 
 
 
 @mcp.tool()
-def get_scene_info(ctx: Context, filter_type: str = None, filter_name: str = None, limit: int = 100) -> str:
+def get_scene_info(
+    ctx: Context, filter_type: str = None, filter_name: str = None, limit: int = 100
+) -> str:
     """
     Get information about the current Blender scene, including objects and materials.
-    
+
     Parameters:
     - filter_type: Optional object type to filter by (e.g. 'MESH', 'LIGHT', 'CAMERA')
     - filter_name: Optional partial name to filter objects
@@ -677,11 +697,10 @@ def get_scene_info(ctx: Context, filter_type: str = None, filter_name: str = Non
     """
     try:
         blender = get_blender_connection()
-        result = blender.send_command("get_scene_info", {
-            "filter_type": filter_type,
-            "filter_name": filter_name,
-            "limit": limit
-        })
+        result = blender.send_command(
+            "get_scene_info",
+            {"filter_type": filter_type, "filter_name": filter_name, "limit": limit},
+        )
         return json.dumps(result, indent=2)
     except Exception as e:
         logger.error(f"Error getting scene info: {str(e)}")
@@ -721,7 +740,7 @@ def transform_object(
 ) -> str:
     """
     Precisely transform an object's location, rotation, and scale.
-    
+
     Parameters:
     - name: Name of the object
     - location: List of [x, y, z] coordinates
@@ -731,13 +750,16 @@ def transform_object(
     """
     try:
         blender = get_blender_connection()
-        result = blender.send_command("transform_object", {
-            "name": name,
-            "location": location,
-            "rotation": rotation,
-            "scale": scale,
-            "relative": relative
-        })
+        result = blender.send_command(
+            "transform_object",
+            {
+                "name": name,
+                "location": location,
+                "rotation": rotation,
+                "scale": scale,
+                "relative": relative,
+            },
+        )
         return json.dumps(result, indent=2)
     except Exception as e:
         return tool_error("Error transforming object", data={"detail": str(e)})
@@ -753,7 +775,7 @@ def add_primitive(
 ) -> str:
     """
     Add a new primitive object (Cube, Sphere, etc.) to the scene.
-    
+
     Parameters:
     - type: Type of primitive ('CUBE', 'SPHERE', 'PLANE', 'MONKEY', 'CYLINDER', 'CONE', 'TORUS')
     - name: Optional name for the new object
@@ -762,12 +784,9 @@ def add_primitive(
     """
     try:
         blender = get_blender_connection()
-        result = blender.send_command("add_primitive", {
-            "type": type,
-            "name": name,
-            "location": location,
-            "scale": scale
-        })
+        result = blender.send_command(
+            "add_primitive", {"type": type, "name": name, "location": location, "scale": scale}
+        )
         return json.dumps(result, indent=2)
     except Exception as e:
         return tool_error("Error adding primitive", data={"detail": str(e)})
@@ -1345,7 +1364,6 @@ def download_sketchfab_model(ctx: Context, uid: str) -> str:
         return tool_error("Invalid model UID", data={"detail": str(e), "uid": uid})
 
     try:
-
         blender = get_blender_connection()
         logger.info(f"Attempting to download Sketchfab model with UID: {uid}")
 
@@ -1389,7 +1407,9 @@ def search_ambientcg_materials(ctx: Context, query: str = "", limit: int = 20) -
     """
     try:
         blender = get_blender_connection()
-        result = blender.send_command("search_ambientcg_materials", {"query": query, "limit": limit})
+        result = blender.send_command(
+            "search_ambientcg_materials", {"query": query, "limit": limit}
+        )
         if "error" in result:
             return tool_error("AmbientCG search failed", data={"detail": result["error"]})
 
@@ -1529,7 +1549,6 @@ def setup_product_studio(ctx: Context, theme: str = "CLEAN") -> str:
         return tool_error("Error setting up studio", data={"detail": str(e)})
 
 
-
 @mcp.tool()
 def apply_boolean_operation(
     ctx: Context, target_name: str, tool_name: str, operation: str = "DIFFERENCE"
@@ -1599,7 +1618,11 @@ def setup_camera(
         blender = get_blender_connection()
         result = blender.send_command(
             "setup_camera",
-            {"focus_object_name": focus_object_name, "location": location, "create_new": create_new},
+            {
+                "focus_object_name": focus_object_name,
+                "location": location,
+                "create_new": create_new,
+            },
         )
         return json.dumps(result, indent=2)
     except Exception as e:
@@ -1616,7 +1639,7 @@ def create_axle_joint(
 ) -> str:
     """
     Create a mechanical axle joint (hole in chassis, pin on wheel).
-    
+
     Parameters:
     - chassis_name: Name of the object acting as the chassis
     - wheel_name: Name of the object acting as the wheel
@@ -1649,7 +1672,7 @@ def create_hinge_joint(
 ) -> str:
     """
     Create a hinge joint (pivot holes) between two parts.
-    
+
     Parameters:
     - part1_name: Name of the first part
     - part2_name: Name of the second part
@@ -1660,7 +1683,12 @@ def create_hinge_joint(
         blender = get_blender_connection()
         result = blender.send_command(
             "create_hinge_joint",
-            {"part1_name": part1_name, "part2_name": part2_name, "diameter": diameter, "clearance": clearance},
+            {
+                "part1_name": part1_name,
+                "part2_name": part2_name,
+                "diameter": diameter,
+                "clearance": clearance,
+            },
         )
         return json.dumps(result, indent=2)
     except Exception as e:
@@ -1678,7 +1706,7 @@ def create_snap_fit(
 ) -> str:
     """
     Create a cantilever snap-fit joint between two parts.
-    
+
     Parameters:
     - female_part_name: Part that will have the receiving hole
     - male_part_name: Part that will have the hook/tab
@@ -1709,7 +1737,7 @@ def snap_objects_by_proximity(
 ) -> str:
     """
     Snap a source object to the closest surface of a target object.
-    
+
     Parameters:
     - source_name: Object to be moved
     - target_name: Object to snap against
@@ -1732,7 +1760,7 @@ def mark_as_functional_part(
 ) -> str:
     """
     Tag an object as a functional part and store metadata for management.
-    
+
     Parameters:
     - object_name: Name of the object to tag
     - role: Descriptive role (e.g., 'Chassis', 'Gear', 'Enclosure')
@@ -1770,7 +1798,7 @@ def create_ball_joint(
 ) -> str:
     """
     Create a ball-and-socket joint between two parts.
-    
+
     Parameters:
     - socket_part_name: Name of the part that will have the socket
     - ball_part_name: Name of the part that will have the ball
@@ -1805,7 +1833,7 @@ def create_screw_hole(
 ) -> str:
     """
     Create aligned screw holes for standard metric screws (M2 to M5), with support for 3D printing heat-set inserts or captured hex nuts.
-    
+
     Parameters:
     - part1_name: Part that will receive the screw head/insert (with optional countersink/insert pocket)
     - part2_name: Optional second part to also receive the aligned hole (and nut pocket if enabled)
@@ -1836,7 +1864,7 @@ def create_screw_hole(
 def set_clearance_tolerance(ctx: Context, object_name: str, tolerance_mm: float = 0.2) -> str:
     """
     Apply a shell offset/tolerance to a mesh to ensure precise fit.
-    
+
     Parameters:
     - object_name: Name of the object to adjust
     - tolerance_mm: Offset distance in mm (positive expands, negative contracts, default 0.2)
@@ -1852,15 +1880,17 @@ def set_clearance_tolerance(ctx: Context, object_name: str, tolerance_mm: float 
 
 
 @mcp.tool()
-def search_blenderkit(ctx: Context, query: str, asset_type: str = "model", free_only: bool = True) -> str:
+def search_blenderkit(
+    ctx: Context, query: str, asset_type: str = "model", free_only: bool = True
+) -> str:
     """
     Search BlenderKit for assets (models, materials, textures, hdr, brush).
     """
     try:
         blender = get_blender_connection()
         result = blender.send_command(
-            "blenderkit.search_blenderkit", 
-            {"query": query, "asset_type": asset_type, "free_only": free_only}
+            "blenderkit.search_blenderkit",
+            {"query": query, "asset_type": asset_type, "free_only": free_only},
         )
         return json.dumps(result, indent=2)
     except Exception as e:
@@ -1870,7 +1900,7 @@ def search_blenderkit(ctx: Context, query: str, asset_type: str = "model", free_
 @mcp.tool()
 def import_blenderkit_asset(ctx: Context, asset_id: str) -> str:
     """
-    Import a BlenderKit asset by ID into the scene. 
+    Import a BlenderKit asset by ID into the scene.
     Note: Highly complex/paid assets might require the official BlenderKit addon to be logged in.
     """
     try:
@@ -1891,7 +1921,7 @@ def setup_physics_body(
 ) -> str:
     """
     Configure a 3D object to behave as a physics rigid body during mechanical simulations.
-    
+
     Parameters:
     - object_name: The name of the object to configure
     - body_type: Physics type, either 'ACTIVE' (moving parts) or 'PASSIVE' (static grounds/chassis)
@@ -1925,7 +1955,7 @@ def add_physics_constraint(
 ) -> str:
     """
     Connect two physics bodies with a mechanical joint/constraint (e.g. Hinge, Slider, Piston) for simulation.
-    
+
     Parameters:
     - object1_name: First connected rigid body object name
     - object2_name: Second connected rigid body object name
@@ -1958,7 +1988,7 @@ def run_assembly_simulation(
 ) -> str:
     """
     Run the rigid body simulation and perform a frame-by-frame mesh collision check (using BVHTree) to detect mechanical interferences.
-    
+
     Parameters:
     - end_frame: Duration of simulation in frames to evaluate (default 100)
     - check_pairs: List of pairs of object names to check for collisions, e.g. [["Tire", "Chassis"], ["Rod", "Knuckle"]]
@@ -1989,7 +2019,7 @@ def generate_fastener(
 ) -> str:
     """
     Generate a standard metric fastener (Screw, Nut, Washer, Bearing) procedurally in the active Blender scene.
-    
+
     Parameters:
     - type: Fastener type, options: 'SCREW', 'NUT', 'WASHER', 'BEARING'
     - size: ISO size name (e.g. 'M2', 'M2.5', 'M3', 'M4', 'M5', 'M6', 'M8' for screws/nuts/washers; or '608', '623', '625', '688' for bearings)
@@ -2024,7 +2054,7 @@ def analyze_structural_properties(
 ) -> str:
     """
     Calculate the estimated weight, center of mass, volume, and identify potential weak spots or stress concentrators for 3D printing of a mesh object.
-    
+
     Parameters:
     - object_name: The name of the mesh object to analyze in the Blender scene
     - material_preset: Material preset for density and cost estimation (options: 'PLA', 'PETG', 'ABS', 'NYLON', 'STEEL', 'ALUMINUM')
@@ -2085,4 +2115,3 @@ def main(host: str | None = None, port: int | None = None):
 
 if __name__ == "__main__":
     main()
-

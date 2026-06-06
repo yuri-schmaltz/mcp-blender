@@ -1,11 +1,11 @@
 """3D Printing preparation tools for BlenderMCP."""
-from ..core.router import mcp_command
-
 
 import os
 
 import bpy
 import mathutils
+
+from ..core.router import mcp_command
 
 
 @mcp_command(name="set_exact_dimensions", read_only=False)
@@ -25,7 +25,9 @@ def set_exact_dimensions(scene, object_name, size_x=None, size_y=None, size_z=No
         current_dims = obj.dimensions.copy()
 
         if current_dims.x == 0 or current_dims.y == 0 or current_dims.z == 0:
-            return {"error": f"Object '{object_name}' has zero dimension on at least one axis, cannot scale proportionately."}
+            return {
+                "error": f"Object '{object_name}' has zero dimension on at least one axis, cannot scale proportionately."
+            }
 
         target_x = float(size_x) if size_x is not None else None
         target_y = float(size_y) if size_y is not None else None
@@ -70,7 +72,7 @@ def set_exact_dimensions(scene, object_name, size_x=None, size_y=None, size_z=No
         return {
             "success": True,
             "message": f"Successfully resized '{object_name}'. Scale applied.",
-            "final_dimensions": {"x": final_dims.x, "y": final_dims.y, "z": final_dims.z}
+            "final_dimensions": {"x": final_dims.x, "y": final_dims.y, "z": final_dims.z},
         }
     except Exception as e:
         return {"error": f"Failed to set dimensions: {str(e)}"}
@@ -87,7 +89,7 @@ def apply_print_thickness(scene, object_name, thickness_mm, offset=0.0):
 
         obj = scene.objects[object_name]
 
-        if obj.type != 'MESH':
+        if obj.type != "MESH":
             return {"error": f"Object '{object_name}' is not a MESH."}
 
         # Millimeters to meters conversion (Blender's default base unit)
@@ -96,7 +98,7 @@ def apply_print_thickness(scene, object_name, thickness_mm, offset=0.0):
         mod_name = "3DPrint_Solidify"
         mod = obj.modifiers.get(mod_name)
         if not mod:
-            mod = obj.modifiers.new(name=mod_name, type='SOLIDIFY')
+            mod = obj.modifiers.new(name=mod_name, type="SOLIDIFY")
 
         mod.thickness = thickness_meters
         mod.offset = float(offset)
@@ -106,7 +108,7 @@ def apply_print_thickness(scene, object_name, thickness_mm, offset=0.0):
         return {
             "success": True,
             "message": f"Applied {thickness_mm}mm thickness to '{object_name}'.",
-            "modifier_name": mod.name
+            "modifier_name": mod.name,
         }
     except Exception as e:
         return {"error": f"Failed to apply thickness: {str(e)}"}
@@ -125,23 +127,25 @@ def apply_boolean_operation(scene, target_name, tool_name, operation="DIFFERENCE
         tool_obj = scene.objects[tool_name]
 
         if operation.upper() not in ["INTERSECT", "UNION", "DIFFERENCE"]:
-             return {"error": f"Invalid operation '{operation}'. Use INTERSECT, UNION, or DIFFERENCE."}
+            return {
+                "error": f"Invalid operation '{operation}'. Use INTERSECT, UNION, or DIFFERENCE."
+            }
 
         mod_name = f"Bool_{operation.capitalize()}_{tool_name}"
-        mod = target_obj.modifiers.new(name=mod_name, type='BOOLEAN')
+        mod = target_obj.modifiers.new(name=mod_name, type="BOOLEAN")
 
         mod.operation = operation.upper()
         mod.object = tool_obj
-        mod.solver = 'EXACT'  # Usually safer for precise CAD/Hard surface models
+        mod.solver = "EXACT"  # Usually safer for precise CAD/Hard surface models
 
         # Hide the tool object from viewport & render to observe the cut
-        tool_obj.display_type = 'WIRE'
+        tool_obj.display_type = "WIRE"
         tool_obj.hide_render = True
 
         return {
             "success": True,
             "message": f"Applied {operation} boolean on '{target_name}' using '{tool_name}'. Tool is hidden in wireframe mode.",
-            "modifier_name": mod.name
+            "modifier_name": mod.name,
         }
     except Exception as e:
         return {"error": f"Failed to apply boolean: {str(e)}"}
@@ -159,7 +163,7 @@ def export_for_printing(scene, object_names=None, filepath=None):
             filepath += ".stl"
 
         # Select objects to export
-        bpy.ops.object.select_all(action='DESELECT')
+        bpy.ops.object.select_all(action="DESELECT")
         export_count = 0
 
         if object_names:
@@ -172,12 +176,12 @@ def export_for_printing(scene, object_names=None, filepath=None):
         else:
             # If no objects specified, export all meshes
             for obj in scene.objects:
-                if obj.type == 'MESH':
+                if obj.type == "MESH":
                     obj.select_set(True)
                     export_count += 1
 
         if export_count == 0:
-             return {"error": "No valid mesh objects to export."}
+            return {"error": "No valid mesh objects to export."}
 
         # Export operator (STL is built-in)
         # using use_selection=True to only export what we selected
@@ -188,14 +192,14 @@ def export_for_printing(scene, object_names=None, filepath=None):
             use_mesh_modifiers=True,  # Apply solidify, booleans, etc.
             ascii=False,
             # Blender uses Z-up, Y-forward for generic 3D space, which matches most slicers (Cura/PrusaSlicer) natively when exported directly
-            global_scale=1.0
+            global_scale=1.0,
         )
 
         return {
             "success": True,
             "message": f"Exported {export_count} objects to {filepath}",
             "filepath": filepath,
-            "objects_exported": export_count
+            "objects_exported": export_count,
         }
 
     except Exception as e:
@@ -210,19 +214,19 @@ def assign_print_color(scene, object_name, hex_color):
             return {"error": f"Object '{object_name}' not found."}
 
         obj = scene.objects[object_name]
-        if obj.type != 'MESH':
+        if obj.type != "MESH":
             return {"error": f"Object '{object_name}' is not a MESH."}
 
         # Validate and convert hex to RGBA
-        hex_color = hex_color.lstrip('#')
+        hex_color = hex_color.lstrip("#")
         if len(hex_color) == 3:
-            hex_color = ''.join([c*2 for c in hex_color])
+            hex_color = "".join([c * 2 for c in hex_color])
         if len(hex_color) != 6:
             return {"error": f"Invalid hex color '{hex_color}'. Use 6-character hex (e.g. FF0000)."}
 
         # Convert hex to linear RGB (Blender uses linear internally)
         # Standard sRGB to Linear conversion
-        srgb = tuple(int(hex_color[i:i+2], 16) / 255.0 for i in (0, 2, 4))
+        srgb = tuple(int(hex_color[i : i + 2], 16) / 255.0 for i in (0, 2, 4))
         linear_rgb = [(c / 12.92) if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in srgb]
         rgba = (*linear_rgb, 1.0)
 
@@ -249,7 +253,7 @@ def assign_print_color(scene, object_name, hex_color):
         return {
             "success": True,
             "message": f"Color #{hex_color} assigned to '{object_name}' for multi-color printing.",
-            "material": mat_name
+            "material": mat_name,
         }
     except Exception as e:
         return {"error": f"Failed to assign print color: {str(e)}"}
@@ -259,10 +263,10 @@ def assign_print_color(scene, object_name, hex_color):
 def auto_layout_for_printing(scene, bed_size_x=256, bed_size_y=256, padding_mm=5):
     """Automatically layout all mesh objects flat on the virtual print bed (Z=0) with spacing."""
     try:
-        meshes = [obj for obj in scene.objects if obj.type == 'MESH' and not obj.hide_get()]
+        meshes = [obj for obj in scene.objects if obj.type == "MESH" and not obj.hide_get()]
 
         if not meshes:
-             return {"error": "No visible meshes found to layout."}
+            return {"error": "No visible meshes found to layout."}
 
         padding_m = padding_mm / 1000.0
 
@@ -289,8 +293,8 @@ def auto_layout_for_printing(scene, bed_size_x=256, bed_size_y=256, padding_mm=5
         # Bed origin logic (center of bed is usually 0,0 in Bambu/Prusa)
         # So bed ranges from -bed/2 to +bed/2.
         # We start packing from bottom left:
-        start_x = - (bed_size_x / 2000.0) + padding_m
-        start_y = - (bed_size_y / 2000.0) + padding_m
+        start_x = -(bed_size_x / 2000.0) + padding_m
+        start_y = -(bed_size_y / 2000.0) + padding_m
 
         current_x = start_x
         current_y = start_y
@@ -326,7 +330,7 @@ def auto_layout_for_printing(scene, bed_size_x=256, bed_size_y=256, padding_mm=5
         return {
             "success": True,
             "message": f"Successfully laid out {len(meshes)} objects on the bed (Z=0).",
-            "objects_arranged": len(meshes)
+            "objects_arranged": len(meshes),
         }
     except Exception as e:
         return {"error": f"Failed to auto-layout objects: {str(e)}"}
@@ -337,13 +341,18 @@ def export_3mf_for_multicolor(scene, filepath=None):
     """Export the scene to a .3mf file, preserving materials for Bambu Studio/PrusaSlicer."""
     try:
         # Check if 3MF addon is enabled
-        if not hasattr(bpy.ops.export_mesh, "threemf") and not hasattr(bpy.ops.export_scene, "threemf"):
+        if not hasattr(bpy.ops.export_mesh, "threemf") and not hasattr(
+            bpy.ops.export_scene, "threemf"
+        ):
             try:
                 # Try to enable the built-in 3mf addon
                 import addon_utils
+
                 addon_utils.enable("io_scene_3mf")
             except Exception as e:
-                return {"error": f"The io_scene_3mf addon is not enabled and couldn't be loaded: {str(e)}"}
+                return {
+                    "error": f"The io_scene_3mf addon is not enabled and couldn't be loaded: {str(e)}"
+                }
 
         if not filepath:
             filepath = os.path.join(os.path.expanduser("~"), "blender_mcp_export.3mf")
@@ -352,10 +361,10 @@ def export_3mf_for_multicolor(scene, filepath=None):
             filepath += ".3mf"
 
         # Ensure all visible meshes are selected
-        bpy.ops.object.select_all(action='DESELECT')
+        bpy.ops.object.select_all(action="DESELECT")
         export_count = 0
         for obj in scene.objects:
-            if obj.type == 'MESH' and not obj.hide_get():
+            if obj.type == "MESH" and not obj.hide_get():
                 obj.select_set(True)
                 export_count += 1
 
@@ -365,23 +374,19 @@ def export_3mf_for_multicolor(scene, filepath=None):
         # Export settings (may vary slightly between Blender versions)
         # Try new and old namespaces
         try:
-            bpy.ops.export_mesh.threemf(
-                filepath=filepath,
-                use_selection=True
-            )
+            bpy.ops.export_mesh.threemf(filepath=filepath, use_selection=True)
         except AttributeError:
             try:
-                bpy.ops.export_scene.threemf(
-                    filepath=filepath,
-                    use_selection=True
-                )
+                bpy.ops.export_scene.threemf(filepath=filepath, use_selection=True)
             except AttributeError as e:
-                 return {"error": f"Failed to find 3MF export operator. Ensure the 3MF add-on is active. ({str(e)})"}
+                return {
+                    "error": f"Failed to find 3MF export operator. Ensure the 3MF add-on is active. ({str(e)})"
+                }
 
         return {
             "success": True,
             "message": f"Exported {export_count} objects to {filepath} in 3MF format, preserving colors.",
-            "filepath": filepath
+            "filepath": filepath,
         }
     except Exception as e:
         return {"error": f"Failed to export 3MF: {str(e)}"}
@@ -392,6 +397,7 @@ def batch_export_all_formats(scene, base_path=None):
     """One-click batch export for all formats (STL, 3MF, Report, Studio)."""
     try:
         import os
+
         if not base_path:
             base_path = os.path.join(os.path.expanduser("~"), "blender_mcp_release")
 
@@ -408,18 +414,20 @@ def batch_export_all_formats(scene, base_path=None):
 
         # 3. Generate Report
         from .reporting_tools import generate_print_report
+
         report_path = os.path.join(base_path, "print_report.txt")
         generate_print_report(scene, filepath=report_path)
 
         # 4. Render Catalog (if studio exists)
         from .studio_tools import render_catalog_angles
+
         catalog_dir = os.path.join(base_path, "catalog")
         render_catalog_angles(scene, output_dir=catalog_dir)
 
         return {
             "success": True,
             "message": f"Successfully completed batch export to {base_path}",
-            "files": ["model.stl", "model.3mf", "print_report.txt", "catalog/"]
+            "files": ["model.stl", "model.3mf", "print_report.txt", "catalog/"],
         }
     except Exception as e:
         return {"error": f"Failed batch export: {str(e)}"}
@@ -436,24 +444,26 @@ def snap_objects_by_proximity(scene, source_name, target_name, padding_mm=0.0):
         obj_t = scene.objects[target_name]
 
         bpy.context.view_layer.update()
-        
+
         # Get bounding box centers
         center_s = obj_s.matrix_world.translation
         center_t = obj_t.matrix_world.translation
 
         # Simple snapping: Move source to target surface along the vector between them
         direction = (center_t - center_s).normalized()
-        
+
         # Raycast from source to target
         origin = center_s
-        hit, loc, norm, index, obj, matrix = scene.ray_cast(bpy.context.view_layer.depsgraph, origin, direction)
+        hit, loc, norm, index, obj, matrix = scene.ray_cast(
+            bpy.context.view_layer.depsgraph, origin, direction
+        )
 
         if hit:
             # Move source to hit location plus its half-dimension along normal
-            half_dim = obj_s.dimensions.z / 2 # Simple assumption for now
-            target_loc = loc + norm * (half_dim + (padding_mm/1000.0))
+            half_dim = obj_s.dimensions.z / 2  # Simple assumption for now
+            target_loc = loc + norm * (half_dim + (padding_mm / 1000.0))
             obj_s.location = target_loc
-            
+
             # Align source Z axis to target normal
             rotation_diff = mathutils.Vector((0, 0, 1)).rotation_difference(norm)
             obj_s.rotation_euler = rotation_diff.to_euler()
@@ -461,10 +471,12 @@ def snap_objects_by_proximity(scene, source_name, target_name, padding_mm=0.0):
             return {
                 "success": True,
                 "message": f"Snapped '{source_name}' to '{target_name}' surface.",
-                "hit_location": list(loc)
+                "hit_location": list(loc),
             }
         else:
-            return {"error": "Could not find a clear path to snap objects. Try moving them closer manually."}
+            return {
+                "error": "Could not find a clear path to snap objects. Try moving them closer manually."
+            }
 
     except Exception as e:
         return {"error": f"Failed to snap objects: {str(e)}"}
@@ -478,20 +490,20 @@ def set_clearance_tolerance(scene, object_name, tolerance_mm=0.2):
             return {"error": f"Object '{object_name}' not found."}
 
         obj = scene.objects[object_name]
-        if obj.type != 'MESH':
+        if obj.type != "MESH":
             return {"error": "Object must be a mesh."}
 
         # Use Displace modifier for uniform surface offset
         mod_name = "MCP_Tolerance"
-        mod = obj.modifiers.get(mod_name) or obj.modifiers.new(name=mod_name, type='DISPLACE')
-        
-        mod.strength = tolerance_mm / 1000.0 # Convert mm to m
-        mod.mid_level = 0.0 # Offset from base surface
+        mod = obj.modifiers.get(mod_name) or obj.modifiers.new(name=mod_name, type="DISPLACE")
+
+        mod.strength = tolerance_mm / 1000.0  # Convert mm to m
+        mod.mid_level = 0.0  # Offset from base surface
 
         return {
             "success": True,
             "message": f"Applied {tolerance_mm}mm tolerance offset to '{object_name}'.",
-            "modifier": mod.name
+            "modifier": mod.name,
         }
     except Exception as e:
         return {"error": f"Failed to set tolerance: {str(e)}"}

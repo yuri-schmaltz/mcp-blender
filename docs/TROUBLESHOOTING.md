@@ -1,4 +1,4 @@
-# troubleshooting.md - Scripts e dicas para troubleshooting
+# TROUBLESHOOTING - Scripts e dicas para troubleshooting
 
 ## Logs
 - Verifique logs em `stdout` ou arquivo (dependendo do setup).

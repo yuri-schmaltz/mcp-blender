@@ -1,4 +1,4 @@
-# baseline_metrics.md - Como medir e monitorar baseline
+# BASELINE_METRICS - Como medir e monitorar baseline
 
 ## 1. Logs
 - Ative logging em modo INFO/DEBUG para capturar eventos críticos.

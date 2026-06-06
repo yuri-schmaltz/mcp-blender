@@ -1,11 +1,11 @@
 """Mesh processing tools for BlenderMCP."""
-from ..core.router import mcp_command
-
 
 from collections import defaultdict
 
 import bmesh
 import bpy
+
+from ..core.router import mcp_command
 
 
 @mcp_command(name="separate_loose_parts", read_only=False)
@@ -16,11 +16,11 @@ def separate_loose_parts(scene, object_name, smart_rename=True):
             return {"error": f"Object '{object_name}' not found."}
 
         obj = scene.objects[object_name]
-        if obj.type != 'MESH':
+        if obj.type != "MESH":
             return {"error": f"Object '{object_name}' is not a MESH."}
 
         # Select and make active
-        bpy.ops.object.select_all(action='DESELECT')
+        bpy.ops.object.select_all(action="DESELECT")
         obj.select_set(True)
         bpy.context.view_layer.objects.active = obj
 
@@ -28,7 +28,7 @@ def separate_loose_parts(scene, object_name, smart_rename=True):
         pre_objects = set(scene.objects.keys())
 
         # Perform separation
-        bpy.ops.mesh.separate(type='LOOSE')
+        bpy.ops.mesh.separate(type="LOOSE")
 
         # Find new objects
         post_objects = set(scene.objects.keys())
@@ -42,10 +42,18 @@ def separate_loose_parts(scene, object_name, smart_rename=True):
             # Smart identification logic
             # Group objects by bounding box dimensions (within a small tolerance)
             size_groups = defaultdict(list)
-            tolerance = 0.05 # 5% tolerance
+            tolerance = 0.05  # 5% tolerance
 
             for part in all_parts:
-                dims = tuple(sorted([round(part.dimensions.x, 3), round(part.dimensions.y, 3), round(part.dimensions.z, 3)]))
+                dims = tuple(
+                    sorted(
+                        [
+                            round(part.dimensions.x, 3),
+                            round(part.dimensions.y, 3),
+                            round(part.dimensions.z, 3),
+                        ]
+                    )
+                )
                 # Try to find a group with similar dimensions
                 found = False
                 for group_dims in size_groups.keys():
@@ -66,10 +74,12 @@ def separate_loose_parts(scene, object_name, smart_rename=True):
             # Look for wheels: usually a group of 4 (or 2) similar objects
             wheel_candidates = []
             for dims, group in size_groups.items():
-                if len(group) >= 2: # At least a pair
+                if len(group) >= 2:  # At least a pair
                     # Check if it looks circular (two dimensions roughly equal)
                     d_sorted = sorted(dims)
-                    if d_sorted[0] > 0 and abs(d_sorted[1] - d_sorted[2]) / d_sorted[2] < 0.2: # 20% diff max
+                    if (
+                        d_sorted[0] > 0 and abs(d_sorted[1] - d_sorted[2]) / d_sorted[2] < 0.2
+                    ):  # 20% diff max
                         wheel_candidates.append((len(group), dims, group))
 
             # Use the group closest to 4 members as wheels
@@ -77,11 +87,13 @@ def separate_loose_parts(scene, object_name, smart_rename=True):
                 wheel_candidates.sort(key=lambda x: abs(x[0] - 4))
                 count, dims, wheels = wheel_candidates[0]
                 for i, wheel in enumerate(wheels):
-                    wheel.name = f"Wheel_{i+1}"
+                    wheel.name = f"Wheel_{i + 1}"
                     identified_parts.append(wheel.name)
 
             # Identify Chassis: usually the largest by bounding volume
-            all_parts.sort(key=lambda x: x.dimensions.x * x.dimensions.y * x.dimensions.z, reverse=True)
+            all_parts.sort(
+                key=lambda x: x.dimensions.x * x.dimensions.y * x.dimensions.z, reverse=True
+            )
             chassis = all_parts[0]
             if chassis.name.startswith("Wheel") is False:
                 chassis.name = "Chassis"
@@ -91,7 +103,7 @@ def separate_loose_parts(scene, object_name, smart_rename=True):
             for i, part in enumerate(all_parts):
                 if part.name == "Chassis" or part.name.startswith("Wheel"):
                     continue
-                part.name = f"Part_{i+1}"
+                part.name = f"Part_{i + 1}"
 
             result_message += f" Identified: {', '.join(identified_parts)}."
 
@@ -99,10 +111,11 @@ def separate_loose_parts(scene, object_name, smart_rename=True):
             "success": True,
             "message": result_message,
             "parts_count": len(all_parts),
-            "identified": identified_parts
+            "identified": identified_parts,
         }
     except Exception as e:
         import traceback
+
         traceback.print_exc()
         return {"error": f"Failed to separate mesh: {str(e)}"}
 
@@ -115,7 +128,7 @@ def check_mesh_integrity(scene, object_name):
             return {"error": f"Object '{object_name}' not found."}
 
         obj = scene.objects[object_name]
-        if obj.type != 'MESH':
+        if obj.type != "MESH":
             return {"error": f"Object '{object_name}' is not a MESH."}
 
         # Use bmesh for analysis
@@ -134,7 +147,9 @@ def check_mesh_integrity(scene, object_name):
             "is_printer_ready": len(non_manifold) == 0,
             "non_manifold_edges": len(non_manifold),
             "boundary_edges_count": len(boundary),
-            "message": "Mesh is clean and ready for printing." if len(non_manifold) == 0 else f"Found {len(non_manifold)} non-manifold issues."
+            "message": "Mesh is clean and ready for printing."
+            if len(non_manifold) == 0
+            else f"Found {len(non_manifold)} non-manifold issues.",
         }
 
         bm.free()
@@ -151,16 +166,16 @@ def auto_repair_mesh(scene, object_name):
             return {"error": f"Object '{object_name}' not found."}
 
         obj = scene.objects[object_name]
-        if obj.type != 'MESH':
+        if obj.type != "MESH":
             return {"error": f"Object '{object_name}' is not a MESH."}
 
         # Select and make active
-        bpy.ops.object.select_all(action='DESELECT')
+        bpy.ops.object.select_all(action="DESELECT")
         obj.select_set(True)
         bpy.context.view_layer.objects.active = obj
 
         # Go to Edit Mode
-        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.object.mode_set(mode="EDIT")
 
         # 1. Fill holes
         bpy.ops.mesh.fill_holes(sides=0)
@@ -172,15 +187,15 @@ def auto_repair_mesh(scene, object_name):
         bpy.ops.mesh.remove_doubles()
 
         # Back to Object Mode
-        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.mode_set(mode="OBJECT")
 
         return {
             "success": True,
-            "message": f"Applied auto-repairs (fill holes, recalculate normals, merge doubles) to '{object_name}'."
+            "message": f"Applied auto-repairs (fill holes, recalculate normals, merge doubles) to '{object_name}'.",
         }
     except Exception as e:
-        if bpy.context.mode != 'OBJECT':
-            bpy.ops.object.mode_set(mode='OBJECT')
+        if bpy.context.mode != "OBJECT":
+            bpy.ops.object.mode_set(mode="OBJECT")
         return {"error": f"Failed to auto-repair: {str(e)}"}
 
 
@@ -192,36 +207,38 @@ def resolve_self_intersections(scene, object_name):
             return {"error": f"Object '{object_name}' not found."}
 
         obj = scene.objects[object_name]
-        if obj.type != 'MESH':
+        if obj.type != "MESH":
             return {"error": f"Object '{object_name}' is not a MESH."}
 
         # Select and make active
-        bpy.ops.object.select_all(action='DESELECT')
+        bpy.ops.object.select_all(action="DESELECT")
         obj.select_set(True)
         bpy.context.view_layer.objects.active = obj
 
         # Go to Edit Mode
-        bpy.ops.object.mode_set(mode='EDIT')
-        
+        bpy.ops.object.mode_set(mode="EDIT")
+
         # Select all faces
-        bpy.ops.mesh.select_all(action='SELECT')
-        
+        bpy.ops.mesh.select_all(action="SELECT")
+
         # Intersect (Boolean) with Self-Intersect enabled
         # This resolves overlaps within the same mesh while maintaining original shape
-        bpy.ops.mesh.intersect_boolean(operation='UNION', use_self=True, solver='EXACT', use_swap=True)
-        
+        bpy.ops.mesh.intersect_boolean(
+            operation="UNION", use_self=True, solver="EXACT", use_swap=True
+        )
+
         # Final cleanup: merge by distance and fix normals
         bpy.ops.mesh.remove_doubles()
         bpy.ops.mesh.normals_make_consistent(inside=False)
-        
+
         # Back to Object Mode
-        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.mode_set(mode="OBJECT")
 
         return {
             "success": True,
-            "message": f"Resolved self-intersections in '{object_name}' while preserving the outer shape."
+            "message": f"Resolved self-intersections in '{object_name}' while preserving the outer shape.",
         }
     except Exception as e:
-        if bpy.context.mode != 'OBJECT':
-            bpy.ops.object.mode_set(mode='OBJECT')
+        if bpy.context.mode != "OBJECT":
+            bpy.ops.object.mode_set(mode="OBJECT")
         return {"error": f"Failed to resolve self-intersections: {str(e)}"}

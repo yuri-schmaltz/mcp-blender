@@ -1,18 +1,24 @@
 """Scene and render control tools for BlenderMCP."""
+
+import math
+import traceback
+
+import bpy
+import mathutils
+
 from ..core.router import mcp_command
 
 
-import math
-import mathutils
-import traceback
-import io
-from contextlib import redirect_stdout
-
-import bpy
-
-
 @mcp_command(name="configure_render_settings", read_only=False)
-def configure_render_settings(scene, engine="BLENDER_EEVEE", resolution_x=1920, resolution_y=1080, samples=64, use_gpu=True, transparent_background=False):
+def configure_render_settings(
+    scene,
+    engine="BLENDER_EEVEE",
+    resolution_x=1920,
+    resolution_y=1080,
+    samples=64,
+    use_gpu=True,
+    transparent_background=False,
+):
     """Configure render settings like engine, resolution, samples, and device."""
     try:
         render = scene.render
@@ -43,38 +49,38 @@ def configure_render_settings(scene, engine="BLENDER_EEVEE", resolution_x=1920, 
             cycles = scene.cycles
             cycles.samples = int(samples)
             if use_gpu:
-                cycles.device = 'GPU'
+                cycles.device = "GPU"
 
                 # Make sure GPU compute is enabled in preferences
                 prefs = bpy.context.preferences
-                cprefs = prefs.addons['cycles'].preferences
+                cprefs = prefs.addons["cycles"].preferences
 
                 # Try to enable all available GPU devices (CUDA, OptiX, HIP, Metal, OneAPI)
-                for compute_device_type in ('CUDA', 'OPTIX', 'HIP', 'METAL', 'ONEAPI'):
+                for compute_device_type in ("CUDA", "OPTIX", "HIP", "METAL", "ONEAPI"):
                     try:
                         cprefs.compute_device_type = compute_device_type
                         cprefs.get_devices()
                         for device in cprefs.devices:
-                            if device.type != 'CPU':
+                            if device.type != "CPU":
                                 device.use = True
                         break  # Found at least one working compute type
                     except Exception:
                         continue
             else:
-                cycles.device = 'CPU'
+                cycles.device = "CPU"
 
         elif engine in ["BLENDER_EEVEE", "BLENDER_EEVEE_NEXT"]:
             # Eevee uses different properties depending on version
             if hasattr(scene, "eevee"):
                 eevee = scene.eevee
                 if hasattr(eevee, "taa_render_samples"):
-                    eevee.taa_render_samples = int(samples) # Legacy Eevee
+                    eevee.taa_render_samples = int(samples)  # Legacy Eevee
 
         return {
             "success": True,
             "message": f"Render settings configured: Engine={engine}, Resolution={resolution_x}x{resolution_y}, Samples={samples}",
             "engine": engine,
-            "resolution": [render.resolution_x, render.resolution_y]
+            "resolution": [render.resolution_x, render.resolution_y],
         }
     except Exception as e:
         return {"error": f"Failed to configure render settings: {str(e)}"}
@@ -109,9 +115,11 @@ def setup_camera(scene, focus_object_name=None, location=(0, -10, 5), create_new
             # Calculate rotation to point at the target
             direction = target_obj.location - cam_obj.location
             # Point camera '-Z' towards target, with 'Y' up
-            rot_quat = direction.to_track_quat('-Z', 'Y')
+            rot_quat = direction.to_track_quat("-Z", "Y")
             cam_obj.rotation_euler = rot_quat.to_euler()
-            msg = f"Camera '{cam_obj.name}' positioned at {location} looking at '{target_obj.name}'."
+            msg = (
+                f"Camera '{cam_obj.name}' positioned at {location} looking at '{target_obj.name}'."
+            )
         else:
             # Just set rotation to default looking forward if no target
             cam_obj.rotation_euler = (math.radians(90), 0, 0)
@@ -121,10 +129,11 @@ def setup_camera(scene, focus_object_name=None, location=(0, -10, 5), create_new
             "success": True,
             "message": msg,
             "camera_name": cam_obj.name,
-            "is_active": (scene.camera == cam_obj)
+            "is_active": (scene.camera == cam_obj),
         }
     except Exception as e:
         return {"error": f"Failed to set up camera: {str(e)}"}
+
 
 @mcp_command(name="get_scene_info", read_only=True)
 def get_scene_info(scene, filter_type=None, filter_name=None, limit=100):
@@ -136,7 +145,7 @@ def get_scene_info(scene, filter_type=None, filter_name=None, limit=100):
             "object_count": len(scene.objects),
             "objects": [],
             "materials_count": len(bpy.data.materials),
-            "active_object": scene.objects.active.name if scene.objects.active else None
+            "active_object": scene.objects.active.name if scene.objects.active else None,
         }
 
         # Collect object information
@@ -146,7 +155,7 @@ def get_scene_info(scene, filter_type=None, filter_name=None, limit=100):
                 continue
             if filter_name and filter_name.lower() not in obj.name.lower():
                 continue
-                
+
             obj_info = {
                 "name": obj.name,
                 "type": obj.type,
@@ -165,6 +174,7 @@ def get_scene_info(scene, filter_type=None, filter_name=None, limit=100):
         traceback.print_exc()
         return {"error": str(e)}
 
+
 @mcp_command(name="get_active_object", read_only=False)
 def get_active_object(scene):
     """Get the currently active object"""
@@ -173,6 +183,7 @@ def get_active_object(scene):
         return {"name": obj.name, "type": obj.type}
     return {"name": None, "message": "No active object"}
 
+
 @mcp_command(name="set_active_object", read_only=False)
 def set_active_object(scene, name):
     """Set the active object by name"""
@@ -180,7 +191,7 @@ def set_active_object(scene, name):
         obj = scene.objects.get(name)
         if not obj:
             return {"error": f"Object '{name}' not found."}
-        
+
         bpy.context.view_layer.objects.active = obj
         obj.select_set(True)
         return {"success": True, "message": f"Object '{name}' is now active."}
@@ -245,20 +256,25 @@ def get_object_info(scene, name):
         }
     return obj_info
 
+
 @mcp_command(name="get_viewport_screenshot", read_only=True)
 def get_viewport_screenshot(scene, max_size=800, filepath=None, format="png"):
     """
     Capture a screenshot of the current 3D viewport and save it to the specified path.
     If no filepath is provided, returns a base64-encoded string using RAM-backed temp directory (/dev/shm).
     """
+    import base64
     import os
     import tempfile
     import uuid
-    import base64
-    
+
     is_temp = False
     if not filepath:
-        temp_dir = "/dev/shm" if os.path.exists("/dev/shm") and os.access("/dev/shm", os.W_OK) else tempfile.gettempdir()
+        temp_dir = (
+            "/dev/shm"
+            if os.path.exists("/dev/shm") and os.access("/dev/shm", os.W_OK)
+            else tempfile.gettempdir()
+        )
         filepath = os.path.join(temp_dir, f"blendermcp_shot_{uuid.uuid4().hex}.png")
         is_temp = True
 

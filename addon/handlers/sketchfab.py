@@ -1,6 +1,4 @@
 """Sketchfab API handler for searching and downloading 3D models."""
-from ..core.router import mcp_command
-
 
 import os
 import shutil
@@ -11,21 +9,28 @@ from contextlib import suppress
 
 import bpy
 
+from ..core.router import mcp_command
 from ..utils.network import robust_get
 
 
 def get_prefs():
     """Access global addon preferences safely."""
     from ..utils.helpers import get_addon_prefs
+
     return get_addon_prefs(__package__)
+
 
 # Try to get progress tracker
 PROGRESS_AVAILABLE = False
+
+
 def get_progress_tracker():
     return None
 
+
 try:
     from ...src.blender_mcp.progress import get_progress_tracker as _get_tracker
+
     get_progress_tracker = _get_tracker
     PROGRESS_AVAILABLE = True
 except ImportError:
@@ -201,10 +206,10 @@ def download_sketchfab_model(scene, uid):
 
         main_file = os.path.join(temp_dir, gltf_files[0])
         bpy.ops.import_scene.gltf(filepath=main_file)
-        
+
         # Pack all textures to ensure they persist after temp dir deletion
         bpy.ops.file.pack_all()
-        
+
         imported_objects = [obj.name for obj in bpy.context.selected_objects]
 
         with suppress(Exception):

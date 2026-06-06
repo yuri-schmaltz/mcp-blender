@@ -1,8 +1,9 @@
 """Structural analyzer handler for BlenderMCP."""
-from ..core.router import mcp_command
 
 import bpy
 import mathutils
+
+from ..core.router import mcp_command
 
 
 @mcp_command(name="analyze_structural_properties", read_only=True)
@@ -21,7 +22,9 @@ def analyze_structural_properties(scene, object_name, material_preset="PLA"):
 
         material = material_preset.upper()
         if material not in DENSITIES:
-            return {"error": f"Unknown material '{material_preset}'. Supported: PLA, PETG, ABS, NYLON, STEEL, ALUMINUM."}
+            return {
+                "error": f"Unknown material '{material_preset}'. Supported: PLA, PETG, ABS, NYLON, STEEL, ALUMINUM."
+            }
 
         density = DENSITIES[material]
 
@@ -29,15 +32,17 @@ def analyze_structural_properties(scene, object_name, material_preset="PLA"):
             return {"error": f"Object '{object_name}' not found."}
 
         obj = scene.objects[object_name]
-        if obj.type != 'MESH':
-            return {"error": f"Object '{object_name}' is not a MESH. Cannot analyze structural properties."}
+        if obj.type != "MESH":
+            return {
+                "error": f"Object '{object_name}' is not a MESH. Cannot analyze structural properties."
+            }
 
         # Force a scene graph update to get correct evaluated dimensions
         bpy.context.view_layer.update()
 
         # Calculate bounding box volume (rough estimation)
         dims = obj.dimensions
-        bbox_volume = dims.x * dims.y * dims.z # in m^3
+        dims.x * dims.y * dims.z  # in m^3
 
         # Precise mesh volume calculation using evaluated depsgraph
         depsgraph = bpy.context.evaluated_depsgraph_get()
@@ -48,7 +53,7 @@ def analyze_structural_properties(scene, object_name, material_preset="PLA"):
         verts_world = [obj.matrix_world @ v.co for v in mesh.vertices]
         if not verts_world:
             return {"error": "Mesh has no vertices."}
-        
+
         center_of_mass = sum(verts_world, mathutils.Vector()) / len(verts_world)
 
         # Estimate mesh volume using triangle signed volumes (divergence theorem)
@@ -60,12 +65,12 @@ def analyze_structural_properties(scene, object_name, material_preset="PLA"):
                 v0 = verts_world[poly.vertices[0]]
                 for i in range(1, len(poly.vertices) - 1):
                     v1 = verts_world[poly.vertices[i]]
-                    v2 = verts_world[poly.vertices[i+1]]
+                    v2 = verts_world[poly.vertices[i + 1]]
                     # Signed volume of tetrahedron
                     vol = v0.dot(v1.cross(v2)) / 6.0
                     total_volume += vol
 
-        total_volume = abs(total_volume) # Handle reversed normals gracefully
+        total_volume = abs(total_volume)  # Handle reversed normals gracefully
 
         # Mass calculation (Density * Volume)
         mass_kg = total_volume * density
@@ -73,10 +78,10 @@ def analyze_structural_properties(scene, object_name, material_preset="PLA"):
 
         # Structural warnings / stress concentrators
         warnings = []
-        
+
         # 1. Bounding box thickness check (thin wall check)
         min_dim_mm = min(dims.x, dims.y, dims.z) * 1000.0
-        if min_dim_mm < 1.6: # Less than 4 wall perimeters (0.4mm nozzle)
+        if min_dim_mm < 1.6:  # Less than 4 wall perimeters (0.4mm nozzle)
             warnings.append(
                 f"Thin section warning: The smallest dimension is {min_dim_mm:.2f}mm. "
                 "Wall thickness under 1.6mm is fragile for functional parts under stress."
@@ -105,7 +110,7 @@ def analyze_structural_properties(scene, object_name, material_preset="PLA"):
             "center_of_mass": [center_of_mass.x, center_of_mass.y, center_of_mass.z],
             "estimated_cost_usd": cost_usd,
             "structural_warnings": warnings,
-            "message": f"Structural analysis complete for '{object_name}' ({material_preset}). Mass: {mass_g:.2f}g."
+            "message": f"Structural analysis complete for '{object_name}' ({material_preset}). Mass: {mass_g:.2f}g.",
         }
     except Exception as e:
         return {"error": f"Failed to analyze structural properties: {str(e)}"}

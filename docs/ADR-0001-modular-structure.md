@@ -13,10 +13,10 @@ O projeto BlenderMCP adota uma arquitetura modular, separando responsabilidades 
 
 
 ## Consequências
-- Facilita onboarding e troubleshooting (ver docs/troubleshooting.md).
+- Facilita onboarding e troubleshooting (ver docs/TROUBLESHOOTING.md).
 - Reduz risco de regressão e divergência arquitetural.
 - Permite evolução incremental sem grandes rupturas.
-- Garante baseline de métricas e acessibilidade (ver docs/baseline_metrics.md e addon/ui/checklist_a11y.md).
+- Garante baseline de métricas e acessibilidade (ver docs/BASELINE_METRICS.md e addon/ui/checklist_a11y.md).
 
 ## Referências
 - [docs/ARCHITECTURE.md](ARCHITECTURE.md)

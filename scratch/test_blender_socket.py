@@ -1,31 +1,35 @@
-import socket
 import json
+import socket
+
 
 def test_command(cmd_type, params=None):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.settimeout(10)
     try:
-        s.connect(('localhost', 9876))
+        s.connect(("localhost", 9876))
         payload = {"type": cmd_type, "params": params or {}}
-        s.sendall(json.dumps(payload).encode('utf-8'))
-        
+        s.sendall(json.dumps(payload).encode("utf-8"))
+
         # Read until EOF
         res = b""
         while True:
             try:
                 data = s.recv(4096)
-                if not data: break
+                if not data:
+                    break
                 res += data
                 # Check if we have a valid JSON
                 try:
-                    json.loads(res.decode('utf-8'))
+                    json.loads(res.decode("utf-8"))
                     break
-                except: continue
-            except socket.timeout:
+                except:
+                    continue
+            except TimeoutError:
                 break
-        return json.loads(res.decode('utf-8'))
+        return json.loads(res.decode("utf-8"))
     finally:
         s.close()
+
 
 print("--- TESTING SOCKET: list_tools ---")
 try:

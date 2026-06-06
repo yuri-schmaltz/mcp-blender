@@ -1,9 +1,11 @@
 import sys
 from unittest.mock import MagicMock
 
+
 # Setup mock modules for Blender's bpy and mathutils during host tests
 class BpyMock(MagicMock):
     __path__ = []
+
 
 mock_bpy = BpyMock()
 mock_bpy.props.BoolProperty = MagicMock(return_value=None)

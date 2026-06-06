@@ -1,6 +1,5 @@
 """Shared helper functions for BlenderMCP addon UI and operators."""
 
-import collections.abc
 import json
 import os
 import platform
@@ -8,20 +7,21 @@ import shutil
 import subprocess
 import sys
 import time
+
 import bpy
 
 
 def resolve_addon_package(caller_package=None):
     """Resolve the root extension/addon package name for addon preferences lookup.
-    
+
     In Blender 4.2+ Extension mode, __package__ for sub-modules is e.g.
     'bl_ext.user_default.mcp_blender.addon.handlers' — we need only the first
     3 parts: 'bl_ext.user_default.mcp_blender'.
-    
+
     Args:
         caller_package: The __package__ of the calling module. If None, uses
                         the helpers module's own __package__.
-    
+
     Returns:
         The root package name suitable for bpy.context.preferences.addons lookup.
     """
@@ -36,10 +36,10 @@ def resolve_addon_package(caller_package=None):
 
 def get_addon_prefs(caller_package=None):
     """Access global addon preferences safely from any sub-module.
-    
+
     Args:
         caller_package: The __package__ of the calling module.
-    
+
     Returns:
         The AddonPreferences instance, or None if not found.
     """
@@ -51,18 +51,23 @@ def get_addon_prefs(caller_package=None):
 
 def ensure_mode(mode: str):
     """Decorator to ensure Blender is in the correct mode before running a function.
-    
+
     Supported modes: 'OBJECT', 'EDIT', 'POSE', 'SCULPT', 'VERTEX_PAINT', 'WEIGHT_PAINT', 'TEXTURE_PAINT'.
     """
+
     def decorator(func):
         def wrapper(*args, **kwargs):
             if bpy.context.mode != mode:
                 try:
                     bpy.ops.object.mode_set(mode=mode)
                 except Exception as e:
-                    return {"error": f"Failed to switch to {mode} (Current: {bpy.context.mode}): {str(e)}"}
+                    return {
+                        "error": f"Failed to switch to {mode} (Current: {bpy.context.mode}): {str(e)}"
+                    }
             return func(*args, **kwargs)
+
         return wrapper
+
     return decorator
 
 
@@ -169,7 +174,7 @@ def detect_installed_clients() -> list[tuple[str, str, str]]:
     If no client is detected, the full static list is returned as fallback.
     """
     detected: list[tuple[str, str, str]] = []
-    
+
     # We check each one and map to our static list
     # _ALL_CLIENTS indices: 0:claude, 1:cursor, 2:ollama, 3:lm_studio
     if _is_ollama_installed():
@@ -253,7 +258,9 @@ def _resolve_uv_command(cwd: str) -> list[str] | None:
     return None
 
 
-def _uv_blender_mcp_command(cwd: str, host: str, port: int, doctor: bool = False) -> list[str] | None:
+def _uv_blender_mcp_command(
+    cwd: str, host: str, port: int, doctor: bool = False
+) -> list[str] | None:
     """Build a uv command that works both in repo checkout and installed addon mode."""
     uv_prefix = _resolve_uv_command(cwd)
     if uv_prefix is None:
@@ -316,7 +323,10 @@ def _install_runtime_dependencies_with_pip(cwd: str) -> tuple[int, str]:
     ok, out = _ensure_pip(cwd)
     if not ok:
         return 1, f"pip unavailable: {out}"
-    return _run_command([sys.executable, "-m", "pip", "install", "--upgrade", "requests>=2.25.0", "litellm>=1.0.0"], cwd=cwd)
+    return _run_command(
+        [sys.executable, "-m", "pip", "install", "--upgrade", "requests>=2.25.0", "litellm>=1.0.0"],
+        cwd=cwd,
+    )
 
 
 def _mcp_client_config_snippet(client: str, host: str, port: int) -> str:

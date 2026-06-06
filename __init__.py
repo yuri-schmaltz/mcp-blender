@@ -4,8 +4,12 @@
 from __future__ import annotations
 
 import importlib.util
-from pathlib import Path
+import json
 import sys
+import threading
+import time
+import urllib.request
+from pathlib import Path
 
 import bpy
 from bpy.props import (
@@ -15,80 +19,78 @@ from bpy.props import (
     StringProperty,
 )
 
-
-
-import threading
-import json
-import urllib.request
-import time
-
 _ollama_models_cache = []
 _ollama_fetch_time = 0
+
 
 def fetch_ollama_models_thread(base_url):
     global _ollama_models_cache, _ollama_fetch_time
     try:
-        url = base_url.rstrip('/') + '/api/tags'
+        url = base_url.rstrip("/") + "/api/tags"
         req = urllib.request.Request(url)
         with urllib.request.urlopen(req, timeout=1.0) as response:
             data = json.loads(response.read().decode())
-            models = [(m['name'], m['name'], '') for m in data.get('models', [])]
+            models = [(m["name"], m["name"], "") for m in data.get("models", [])]
             if models:
                 _ollama_models_cache = models
                 _ollama_fetch_time = time.time()
     except Exception:
         pass
 
+
 def get_ollama_items(self, context):
     global _ollama_models_cache, _ollama_fetch_time
-    
+
     base_url = self.llm_base_url if self.llm_base_url else "http://localhost:11434"
-    
+
     # If cache empty, perform quick sync fetch
     if not _ollama_models_cache:
         try:
-            with urllib.request.urlopen(base_url.rstrip('/') + '/api/tags', timeout=2) as response:
+            with urllib.request.urlopen(base_url.rstrip("/") + "/api/tags", timeout=2) as response:
                 data = json.load(response)
-                _ollama_models_cache = [(m['name'], m['name'], '') for m in data.get('models', [])]
+                _ollama_models_cache = [(m["name"], m["name"], "") for m in data.get("models", [])]
                 _ollama_fetch_time = time.time()
         except Exception:
             pass
-    
+
     # Refresh in background if stale (>60s)
     if time.time() - _ollama_fetch_time > 60:
         threading.Thread(target=fetch_ollama_models_thread, args=(base_url,), daemon=True).start()
-    
+
     res = list(_ollama_models_cache)
-    res.append(('MANUAL', 'Type Manually...', ''))
+    res.append(("MANUAL", "Type Manually...", ""))
     return res
+
 
 _custom_models_cache = []
 _custom_fetch_time = 0
 
+
 def fetch_custom_models_thread(base_url):
     global _custom_models_cache, _custom_fetch_time
     try:
-        url = base_url.rstrip('/') + '/models'
+        url = base_url.rstrip("/") + "/models"
         req = urllib.request.Request(url)
         with urllib.request.urlopen(req, timeout=1.0) as response:
             data = json.loads(response.read().decode())
-            models = [(m['id'], m['id'], '') for m in data.get('data', [])]
+            models = [(m["id"], m["id"], "") for m in data.get("data", [])]
             if models:
                 _custom_models_cache = models
                 _custom_fetch_time = time.time()
     except Exception:
         pass
 
+
 def get_custom_items(self, context):
     global _custom_models_cache, _custom_fetch_time
     base_url = self.llm_base_url if self.llm_base_url else "http://localhost:1234/v1"
-    
+
     if time.time() - _custom_fetch_time > 10:
         _custom_fetch_time = time.time()
         threading.Thread(target=fetch_custom_models_thread, args=(base_url,), daemon=True).start()
-    
+
     res = list(_custom_models_cache)
-    res.append(('MANUAL', 'Type Manually...', ''))
+    res.append(("MANUAL", "Type Manually...", ""))
     return res
 
 
@@ -117,8 +119,6 @@ class BlenderMCPPreferences(bpy.types.AddonPreferences):
         default=False,
     )
 
-
-
     sketchfab_api_key: StringProperty(
         name="Sketchfab API Key",
         subtype="PASSWORD",
@@ -136,20 +136,20 @@ class BlenderMCPPreferences(bpy.types.AddonPreferences):
     client_target: EnumProperty(
         name="Target Client",
         items=[
-            ('lm_studio', "LM Studio", "Local LLM via LM Studio"),
-            ('ollama', "Ollama", "Local LLM via Ollama"),
-            ('custom', "Custom", "Generic OpenAI-compatible API"),
+            ("lm_studio", "LM Studio", "Local LLM via LM Studio"),
+            ("ollama", "Ollama", "Local LLM via Ollama"),
+            ("custom", "Custom", "Generic OpenAI-compatible API"),
         ],
-        default='lm_studio',
+        default="lm_studio",
     )
 
     llm_provider: EnumProperty(
         name="LLM Provider",
         items=[
-            ('OLLAMA', "Ollama (Local)", "Use local Ollama instance"),
-            ('CUSTOM', "Custom / LM Studio (Local)", "Use any OpenAI-compatible local API"),
+            ("OLLAMA", "Ollama (Local)", "Use local Ollama instance"),
+            ("CUSTOM", "Custom / LM Studio (Local)", "Use any OpenAI-compatible local API"),
         ],
-        default='OLLAMA',
+        default="OLLAMA",
     )
 
     llm_model_ollama: EnumProperty(
@@ -187,13 +187,25 @@ class BlenderMCPPreferences(bpy.types.AddonPreferences):
         name="MCP Tool Profile",
         description="Filter tools exposed to the AI client to optimize prompt context and speed",
         items=[
-            ('ALL', "Full (All Tools)", "Expose all 73 tools to the AI"),
-            ('MODELING', "Modeling & Layout", "Expose only essential and modeling/transform tools"),
-            ('MATERIALS', "Materials & Studio", "Expose only PBR materials, textures, and studio lighting tools"),
-            ('PHYSICS', "Mechanics & Simulation", "Expose only rigid body, physics constraints, and joint simulation tools"),
-            ('PRINTING', "3D Printing & CAD", "Expose only mesh analysis, repair, and 3D printing tools"),
+            ("ALL", "Full (All Tools)", "Expose all 73 tools to the AI"),
+            ("MODELING", "Modeling & Layout", "Expose only essential and modeling/transform tools"),
+            (
+                "MATERIALS",
+                "Materials & Studio",
+                "Expose only PBR materials, textures, and studio lighting tools",
+            ),
+            (
+                "PHYSICS",
+                "Mechanics & Simulation",
+                "Expose only rigid body, physics constraints, and joint simulation tools",
+            ),
+            (
+                "PRINTING",
+                "3D Printing & CAD",
+                "Expose only mesh analysis, repair, and 3D printing tools",
+            ),
         ],
-        default='ALL',
+        default="ALL",
     )
 
     # Integration Toggles
@@ -218,8 +230,6 @@ class BlenderMCPPreferences(bpy.types.AddonPreferences):
         default=False,
     )
 
-
-
     def draw(self, context):
         layout = self.layout
 
@@ -237,19 +247,19 @@ class BlenderMCPPreferences(bpy.types.AddonPreferences):
         box.label(text="Built-in AI Client", icon="COMMUNITY")
         col = box.column(align=True)
         col.prop(self, "llm_provider")
-        
-        if self.llm_provider == 'OLLAMA':
+
+        if self.llm_provider == "OLLAMA":
             col.prop(self, "llm_model_ollama", text="Model Name")
-            if self.llm_model_ollama == 'MANUAL':
+            if self.llm_model_ollama == "MANUAL":
                 col.prop(self, "llm_model_custom")
             col.prop(self, "llm_base_url")
-        elif self.llm_provider == 'CUSTOM':
+        elif self.llm_provider == "CUSTOM":
             col.prop(self, "llm_model_custom_enum", text="Model Name")
-            if self.llm_model_custom_enum == 'MANUAL':
+            if self.llm_model_custom_enum == "MANUAL":
                 col.prop(self, "llm_model_custom")
             col.prop(self, "llm_base_url")
             col.prop(self, "llm_api_key", text="API Key (Optional)")
-            
+
         col.prop(self, "webui_port")
 
         # Section: Integrations
@@ -269,17 +279,17 @@ class BlenderMCPPreferences(bpy.types.AddonPreferences):
         # Section: Setup & Maintenance
         box = layout.box()
         box.label(text="Setup & Maintenance", icon="TOOL_SETTINGS")
-        
+
         col = box.column(align=True)
         col.operator("blendermcp.install_dependencies", text="Install Dependencies", icon="IMPORT")
         col.operator("blendermcp.health_check", text="Health Check", icon="CHECKMARK")
-        
+
         box.separator()
         box.label(text="Advanced (Stdio / Terminal):", icon="CONSOLE")
         box.prop(self, "client_target")
         box.operator("blendermcp.copy_mcp_client_config")
         box.operator("blendermcp.run_mcp_terminal_server")
-        
+
         box.separator()
         box.operator("blendermcp.open_logs", icon="TEXT")
         box.operator("blendermcp.clear_cache", icon="TRASH")
@@ -311,7 +321,6 @@ bl_info = {
     "name": "Blender MCP",
     "author": "BlenderMCP",
     "version": (2, 11, 0),
-
     "blender": (4, 2, 0),
     "location": "View3D > Sidebar > BlenderMCP",
     "description": "Connect Blender to local LLM clients via MCP",

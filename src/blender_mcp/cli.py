@@ -61,9 +61,8 @@ def _client_config_snippet(client: str, host: str, port: int) -> str:
     args = ["run", "blender-mcp", "--host", host, "--port", str(port)]
     payload = {"mcpServers": {"blender": {"command": "uv", "args": args}}}
     if client == "ollama":
-        return (
-            "Use this in an MCP-capable Ollama client (Continue/Open WebUI/etc):\n"
-            + json.dumps(payload, indent=2)
+        return "Use this in an MCP-capable Ollama client (Continue/Open WebUI/etc):\n" + json.dumps(
+            payload, indent=2
         )
     return json.dumps(payload, indent=2)
 

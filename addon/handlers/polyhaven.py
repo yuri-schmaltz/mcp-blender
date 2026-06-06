@@ -1,6 +1,4 @@
 """Poly Haven API handler for downloading HDRIs, textures, and models."""
-from ..core.router import mcp_command
-
 
 import os
 import shutil
@@ -10,18 +8,23 @@ import zipfile
 
 import bpy
 
+from ..core.router import mcp_command
 from ..utils.cache import get_asset_cache
 from ..utils.constants import REQ_HEADERS
 from ..utils.network import log_asset_download, robust_get
 
 # Try to get progress tracker
 PROGRESS_AVAILABLE = False
+
+
 def get_progress_tracker():
     return None
+
 
 try:
     # This assumes the progress module is available in the expected location
     from ...src.blender_mcp.progress import get_progress_tracker as _get_tracker
+
     get_progress_tracker = _get_tracker
     PROGRESS_AVAILABLE = True
 except ImportError:
@@ -31,6 +34,7 @@ except ImportError:
 def get_prefs():
     """Access global addon preferences safely."""
     from ..utils.helpers import get_addon_prefs
+
     return get_addon_prefs(__package__)
 
 
@@ -80,7 +84,9 @@ def search_polyhaven_assets(query, asset_type="hdris"):
             results = {}
             query = query.lower()
             for asset_id, info in all_assets.items():
-                if query in asset_id.lower() or any(query in tag.lower() for tag in info.get("tags", [])):
+                if query in asset_id.lower() or any(
+                    query in tag.lower() for tag in info.get("tags", [])
+                ):
                     results[asset_id] = info
                 if len(results) >= 20:  # Limit results
                     break
@@ -150,11 +156,15 @@ def download_polyhaven_asset(scene, asset_id, asset_type="hdris", resolution="4k
         # Download logic
         try:
             if asset_type == "hdris":
-                download_url = f"https://api.polyhaven.com/files/{asset_id}?file={asset_id}_{resolution}.exr"
+                download_url = (
+                    f"https://api.polyhaven.com/files/{asset_id}?file={asset_id}_{resolution}.exr"
+                )
             elif asset_type == "textures":
                 download_url = f"https://api.polyhaven.com/files/{asset_id}?file={asset_id}_{resolution}_png.zip"
             elif asset_type == "models":
-                download_url = f"https://api.polyhaven.com/files/{asset_id}?file={asset_id}_{resolution}.zip"
+                download_url = (
+                    f"https://api.polyhaven.com/files/{asset_id}?file={asset_id}_{resolution}.zip"
+                )
             else:
                 return {"error": f"Unsupported asset type: {asset_type}"}
 
@@ -169,7 +179,9 @@ def download_polyhaven_asset(scene, asset_id, asset_type="hdris", resolution="4k
                 else:
                     return {"error": f"Failed to download asset: {response.status_code}"}
 
-            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".exr" if asset_type == "hdris" else ".zip")
+            temp_file = tempfile.NamedTemporaryFile(
+                delete=False, suffix=".exr" if asset_type == "hdris" else ".zip"
+            )
             total_size = int(response.headers.get("content-length", 0))
             downloaded = 0
 
@@ -231,7 +243,11 @@ def download_polyhaven_asset(scene, asset_id, asset_type="hdris", resolution="4k
             # For now, we'll need to call the set_texture logic.
             # In the final refactor, addon.py will coordinate this.
             # But let's keep the core extraction logic here.
-            return {"success": True, "message": f"Texture {asset_id} downloaded to {local_path}. Extraction and application pending setup_texture call.", "path": local_path}
+            return {
+                "success": True,
+                "message": f"Texture {asset_id} downloaded to {local_path}. Extraction and application pending setup_texture call.",
+                "path": local_path,
+            }
 
         elif asset_type == "models":
             # Unzip and import

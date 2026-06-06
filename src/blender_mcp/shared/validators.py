@@ -30,7 +30,7 @@ def validate_port(port: int | str) -> int:
 
     if not 1024 <= port_int <= 65535:
         raise ValidationError(
-            f"Port must be between 1024-65535 (privileged ports not allowed), " f"got: {port_int}"
+            f"Port must be between 1024-65535 (privileged ports not allowed), got: {port_int}"
         )
 
     return port_int
@@ -58,7 +58,7 @@ def validate_api_key(key: str, min_length: int = 10, name: str = "API key") -> s
 
     if len(key) < min_length:
         raise ValidationError(
-            f"{name} too short (minimum {min_length} characters), " f"got {len(key)} characters"
+            f"{name} too short (minimum {min_length} characters), got {len(key)} characters"
         )
 
     # Check for suspicious patterns
@@ -191,7 +191,7 @@ def validate_resolution(resolution: str) -> str:
 
     if resolution.lower() not in valid_resolutions:
         raise ValidationError(
-            f"Invalid resolution: {resolution}. " f"Must be one of: {', '.join(valid_resolutions)}"
+            f"Invalid resolution: {resolution}. Must be one of: {', '.join(valid_resolutions)}"
         )
 
     return resolution.lower()

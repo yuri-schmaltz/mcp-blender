@@ -1,6 +1,9 @@
 """Smart modifier shortcuts and mesh cleanup tools for BlenderMCP."""
+
 import math
+
 import bpy
+
 from ..core.router import mcp_command
 
 
@@ -18,7 +21,11 @@ def add_modifier(scene, name, modifier_type, properties=None):
                 if hasattr(mod, key):
                     setattr(mod, key, value)
 
-        return {"success": True, "message": f"Added {modifier_type} modifier to '{name}'.", "modifier_name": mod.name}
+        return {
+            "success": True,
+            "message": f"Added {modifier_type} modifier to '{name}'.",
+            "modifier_name": mod.name,
+        }
     except Exception as e:
         return {"error": str(e)}
 
@@ -33,7 +40,7 @@ def apply_modifier(scene, name, modifier_name):
         if modifier_name not in obj.modifiers:
             return {"error": f"Modifier '{modifier_name}' not found on '{name}'."}
 
-        bpy.ops.object.select_all(action='DESELECT')
+        bpy.ops.object.select_all(action="DESELECT")
         obj.select_set(True)
         bpy.context.view_layer.objects.active = obj
         bpy.ops.object.modifier_apply(modifier=modifier_name)
@@ -51,7 +58,7 @@ def apply_all_modifiers(scene, name):
         if not obj:
             return {"error": f"Object '{name}' not found."}
 
-        bpy.ops.object.select_all(action='DESELECT')
+        bpy.ops.object.select_all(action="DESELECT")
         obj.select_set(True)
         bpy.context.view_layer.objects.active = obj
 
@@ -63,7 +70,11 @@ def apply_all_modifiers(scene, name):
             except Exception:
                 pass  # Some modifiers can't be applied (e.g., on multi-user data)
 
-        return {"success": True, "message": f"Applied {len(applied)} modifiers on '{name}'.", "applied": applied}
+        return {
+            "success": True,
+            "message": f"Applied {len(applied)} modifiers on '{name}'.",
+            "applied": applied,
+        }
     except Exception as e:
         return {"error": str(e)}
 
@@ -76,15 +87,18 @@ def add_mirror_modifier(scene, name, axis="X", use_clipping=True):
         if not obj:
             return {"error": f"Object '{name}' not found."}
 
-        mod = obj.modifiers.new(name="Mirror", type='MIRROR')
+        mod = obj.modifiers.new(name="Mirror", type="MIRROR")
         mod.use_clip = use_clipping
 
         # Reset all axes, then enable the requested one
-        mod.use_axis[0] = 'X' in axis.upper()
-        mod.use_axis[1] = 'Y' in axis.upper()
-        mod.use_axis[2] = 'Z' in axis.upper()
+        mod.use_axis[0] = "X" in axis.upper()
+        mod.use_axis[1] = "Y" in axis.upper()
+        mod.use_axis[2] = "Z" in axis.upper()
 
-        return {"success": True, "message": f"Added Mirror modifier to '{name}' on axis {axis} (clipping={use_clipping})."}
+        return {
+            "success": True,
+            "message": f"Added Mirror modifier to '{name}' on axis {axis} (clipping={use_clipping}).",
+        }
     except Exception as e:
         return {"error": str(e)}
 
@@ -97,7 +111,7 @@ def add_array_modifier(scene, name, count=3, offset=(1.0, 0.0, 0.0), use_relativ
         if not obj:
             return {"error": f"Object '{name}' not found."}
 
-        mod = obj.modifiers.new(name="Array", type='ARRAY')
+        mod = obj.modifiers.new(name="Array", type="ARRAY")
         mod.count = count
         mod.use_relative_offset = use_relative
         mod.use_constant_offset = not use_relative
@@ -120,14 +134,17 @@ def add_screw_modifier(scene, name, axis="Z", angle=360, steps=32, screw_offset=
         if not obj:
             return {"error": f"Object '{name}' not found."}
 
-        mod = obj.modifiers.new(name="Screw", type='SCREW')
+        mod = obj.modifiers.new(name="Screw", type="SCREW")
         mod.axis = axis.upper()
         mod.angle = math.radians(angle)
         mod.steps = steps
         mod.render_steps = steps
         mod.screw_offset = screw_offset
 
-        return {"success": True, "message": f"Added Screw modifier to '{name}' ({angle}° around {axis})."}
+        return {
+            "success": True,
+            "message": f"Added Screw modifier to '{name}' ({angle}° around {axis}).",
+        }
     except Exception as e:
         return {"error": str(e)}
 
@@ -140,13 +157,16 @@ def add_curve_modifier(scene, mesh_name, curve_name):
         if not obj:
             return {"error": f"Object '{mesh_name}' not found."}
         curve = scene.objects.get(curve_name)
-        if not curve or curve.type != 'CURVE':
+        if not curve or curve.type != "CURVE":
             return {"error": f"Curve object '{curve_name}' not found."}
 
-        mod = obj.modifiers.new(name="Curve", type='CURVE')
+        mod = obj.modifiers.new(name="Curve", type="CURVE")
         mod.object = curve
 
-        return {"success": True, "message": f"Added Curve modifier to '{mesh_name}' using curve '{curve_name}'."}
+        return {
+            "success": True,
+            "message": f"Added Curve modifier to '{mesh_name}' using curve '{curve_name}'.",
+        }
     except Exception as e:
         return {"error": str(e)}
 
@@ -156,24 +176,24 @@ def decimate_mesh(scene, name, ratio=0.5, method="COLLAPSE"):
     """Reduce polygon count while preserving shape."""
     try:
         obj = scene.objects.get(name)
-        if not obj or obj.type != 'MESH':
+        if not obj or obj.type != "MESH":
             return {"error": f"Mesh object '{name}' not found."}
 
         initial_faces = len(obj.data.polygons)
 
-        mod = obj.modifiers.new(name="Decimate", type='DECIMATE')
+        mod = obj.modifiers.new(name="Decimate", type="DECIMATE")
         if method == "COLLAPSE":
-            mod.decimate_type = 'COLLAPSE'
+            mod.decimate_type = "COLLAPSE"
             mod.ratio = ratio
         elif method == "UNSUBDIV":
-            mod.decimate_type = 'UNSUBDIV'
+            mod.decimate_type = "UNSUBDIV"
             mod.iterations = max(1, int((1 - ratio) * 5))
         elif method == "PLANAR":
-            mod.decimate_type = 'DISSOLVE'
+            mod.decimate_type = "DISSOLVE"
             mod.angle_limit = math.radians(5)
 
         # Apply immediately
-        bpy.ops.object.select_all(action='DESELECT')
+        bpy.ops.object.select_all(action="DESELECT")
         obj.select_set(True)
         bpy.context.view_layer.objects.active = obj
         bpy.ops.object.modifier_apply(modifier=mod.name)
@@ -181,7 +201,7 @@ def decimate_mesh(scene, name, ratio=0.5, method="COLLAPSE"):
         final_faces = len(obj.data.polygons)
         return {
             "success": True,
-            "message": f"Decimated '{name}': {initial_faces} → {final_faces} faces ({method}, ratio={ratio})."
+            "message": f"Decimated '{name}': {initial_faces} → {final_faces} faces ({method}, ratio={ratio}).",
         }
     except Exception as e:
         return {"error": str(e)}
@@ -192,21 +212,24 @@ def remesh_voxel(scene, name, voxel_size=0.1):
     """Remesh with voxels for uniform topology."""
     try:
         obj = scene.objects.get(name)
-        if not obj or obj.type != 'MESH':
+        if not obj or obj.type != "MESH":
             return {"error": f"Mesh object '{name}' not found."}
 
-        mod = obj.modifiers.new(name="Remesh", type='REMESH')
-        mod.mode = 'VOXEL'
+        mod = obj.modifiers.new(name="Remesh", type="REMESH")
+        mod.mode = "VOXEL"
         mod.voxel_size = voxel_size
 
-        bpy.ops.object.select_all(action='DESELECT')
+        bpy.ops.object.select_all(action="DESELECT")
         obj.select_set(True)
         bpy.context.view_layer.objects.active = obj
         bpy.ops.object.modifier_apply(modifier=mod.name)
 
         verts = len(obj.data.vertices)
         faces = len(obj.data.polygons)
-        return {"success": True, "message": f"Voxel remeshed '{name}' (size={voxel_size}). Now {verts} verts, {faces} faces."}
+        return {
+            "success": True,
+            "message": f"Voxel remeshed '{name}' (size={voxel_size}). Now {verts} verts, {faces} faces.",
+        }
     except Exception as e:
         return {"error": str(e)}
 
@@ -216,22 +239,25 @@ def smooth_mesh(scene, name, iterations=10, factor=0.5):
     """Smooth a mesh using Laplacian smoothing."""
     try:
         obj = scene.objects.get(name)
-        if not obj or obj.type != 'MESH':
+        if not obj or obj.type != "MESH":
             return {"error": f"Mesh object '{name}' not found."}
 
-        bpy.ops.object.select_all(action='DESELECT')
+        bpy.ops.object.select_all(action="DESELECT")
         obj.select_set(True)
         bpy.context.view_layer.objects.active = obj
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.mesh.select_all(action='SELECT')
+        bpy.ops.object.mode_set(mode="EDIT")
+        bpy.ops.mesh.select_all(action="SELECT")
 
         for _ in range(iterations):
             bpy.ops.mesh.vertices_smooth(factor=factor)
 
-        bpy.ops.object.mode_set(mode='OBJECT')
-        return {"success": True, "message": f"Smoothed '{name}' ({iterations} iterations, factor={factor})."}
+        bpy.ops.object.mode_set(mode="OBJECT")
+        return {
+            "success": True,
+            "message": f"Smoothed '{name}' ({iterations} iterations, factor={factor}).",
+        }
     except Exception as e:
-        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.mode_set(mode="OBJECT")
         return {"error": str(e)}
 
 
@@ -240,10 +266,10 @@ def shade_smooth(scene, name, smooth=True):
     """Set smooth or flat shading on an object."""
     try:
         obj = scene.objects.get(name)
-        if not obj or obj.type != 'MESH':
+        if not obj or obj.type != "MESH":
             return {"error": f"Mesh object '{name}' not found."}
 
-        bpy.ops.object.select_all(action='DESELECT')
+        bpy.ops.object.select_all(action="DESELECT")
         obj.select_set(True)
         bpy.context.view_layer.objects.active = obj
 

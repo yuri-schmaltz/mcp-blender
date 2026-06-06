@@ -1,4 +1,4 @@
-# release_checklist.md - Checklist automatizado de release
+# RELEASE_CHECKLIST - Checklist automatizado de release
 
 - [ ] Todos os testes unitários, E2E e integração passando
 - [ ] Lint (pylint) sem erros críticos

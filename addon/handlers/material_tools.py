@@ -1,10 +1,10 @@
 """Material setup and texture application tools for BlenderMCP."""
-from ..core.router import mcp_command
-
 
 import traceback
 
 import bpy
+
+from ..core.router import mcp_command
 
 
 @mcp_command(name="set_texture", read_only=False)
@@ -191,7 +191,9 @@ def set_texture(object_name, texture_id):
             if not any(map_name in texture_nodes for map_name in ["roughness", "rough"]):
                 links.new(separate_rgb.outputs["G"], principled.inputs["Roughness"])
 
-            if not any(map_name in texture_nodes for map_name in ["metallic", "metalness", "metal"]):
+            if not any(
+                map_name in texture_nodes for map_name in ["metallic", "metalness", "metal"]
+            ):
                 links.new(separate_rgb.outputs["B"], principled.inputs["Metallic"])
 
             # AO mix
@@ -253,16 +255,18 @@ def set_texture(object_name, texture_id):
 
 
 def _hex_to_rgba(hex_color, alpha=1.0):
-    hex_color = hex_color.lstrip('#')
+    hex_color = hex_color.lstrip("#")
     if len(hex_color) == 3:
-        hex_color = ''.join(c + c for c in hex_color)
-    r, g, b = tuple(int(hex_color[i:i+2], 16) / 255.0 for i in (0, 2, 4))
+        hex_color = "".join(c + c for c in hex_color)
+    r, g, b = tuple(int(hex_color[i : i + 2], 16) / 255.0 for i in (0, 2, 4))
     # Convert from sRGB to Linear for Blender rendering
     return (pow(r, 2.2), pow(g, 2.2), pow(b, 2.2), alpha)
 
 
 @mcp_command(name="create_pbr_material", read_only=False)
-def create_pbr_material(name, color_hex="#CCCCCC", roughness=0.5, metallic=0.0, apply_to_object=None):
+def create_pbr_material(
+    name, color_hex="#CCCCCC", roughness=0.5, metallic=0.0, apply_to_object=None
+):
     """Create a new PBR material with basic properties and optionally apply it."""
     try:
         # Check if material exists, if so reuse it, otherwise create new
@@ -270,17 +274,17 @@ def create_pbr_material(name, color_hex="#CCCCCC", roughness=0.5, metallic=0.0, 
             mat = bpy.data.materials[name]
         else:
             mat = bpy.data.materials.new(name=name)
-        
+
         mat.use_nodes = True
         nodes = mat.node_tree.nodes
-        
+
         # Find Principled BSDF
         principled = None
         for node in nodes:
-            if node.type == 'BSDF_PRINCIPLED':
+            if node.type == "BSDF_PRINCIPLED":
                 principled = node
                 break
-                
+
         if not principled:
             # If standard material tree is missing, recreate it
             nodes.clear()
@@ -289,14 +293,16 @@ def create_pbr_material(name, color_hex="#CCCCCC", roughness=0.5, metallic=0.0, 
             principled = nodes.new(type="ShaderNodeBsdfPrincipled")
             principled.location = (0, 0)
             mat.node_tree.links.new(principled.outputs[0], output.inputs[0])
-            
+
         # Set parameters
         principled.inputs["Base Color"].default_value = _hex_to_rgba(color_hex)
         principled.inputs["Roughness"].default_value = float(roughness)
         principled.inputs["Metallic"].default_value = float(metallic)
-        
-        message = f"Material '{name}' configured (Color: {color_hex}, R: {roughness}, M: {metallic})."
-        
+
+        message = (
+            f"Material '{name}' configured (Color: {color_hex}, R: {roughness}, M: {metallic})."
+        )
+
         # Apply to object if requested
         if apply_to_object:
             obj = bpy.data.objects.get(apply_to_object)
@@ -308,13 +314,11 @@ def create_pbr_material(name, color_hex="#CCCCCC", roughness=0.5, metallic=0.0, 
                     obj.data.materials[0] = mat
                 message += f" Applied to '{apply_to_object}'."
             else:
-                message += f" Warning: Object '{apply_to_object}' not found or cannot accept materials."
-                
-        return {
-            "success": True,
-            "message": message,
-            "material": name
-        }
+                message += (
+                    f" Warning: Object '{apply_to_object}' not found or cannot accept materials."
+                )
+
+        return {"success": True, "message": message, "material": name}
     except Exception as e:
         traceback.print_exc()
         return {"error": f"Failed to create PBR material: {str(e)}"}

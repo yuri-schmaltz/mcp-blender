@@ -1,8 +1,9 @@
 import bpy
 
+
 class BlenderMCPServerManager:
     """Manages the lifecycle of the MCP socket server within Blender."""
-    
+
     @staticmethod
     def get_server():
         return getattr(bpy.types, "blendermcp_server", None)
