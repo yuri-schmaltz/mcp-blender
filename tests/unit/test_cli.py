@@ -17,6 +17,8 @@ def test_cli_entrypoint_runs_without_blender(monkeypatch):
     monkeypatch.setattr(server, "mcp", DummyMCP())
     monkeypatch.setattr(server, "get_blender_connection", lambda: pytest.fail("Should not connect"))
     monkeypatch.setattr(cli, "configure_logging", lambda **_: None)
+    # Newer safety policy: non-loopback binds need an explicit opt-in.
+    monkeypatch.setenv("BLENDER_MCP_ALLOW_PUBLIC_BIND", "1")
 
     cli.main([])
 
@@ -29,6 +31,9 @@ def test_cli_arguments_override_env(monkeypatch):
     monkeypatch.setenv("BLENDER_MCP_LOG_LEVEL", "WARNING")
     monkeypatch.setenv("BLENDER_MCP_LOG_FORMAT", "%(message)s")
     monkeypatch.setenv("BLENDER_MCP_LOG_HANDLER", "console")
+    # Default policy: refuse non-loopback hosts. The explicit
+    # ``--allow-public-bind`` flag below opts in for this test.
+    monkeypatch.delenv("BLENDER_MCP_ALLOW_PUBLIC_BIND", raising=False)
 
     logging_calls = []
 
@@ -48,6 +53,7 @@ def test_cli_arguments_override_env(monkeypatch):
             "cli-host",
             "--port",
             "1234",
+            "--allow-public-bind",
             "--log-level",
             "debug",
             "--log-format",
@@ -59,6 +65,18 @@ def test_cli_arguments_override_env(monkeypatch):
 
     assert logging_calls == [("debug", "%(levelname)s:%(message)s", "file")]
     assert server_calls == [("cli-host", 1234)]
+
+
+def test_cli_refuses_non_loopback_without_opt_in(monkeypatch, capsys):
+    """Newer safety policy: ``--host 0.0.0.0`` needs ``--allow-public-bind``."""
+    monkeypatch.setattr(cli, "configure_logging", lambda **_: None)
+    monkeypatch.setattr(server, "main", lambda **_: pytest.fail("server.main should not run"))
+
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["--host", "0.0.0.0", "--port", "9876"])
+    assert exc.value.code == 2
+    err = capsys.readouterr().err
+    assert "refusing to bind" in err
 
 
 def test_cli_print_client_config_exits_without_starting_server(monkeypatch, capsys):
@@ -91,7 +109,7 @@ def test_cli_doctor_success_exits_without_starting_server(monkeypatch, capsys):
 
     output = capsys.readouterr().out
     assert exc.value.code == 0
-    assert "basic diagnostics passed" in output
+    assert "OK: basic diagnostics passed" in output
 
 
 def test_cli_doctor_failure_returns_non_zero(monkeypatch, capsys):
@@ -108,4 +126,5 @@ def test_cli_doctor_failure_returns_non_zero(monkeypatch, capsys):
 
     output = capsys.readouterr().out
     assert exc.value.code == 1
-    assert "cannot connect to Blender addon" in output
+    # The new doctor uses the section-prefixed form like "[FAIL]  tcp-connect: ...".
+    assert ("cannot connect" in output) or ("tcp-connect" in output)

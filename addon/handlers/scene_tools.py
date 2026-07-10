@@ -9,6 +9,25 @@ import mathutils
 from ..core.router import mcp_command
 
 
+def _active_object_name(scene):
+    """Return the active object name, or ``None``.
+
+    Blender 3.5 removed ``scene.objects.active`` (it now lives on
+    ``view_layer``). Try the modern API first, fall back to the legacy
+    attribute when running on an older Blender. Kept defensive: any
+    unexpected layout returns ``None`` rather than raising.
+    """
+    try:
+        active = bpy.context.view_layer.objects.active
+    except (AttributeError, KeyError):
+        active = None
+    if active is not None:
+        return active.name
+    # Legacy path: scene.objects.active existed in Blender <= 3.4.
+    legacy = getattr(scene.objects, "active", None) if hasattr(scene, "objects") else None
+    return legacy.name if legacy is not None else None
+
+
 @mcp_command(name="configure_render_settings", read_only=False)
 def configure_render_settings(
     scene,
@@ -145,7 +164,7 @@ def get_scene_info(scene, filter_type=None, filter_name=None, limit=100):
             "object_count": len(scene.objects),
             "objects": [],
             "materials_count": len(bpy.data.materials),
-            "active_object": scene.objects.active.name if scene.objects.active else None,
+            "active_object": _active_object_name(scene),
         }
 
         # Collect object information

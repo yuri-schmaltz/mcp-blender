@@ -1,0 +1,57 @@
+name: Bug report
+description: Report something broken in blender-mcp
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. Please fill in every section —
+        incomplete reports get closed automatically.
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - MCP server (src/blender_mcp)
+        - Blender addon (addon/)
+        - CLI / --doctor
+        - GUI (PySide6)
+        - Documentation
+        - Other
+  - type: input
+    id: blender_version
+    attributes:
+      label: Blender version
+      placeholder: "4.2.0"
+  - type: input
+    id: python_version
+    attributes:
+      label: Python version
+      placeholder: "3.11.9"
+  - type: input
+    id: mcp_client
+    attributes:
+      label: MCP client (LM Studio / Cursor / Continue / other)
+      placeholder: "LM Studio 0.3.5"
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      placeholder: |
+        1. Start Blender
+        2. Enable addon
+        3. Run `uvx blender-mcp --doctor`
+        4. ...
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs (set `BLENDER_MCP_LOG_LEVEL=DEBUG` first)

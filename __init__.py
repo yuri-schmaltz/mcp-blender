@@ -94,8 +94,47 @@ def get_custom_items(self, context):
     return res
 
 
+def _resolve_addon_id():
+    """Return a stable id for the AddonPreferences ``bl_idname``.
+
+    Three fallbacks, in order of preference:
+
+    1. ``__package__`` when Blender loaded us as a real Python package
+       (i.e. as an extension, where ``__package__`` is set to the
+       extension id, e.g. ``"mcp_blender"``).
+    2. The id declared in ``blender_manifest.toml`` when present
+       alongside ``__init__.py`` (extension mode with package stripped).
+    3. The directory name hosting ``__init__.py``. This covers the
+       legacy flat install where ``__package__`` is the empty string
+       and the addon is installed as ``<user_addons>/<name>/__init__.py``.
+
+    The fallback chain guarantees a non-empty id, which is what
+    ``bpy.context.preferences.addons[id].preferences`` needs to find us.
+    """
+    pkg = __package__
+    if pkg:
+        return pkg
+
+    # 2. Read blender_manifest.toml next to __init__.py when present.
+    manifest = Path(__file__).resolve().parent / "blender_manifest.toml"
+    if manifest.is_file():
+        try:
+            import tomllib  # py3.11+
+
+            with manifest.open("rb") as fh:
+                data = tomllib.load(fh)
+            mid = data.get("id")
+            if isinstance(mid, str) and mid:
+                return mid
+        except Exception:
+            pass  # tomllib missing or malformed manifest -- fall through.
+
+    # 3. Legacy flat install: derive from the directory name.
+    return Path(__file__).resolve().parent.name or "blender_mcp"
+
+
 class BlenderMCPPreferences(bpy.types.AddonPreferences):
-    bl_idname = __package__
+    bl_idname = _resolve_addon_id()
 
     port: IntProperty(
         name="Default Port",

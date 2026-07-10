@@ -121,6 +121,18 @@ class BlenderConnection:
             finally:
                 self.sock = None
 
+    def _build_headers(self) -> dict[str, str]:
+        """Return the dict of headers sent on every command.
+
+        Populated from environment variables. When ``BLENDER_MCP_TOKEN`` is
+        unset the dict is empty and the addon skips the check.
+        """
+        headers: dict[str, str] = {}
+        token = os.environ.get("BLENDER_MCP_TOKEN", "").strip()
+        if token:
+            headers["X-BlenderMCP-Token"] = token
+        return headers
+
     def receive_full_response(self, sock, buffer_size=8192, timeout: float | None = None):
         """Receive the complete response, potentially in multiple chunks"""
         chunks = []
@@ -175,7 +187,22 @@ class BlenderConnection:
 
     def send_command(self, command_type: str, params: dict[str, Any] = None) -> dict[str, Any]:
         """Send a command to Blender and return the response"""
-        command = {"type": command_type, "params": params or {}}
+        # If BLENDER_MCP_TOKEN is set, attach it as a header field so the
+        # addon can authenticate the caller. The addon enforces this; the
+        # server-side check below is defence in depth.
+        headers = self._build_headers()
+        command = {"type": command_type, "params": params or {}, "headers": headers}
+
+        # Defence in depth: refuse to send a payload larger than the cap.
+        try:
+            from .security.transport import enforce_payload_cap
+        except ImportError:
+            enforce_payload_cap = None
+        if enforce_payload_cap is not None:
+            try:
+                enforce_payload_cap(command)
+            except Exception as e:
+                raise ValueError(f"refusing to send oversized command: {e}")
 
         last_error: Exception | None = None
 

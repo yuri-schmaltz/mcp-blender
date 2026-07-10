@@ -25,6 +25,35 @@ except ImportError:  # pragma: no cover - fallback for legacy direct module load
     _metrics_spec.loader.exec_module(_metrics_mod)
     metrics = _metrics_mod.metrics
 
+# Transport hardening (kept in sync with src/blender_mcp/security/transport.py).
+try:
+    from .utils.transport_safety import (
+        PayloadTooLargeError,
+        TokenMismatchError,
+        enforce_payload_cap,
+        matches_token,
+        safe_bind_host,
+        validate_token,
+    )
+except ImportError:  # pragma: no cover - legacy fallback
+    import importlib.util as _iu
+    import os
+
+    _ts_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "utils", "transport_safety.py"
+    )
+    _ts_spec = _iu.spec_from_file_location("_blendermcp_transport_safety", _ts_path)
+    _ts_mod = _iu.module_from_spec(_ts_spec)
+    if __package__:
+        _ts_mod.__package__ = __package__
+    _ts_spec.loader.exec_module(_ts_mod)
+    PayloadTooLargeError = _ts_mod.PayloadTooLargeError
+    TokenMismatchError = _ts_mod.TokenMismatchError
+    enforce_payload_cap = _ts_mod.enforce_payload_cap
+    matches_token = _ts_mod.matches_token
+    safe_bind_host = _ts_mod.safe_bind_host
+    validate_token = _ts_mod.validate_token
+
 
 class BlenderMCPServer:
     """
@@ -58,6 +87,8 @@ class BlenderMCPServer:
             # Create socket
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            # Refuse non-loopback binds unless BLENDER_MCP_ALLOW_PUBLIC_BIND=1
+            safe_bind_host(self.host)
             self.socket.bind((self.host, self.port))
             self.socket.listen(1)
 
@@ -183,9 +214,38 @@ class BlenderMCPServer:
 
                     buffer += data
                     try:
+                        # Enforce payload cap before parsing JSON
+                        try:
+                            enforce_payload_cap(buffer)
+                        except PayloadTooLargeError as e:
+                            logger.warning(f"Rejecting oversized payload: {e}")
+                            metrics.inc("payload_too_large")
+                            try:
+                                err = {"status": "error", "code": "payload_too_large", "message": str(e)}
+                                client.sendall(json.dumps(err).encode("utf-8"))
+                            except Exception:
+                                pass
+                            # Drop the buffer so we don't keep appending to it.
+                            buffer = b""
+                            continue
+
                         # Try to parse command
                         command = json.loads(buffer.decode("utf-8"))
                         buffer = b""
+
+                        # Optional token gate. Off by default; both sides must
+                        # agree on BLENDER_MCP_TOKEN to enable it.
+                        try:
+                            validate_token(command.get("headers") if isinstance(command, dict) else None)
+                        except TokenMismatchError as e:
+                            logger.warning(f"Rejecting command: {e}")
+                            metrics.inc("token_mismatch")
+                            try:
+                                err = {"status": "error", "code": "token_mismatch", "message": "auth required"}
+                                client.sendall(json.dumps(err).encode("utf-8"))
+                            except Exception:
+                                pass
+                            continue
 
                         if isinstance(command, dict) and command.get("type") == "ping_thread":
                             import os
