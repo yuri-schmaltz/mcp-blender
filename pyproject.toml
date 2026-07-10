@@ -4,7 +4,8 @@ version = "2.11.0"
 description = "Model Context Protocol server for Blender 3D integration"
 readme = "README.md"
 authors = [
-    { name = "BlenderMCP Contributors", email = "contact@example.com" }
+    { name = "BlenderMCP Contributors" },
+    { name = "Yuri Schmaltz", email = "63480675+yuri-schmaltz@users.noreply.github.com" },
 ]
 license = { text = "MIT" }
 requires-python = ">=3.10"
@@ -49,10 +50,11 @@ blender-mcp = "blender_mcp.cli:main"
 blender-mcp-gui = "blender_mcp.gui:main"
 
 [project.urls]
-Homepage = "https://github.com/modelcontextprotocol/blender-mcp"
-Repository = "https://github.com/modelcontextprotocol/blender-mcp"
-Issues = "https://github.com/modelcontextprotocol/blender-mcp/issues"
-Documentation = "https://github.com/modelcontextprotocol/blender-mcp#readme"
+Homepage = "https://github.com/yuri-schmaltz/mcp-blender"
+Repository = "https://github.com/yuri-schmaltz/mcp-blender"
+Issues = "https://github.com/yuri-schmaltz/mcp-blender/issues"
+Documentation = "https://github.com/yuri-schmaltz/mcp-blender#readme"
+Upstream = "https://github.com/ahujasid/blender-mcp"
 
 [build-system]
 requires = ["hatchling"]
