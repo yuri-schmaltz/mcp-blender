@@ -7,6 +7,14 @@ practical.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [2.12.0] — 2026-07-15
+
+**Hardening release.** All changes are opt-in via environment
+variables; single-user loopback setups behave exactly as before. No
+protocol break.
+
 ### Security
 - **Token authentication** on the socket protocol: when
   `BLENDER_MCP_TOKEN` is set, the addon rejects every command whose
@@ -64,3 +72,6 @@ practical.
 
 Inherited from `ahujasid/blender-mcp` v2.11.0. See upstream CHANGELOG
 for the full list of features inherited unchanged.
+
+[2.12.0]: https://github.com/yuri-schmaltz/mcp-blender/compare/v2.11.0...v2.12.0
+[2.11.0]: https://github.com/yuri-schmaltz/mcp-blender/releases/tag/v2.11.0
