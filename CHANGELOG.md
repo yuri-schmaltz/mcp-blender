@@ -9,6 +9,43 @@ practical.
 
 Nothing yet.
 
+## [2.12.1] — 2026-07-15
+
+**Security patch.** Bumps de lower-bound em dependências para fechar
+15 das 29 vulnerabilidades reportadas pelo Dependabot. Sem mudança de
+código, sem breaking change. 165/165 testes passando.
+
+### Security (resolved via dep bumps)
+
+- **`requests>=2.32.4`** — fecha `.netrc` credentials leak
+  ([GHSA-9hjg-9r4m-mvj7](https://github.com/advisories/GHSA-9hjg-9r4m-mvj7))
+  e outras 7 moderate. Resolve: 8 vulnerabilidades.
+- **`mcp[cli]>=1.23.0,<2.0.0`** — fecha DNS rebinding protection que
+  não vinha habilitada por default
+  ([GHSA-9h52-p55h-vw2f](https://github.com/advisories/GHSA-9h52-p55h-vw2f))
+  e mais 2 high/DoS. Resolve: 3 vulnerabilidades.
+- **`pytest>=9.0.3`** — fecha vulnerable tmpdir handling
+  ([GHSA-6w46-j5rx-g56g](https://github.com/advisories/GHSA-6w46-j5rx-g56g)).
+  Resolve: 1 vulnerabilidade.
+- **`black>=26.3.1`** — fecha arbitrary file write via unsanitized
+  cache filename
+  ([GHSA-3936-cmfr-pm3m](https://github.com/advisories/GHSA-3936-cmfr-pm3m))
+  e mais 2 moderate. Resolve: 3 vulnerabilidades.
+
+### Deferred
+
+- **`litellm>=1.84.0`** — 15 vulnerabilidades restantes (3 high em auth
+  bypass, várias em SSTI/RCE) ficam para `v2.13.0`. É um salto de 92
+  minor versions com mudanças de API; vai como release dedicado.
+
+### Notes
+
+- Sem mudança de código, sem mudança de protocolo
+- 165/165 unit tests passando após o bump
+- Ver `DEPENDABOT_TRIAGE.md` no repo para análise completa
+
+[2.12.1]: https://github.com/yuri-schmaltz/mcp-blender/compare/v2.12.0...v2.12.1
+
 ## [2.12.0] — 2026-07-15
 
 **Hardening release.** All changes are opt-in via environment
