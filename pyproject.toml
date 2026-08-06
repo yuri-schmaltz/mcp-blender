@@ -26,7 +26,7 @@ dependencies = [
     "mcp[cli]>=1.23.0,<2.0.0",  # bumped for DNS rebinding protection (GHSA-9h52-p55h-vw2f)
     "fake-bpy-module>=20230101",  # For type hints
     "requests>=2.32.4",  # bumped for .netrc credentials leak fix (GHSA-9hjg-9r4m-mvj7)
-    "litellm>=1.0.0",  # TODO: bump to 1.84.0+ (37 vulns, see SECURITY.md) - deferred to v2.13.0
+    "litellm>=1.84.0,<2.0.0",  # bumped for 15 CVEs (3 high: auth bypass, SSTI/RCE). Lock at 1.84.0.
 ]
 
 [project.optional-dependencies]
