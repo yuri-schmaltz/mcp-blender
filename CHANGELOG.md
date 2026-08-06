@@ -7,7 +7,40 @@ practical.
 
 ## [Unreleased]
 
-Nothing yet.
+### Security
+
+- **`litellm>=1.84.0,<2.0.0`** — fecha as 15 vulnerabilidades restantes
+  reportadas pelo Dependabot em v2.12.1 (3 high em auth bypass, várias
+  SSTI/RCE em routers internos). 165/165 unit tests passando — sem
+  mudança de código, sem breaking change. O bump de lower-bound
+  casa com o que `uv.lock` já pinava (1.84.0); só faltava o
+  `pyproject.toml` refletir o floor. `v2.13.0` continua reservado
+  para refactors de API (não houve mudança incompatível entre
+  1.0 e 1.84 que afete este projeto — uso de `litellm.completion()`
+  com kwargs é estável desde 1.0).
+
+### Added
+
+- **Circuit breaker nas APIs HTTP externas do addon.** O módulo
+  `circuit_breaker.py` em `src/blender_mcp/shared/` existia mas não
+  era invocado em nenhum call site. Esta release:
+  - Adiciona um espelho addon-side em `addon/utils/circuit_breaker.py`
+    (Blender tem Python restrito, não pode importar de `src/blender_mcp/`).
+  - Registra 3 breakers globais: `polyhaven`, `sketchfab`, `ambientcg`
+    (threshold 5 falhas, cooldown 60s).
+  - Estende `robust_get` em `addon/utils/network.py` com um kwarg
+    `circuit_breaker` opcional. Quando passado, todo o loop de retry
+    conta como uma única chamada para o breaker.
+  - Integra o breaker nos handlers `polyhaven.py` e `sketchfab.py`
+    (search, download, resolve, validate).
+  - Adiciona 14 testes em `tests/unit/test_addon_circuit_breaker.py`
+    cobrindo state machine, cooldown, half-open, registry e reset.
+  - **179/180 unit tests passando** (era 165/166, +14 sem regressões).
+
+  Recupera a peça que faltava da branch
+  `origin/estado-atual-aplicação-05166` (3 meses parada, +21K
+  deletions contra main após o refactor — incompatível com cherry-pick,
+  então re-implementado contra a topologia atual).
 
 ## [2.12.1] — 2026-07-15
 

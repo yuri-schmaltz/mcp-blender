@@ -10,7 +10,15 @@ from contextlib import suppress
 import bpy
 
 from ..core.router import mcp_command
+from ..utils.circuit_breaker import (
+    CircuitBreakerError,
+    get_circuit_breaker,
+)
 from ..utils.network import robust_get
+
+
+# Shared breaker for every Sketchfab call.
+_SKETCHFAB_BREAKER = get_circuit_breaker("sketchfab")
 
 
 def get_prefs():
@@ -115,6 +123,7 @@ def search_sketchfab_models(scene, query, categories=None, count=20, downloadabl
             headers=headers,
             params=params,
             timeout=30,
+            circuit_breaker=_SKETCHFAB_BREAKER,
         )
 
         if response.status_code == 401:
@@ -125,6 +134,8 @@ def search_sketchfab_models(scene, query, categories=None, count=20, downloadabl
 
         return response.json()
 
+    except CircuitBreakerError as e:
+        return {"error": f"Sketchfab temporarily unavailable: {e}"}
     except Exception as e:
         traceback.print_exc()
         return {"error": str(e)}
@@ -142,7 +153,12 @@ def download_sketchfab_model(scene, uid):
         headers = {"Authorization": f"Token {api_key}"}
         download_endpoint = f"https://api.sketchfab.com/v3/models/{uid}/download"
 
-        response = robust_get(download_endpoint, headers=headers, timeout=30)
+        response = robust_get(
+            download_endpoint,
+            headers=headers,
+            timeout=30,
+            circuit_breaker=_SKETCHFAB_BREAKER,
+        )
 
         if response.status_code == 401:
             return {"error": "Authentication failed (401). Check your API key."}
@@ -158,7 +174,9 @@ def download_sketchfab_model(scene, uid):
         download_url = gltf_data.get("url")
         operation_id = f"sketchfab_{uid}"
 
-        model_response = robust_get(download_url, timeout=60, stream=True)
+        model_response = robust_get(
+            download_url, timeout=60, stream=True, circuit_breaker=_SKETCHFAB_BREAKER
+        )
         if model_response.status_code != 200:
             return {"error": f"Model download failed: {model_response.status_code}"}
 
