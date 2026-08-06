@@ -221,7 +221,11 @@ class BlenderMCPServer:
                             logger.warning(f"Rejecting oversized payload: {e}")
                             metrics.inc("payload_too_large")
                             try:
-                                err = {"status": "error", "code": "payload_too_large", "message": str(e)}
+                                err = {
+                                    "status": "error",
+                                    "code": "payload_too_large",
+                                    "message": str(e),
+                                }
                                 client.sendall(json.dumps(err).encode("utf-8"))
                             except Exception:
                                 pass
@@ -236,12 +240,18 @@ class BlenderMCPServer:
                         # Optional token gate. Off by default; both sides must
                         # agree on BLENDER_MCP_TOKEN to enable it.
                         try:
-                            validate_token(command.get("headers") if isinstance(command, dict) else None)
+                            validate_token(
+                                command.get("headers") if isinstance(command, dict) else None
+                            )
                         except TokenMismatchError as e:
                             logger.warning(f"Rejecting command: {e}")
                             metrics.inc("token_mismatch")
                             try:
-                                err = {"status": "error", "code": "token_mismatch", "message": "auth required"}
+                                err = {
+                                    "status": "error",
+                                    "code": "token_mismatch",
+                                    "message": "auth required",
+                                }
                                 client.sendall(json.dumps(err).encode("utf-8"))
                             except Exception:
                                 pass

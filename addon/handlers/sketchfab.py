@@ -16,7 +16,6 @@ from ..utils.circuit_breaker import (
 )
 from ..utils.network import robust_get
 
-
 # Shared breaker for every Sketchfab call.
 _SKETCHFAB_BREAKER = get_circuit_breaker("sketchfab")
 

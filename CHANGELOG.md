@@ -42,6 +42,33 @@ practical.
   deletions contra main após o refactor — incompatível com cherry-pick,
   então re-implementado contra a topologia atual).
 
+- **Ruff + coverage + Dependabot como gates sustentados.** O
+  `pyproject.toml` já tinha configs de ruff e mypy desde v2.0 mas
+  o CI nunca as invocava. Esta release:
+  - Adiciona `.github/dependabot.yml` (monthly, agrupado em PR
+    único, label `dependencies` + `security`).
+  - Reescreve `.github/workflows/ci.yml`:
+    - `uv` em vez de `pip` (lock file já está commitado, instala
+      em ~5s com cache).
+    - `ruff check` + `ruff format --check` como gate hard.
+    - `pytest --cov=src/blender_mcp --cov=addon` com
+      `--cov-fail-under=25` (threshold inicial permissivo, sobe
+      em releases futuras — addon/handlers/* ficam em 0% em
+      host unit tests porque dependem do `bpy` runtime).
+    - `mypy` rodando mas advisory (`|| true`) até tipagem gradual
+      cobrir o addon.
+    - `concurrency:` com `cancel-in-progress` (cancela runs antigos
+      do mesmo PR — economiza ~3min por force-push).
+    - Upload pro Codecov (opcional, não bloqueia se CODECOV_TOKEN
+      não estiver setado).
+  - Corrige paths errados no CI antigo (referenciava
+    `tests/test_server.py` que foi movido pra `tests/unit/`).
+  - Ajusta per-file-ignores de ruff pra refletir o design do
+    projeto (E402 em addon/ui e addon/handlers por imports
+    lazy de i18n e deps opcionais; E722 bare-except no addon
+    é escolha de resiliência; N806 CAPS em handlers/fasteners
+    são "consts" by design).
+
 ## [2.12.1] — 2026-07-15
 
 **Security patch.** Bumps de lower-bound em dependências para fechar

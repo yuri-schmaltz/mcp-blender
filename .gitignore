@@ -24,6 +24,14 @@ venv/
 .blender_mcp_cache/
 *cache*/
 
+# Coverage
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
 # Audit logs
 audit.jsonl
 

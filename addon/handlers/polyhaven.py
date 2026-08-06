@@ -17,7 +17,6 @@ from ..utils.circuit_breaker import (
 from ..utils.constants import REQ_HEADERS
 from ..utils.network import log_asset_download, robust_get
 
-
 # One breaker for all Poly Haven calls — shared across search/download/resolve.
 _POLYHAVEN_BREAKER = get_circuit_breaker("polyhaven")
 

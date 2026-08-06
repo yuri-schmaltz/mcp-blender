@@ -58,8 +58,7 @@ def robust_get(
                 # Server overloaded — wait and retry
                 wait = min(2**attempt, 4)
                 print(
-                    f"[blender-mcp] HTTP {response.status_code} from {url}, "
-                    f"retrying in {wait}s..."
+                    f"[blender-mcp] HTTP {response.status_code} from {url}, retrying in {wait}s..."
                 )
                 time.sleep(wait)
             except (requests.ConnectionError, requests.Timeout) as exc:
@@ -67,10 +66,7 @@ def robust_get(
                 if attempt == max_retries:
                     raise
                 wait = min(2**attempt, 4)
-                print(
-                    f"[blender-mcp] Network error ({type(exc).__name__}), "
-                    f"retrying in {wait}s..."
-                )
+                print(f"[blender-mcp] Network error ({type(exc).__name__}), retrying in {wait}s...")
                 time.sleep(wait)
 
         # Should not reach here, but just in case

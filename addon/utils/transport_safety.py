@@ -55,8 +55,7 @@ def enforce_payload_cap(payload) -> None:
         limit = DEFAULT_MAX_PAYLOAD_BYTES
     if size > limit:
         raise PayloadTooLargeError(
-            f"payload of {size} bytes exceeds limit of {limit} bytes "
-            f"({MAX_PAYLOAD_ENV_VAR})"
+            f"payload of {size} bytes exceeds limit of {limit} bytes ({MAX_PAYLOAD_ENV_VAR})"
         )
 
 
@@ -134,8 +133,7 @@ def safe_bind_host(host: str) -> str:
         }
         if not public:
             raise PermissionError(
-                f"refusing to bind to {host!r}: non-loopback hosts require "
-                f"{PUBLIC_BIND_ENV_VAR}=1."
+                f"refusing to bind to {host!r}: non-loopback hosts require {PUBLIC_BIND_ENV_VAR}=1."
             )
         return host
 
@@ -150,7 +148,6 @@ def safe_bind_host(host: str) -> str:
     }
     if not public:
         raise PermissionError(
-            f"refusing to bind to {host!r}: non-loopback addresses require "
-            f"{PUBLIC_BIND_ENV_VAR}=1."
+            f"refusing to bind to {host!r}: non-loopback addresses require {PUBLIC_BIND_ENV_VAR}=1."
         )
     return host

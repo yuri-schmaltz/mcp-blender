@@ -5,6 +5,12 @@ on:
   push:
     branches: [main]
 
+# Cancel in-flight runs when a new commit lands on the same PR. Saves
+# ~3min of CI time per force-push and per "address review" iteration.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   package-and-core:
     runs-on: ubuntu-latest
@@ -12,32 +18,70 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: "3.11"
+          version: "0.11.19"
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Cache uv dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            .venv
+            ~/.cache/uv
+          key: ${{ runner.os }}-uv-${{ hashFiles('uv.lock', 'pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install build twine pylint
-          python -m pip install -e ".[test]"
+          uv sync --extra test --extra gui
 
       - name: Build package
-        run: python -m build
+        run: |
+          uv run python -m pip install build twine
+          uv run python -m build
 
       - name: Verify metadata
-        run: python -m twine check dist/*
+        run: uv run python -m twine check dist/*
 
-      - name: Lint
-        run: pylint src/blender_mcp addon --rcfile=.pylintrc || true
-
-      - name: Run core tests
+      - name: Lint (ruff)
         run: |
-          pytest tests/unit -q
-          pytest tests/test_server.py -q
-          pytest tests/test_cli.py -q
-          pytest tests/test_e2e_addon_server.py -q
+          uv run ruff check src/ addon/
+          uv run ruff format --check src/ addon/
+
+      - name: Type check (mypy, advisory)
+        # `|| true` keeps the gate advisory for now: there are 100+ untyped
+        # defs in the addon and we want to fix them incrementally before
+        # turning this into a hard fail.
+        run: uv run mypy src/blender_mcp addon --ignore-missing-imports || true
+
+      - name: Run core tests with coverage
+        run: |
+          uv run pytest tests/unit -q \
+            --cov=src/blender_mcp \
+            --cov=addon \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --cov-fail-under=25
+        # Threshold is intentionally low (25%) for the first run. Most
+        # `addon/handlers/*` modules sit at 0% in the host unit-test
+        # environment because they require the Blender runtime; the
+        # windows-blender-e2e job is the one that actually exercises
+        # them. Bump to 40% after we add a coverage-on-Blender run, and
+        # to 60% once the addon handlers have a dedicated test worktree.
+
+      - name: Upload coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.xml
+          flags: unittests
+          fail_ci_if_error: false  # don't block on codecov outages
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   gui-and-visual:
     runs-on: windows-latest
@@ -59,7 +103,7 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
-          pytest tests/test_gui.py -q
+          pytest tests/unit/test_gui.py -q
           pytest tests/visual/test_gui_visual_regression.py -q
 
       - name: Capture GUI snapshot artifact
@@ -111,4 +155,4 @@ jobs:
           }
 
       - name: Run Blender E2E smoke test
-        run: pytest tests/test_e2e_addon_server.py -q
+        run: pytest tests/e2e/test_e2e_addon_server.py -q

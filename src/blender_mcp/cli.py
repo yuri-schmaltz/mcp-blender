@@ -56,8 +56,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--allow-public-bind",
         action="store_true",
         help=(
-            "Allow the MCP server to connect to a non-loopback host. "
-            "Refused by default for safety."
+            "Allow the MCP server to connect to a non-loopback host. Refused by default for safety."
         ),
     )
     parser.add_argument(
@@ -149,11 +148,7 @@ def _run_doctor(host: str, port: int, allow_public: bool = False) -> int:
 
     try:
         with socket.create_connection((bind_target, port), timeout=2):
-            print(
-                _format_kv(
-                    "tcp-connect", f"connected to {bind_target}:{port}", "ok"
-                )
-            )
+            print(_format_kv("tcp-connect", f"connected to {bind_target}:{port}", "ok"))
     except OSError as exc:
         print(_format_kv("tcp-connect", str(exc), "fail"))
         print(

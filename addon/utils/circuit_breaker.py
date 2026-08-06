@@ -72,17 +72,12 @@ class CircuitBreaker:
             if self.last_failure_time is not None and (
                 time.time() - self.last_failure_time >= self.timeout
             ):
-                print(
-                    f"[blender-mcp] Circuit '{self.name}': OPEN -> HALF_OPEN (cooldown elapsed)"
-                )
+                print(f"[blender-mcp] Circuit '{self.name}': OPEN -> HALF_OPEN (cooldown elapsed)")
                 self.state = CircuitState.HALF_OPEN
                 self.success_count = 0
             else:
                 remaining = (
-                    int(
-                        self.timeout
-                        - (time.time() - (self.last_failure_time or time.time()))
-                    )
+                    int(self.timeout - (time.time() - (self.last_failure_time or time.time())))
                     if self.last_failure_time is not None
                     else self.timeout
                 )
@@ -119,9 +114,7 @@ class CircuitBreaker:
         self.success_count = 0
 
         if self.state == CircuitState.HALF_OPEN:
-            print(
-                f"[blender-mcp] Circuit '{self.name}': HALF_OPEN -> OPEN (recovery test failed)"
-            )
+            print(f"[blender-mcp] Circuit '{self.name}': HALF_OPEN -> OPEN (recovery test failed)")
             self.state = CircuitState.OPEN
         elif self.failure_count >= self.failure_threshold:
             print(
@@ -168,8 +161,7 @@ def get_circuit_breaker(service: str) -> CircuitBreaker:
     """Return the breaker registered for ``service``."""
     if service not in _circuit_breakers:
         raise ValueError(
-            f"Unknown service: {service!r}. "
-            f"Known services: {sorted(_circuit_breakers.keys())}"
+            f"Unknown service: {service!r}. Known services: {sorted(_circuit_breakers.keys())}"
         )
     return _circuit_breakers[service]
 
