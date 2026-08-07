@@ -41,12 +41,12 @@ jobs:
           uv sync --extra test --extra gui
 
       - name: Build package
+        # `uv run python -m pip install` doesn't work because uv-managed
+        # venvs don't ship with pip. Use `uv run --with <pkg>` to pull
+        # build + twine into an ephemeral layer on top of the synced venv.
         run: |
-          uv run python -m pip install build twine
-          uv run python -m build
-
-      - name: Verify metadata
-        run: uv run python -m twine check dist/*
+          uv run --with build --with twine python -m build
+          uv run --with twine python -m twine check dist/*
 
       - name: Lint (ruff)
         run: |
