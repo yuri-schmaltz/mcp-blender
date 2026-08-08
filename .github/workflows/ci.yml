@@ -63,7 +63,9 @@ jobs:
 
       - name: Run core tests with coverage
         run: |
+          set -o pipefail
           uv run pytest tests/unit -q \
+            --ignore=tests/unit/test_gui.py \
             --cov=src/blender_mcp \
             --cov=addon \
             --cov-report=term-missing \
@@ -75,6 +77,14 @@ jobs:
         # windows-blender-e2e job is the one that actually exercises
         # them. Bump to 40% after we add a coverage-on-Blender run, and
         # to 60% once the addon handlers have a dedicated test worktree.
+        #
+        # --ignore=tests/unit/test_gui.py keeps the GUI suite out of the
+        # host unit run (test_gui.py needs PySide6 Qt runtime + a display;
+        # the gui-and-visual job is where it actually executes). The
+        # shallow `pytest.importorskip("PySide6")` in test_gui.py was
+        # already replaced with a deep try/except self-skip, but we keep
+        # the ignore here to avoid pulling Qt into the host coverage
+        # numbers in the first place.
 
       - name: Upload coverage to Codecov
         if: always()
