@@ -1,6 +1,6 @@
 [project]
 name = "blender-mcp"
-version = "2.12.1"
+version = "2.12.2"
 description = "Model Context Protocol server for Blender 3D integration"
 readme = "README.md"
 authors = [
@@ -26,7 +26,7 @@ dependencies = [
     "mcp[cli]>=1.23.0,<2.0.0",  # bumped for DNS rebinding protection (GHSA-9h52-p55h-vw2f)
     "fake-bpy-module>=20230101",  # For type hints
     "requests>=2.32.4",  # bumped for .netrc credentials leak fix (GHSA-9hjg-9r4m-mvj7)
-    "litellm>=1.0.0",  # TODO: bump to 1.84.0+ (37 vulns, see SECURITY.md) - deferred to v2.13.0
+    "litellm>=1.84.0,<2.0.0",  # bumped for 15 CVEs (3 high: auth bypass, SSTI/RCE). Lock at 1.84.0.
 ]
 
 [project.optional-dependencies]
@@ -102,7 +102,9 @@ ignore = ["E501", "N999"]  # E501: Line too long; N999: Invalid module name (rep
 "__init__.py" = ["F401"]  # Unused imports in __init__
 "tests/*" = ["E402", "F401", "F811"]  # Allow test fixtures and path bootstrap imports
 "addon.py" = ["N801"]  # Blender operator/panel naming convention
-"addon/ui/*.py" = ["N801"]  # Blender panel/operator naming convention
+"addon/ui/*.py" = ["E402", "N801"]  # E402: i18n is imported lazily; N801: panel/operator naming
+"addon/handlers/*.py" = ["E402", "N806"]  # E402: late imports for optional deps; N806: CAPS = consts
+"addon/**/*.py" = ["E722"]  # Bare except is intentional in Blender addon resilience paths
 
 [tool.mypy]
 python_version = "3.10"

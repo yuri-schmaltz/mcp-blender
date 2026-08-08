@@ -1,8 +1,12 @@
 """Network utilities for BlenderMCP: retry logic, session management, and friendly errors."""
 
 import time
+from typing import TYPE_CHECKING
 
 import requests
+
+if TYPE_CHECKING:
+    from .circuit_breaker import CircuitBreaker
 
 # Shared session with connection pooling and default timeout
 _session = None
@@ -21,36 +25,58 @@ def get_session() -> requests.Session:
     return _session
 
 
-def robust_get(url: str, *, max_retries: int = 2, timeout: int = 30, **kwargs) -> requests.Response:
+def robust_get(
+    url: str,
+    *,
+    max_retries: int = 2,
+    timeout: int = 30,
+    circuit_breaker: "CircuitBreaker | None" = None,
+    **kwargs,
+) -> requests.Response:
     """GET with automatic retry on transient failures.
 
     Retries on: ConnectionError, Timeout, 429, 500, 502, 503, 504.
     Uses exponential backoff (1s, 2s).
+
+    If ``circuit_breaker`` is provided, the entire retry loop is wrapped
+    in a single ``breaker.call(...)`` so that all attempts count as one
+    call from the circuit's perspective. Failures recorded by the
+    breaker are the transient errors the retry loop exhausts on; a final
+    successful response resets the breaker via ``_on_success``.
     """
     session = get_session()
     last_error = None
     retryable_codes = {429, 500, 502, 503, 504}
 
-    for attempt in range(max_retries + 1):
-        try:
-            response = session.get(url, timeout=timeout, **kwargs)
-            if response.status_code not in retryable_codes or attempt == max_retries:
-                return response
-            # Server overloaded — wait and retry
-            wait = min(2**attempt, 4)
-            print(f"[blender-mcp] HTTP {response.status_code} from {url}, retrying in {wait}s...")
-            time.sleep(wait)
-        except (requests.ConnectionError, requests.Timeout) as exc:
-            last_error = exc
-            if attempt == max_retries:
-                raise
-            wait = min(2**attempt, 4)
-            print(f"[blender-mcp] Network error ({type(exc).__name__}), retrying in {wait}s...")
-            time.sleep(wait)
+    def _attempt() -> requests.Response:
+        nonlocal last_error
+        for attempt in range(max_retries + 1):
+            try:
+                response = session.get(url, timeout=timeout, **kwargs)
+                if response.status_code not in retryable_codes or attempt == max_retries:
+                    return response
+                # Server overloaded — wait and retry
+                wait = min(2**attempt, 4)
+                print(
+                    f"[blender-mcp] HTTP {response.status_code} from {url}, retrying in {wait}s..."
+                )
+                time.sleep(wait)
+            except (requests.ConnectionError, requests.Timeout) as exc:
+                last_error = exc
+                if attempt == max_retries:
+                    raise
+                wait = min(2**attempt, 4)
+                print(f"[blender-mcp] Network error ({type(exc).__name__}), retrying in {wait}s...")
+                time.sleep(wait)
 
-    # Should not reach here, but just in case
-    if last_error:
-        raise last_error
+        # Should not reach here, but just in case
+        if last_error:
+            raise last_error
+        raise RuntimeError("robust_get: unreachable")
+
+    if circuit_breaker is not None:
+        return circuit_breaker.call(_attempt)
+    return _attempt()
 
 
 def friendly_error(context: str, exc: Exception) -> dict:
@@ -117,11 +143,16 @@ def validate_sketchfab_key(api_key: str) -> dict:
             "error": "API key is empty. Get yours at sketchfab.com/settings/password",
         }
 
+    # Lazy import: keep the dependency on the breaker module optional so
+    # tests that only exercise this function don't pay for the import.
+    from .circuit_breaker import get_circuit_breaker
+
     try:
         response = robust_get(
             "https://api.sketchfab.com/v3/me",
             headers={"Authorization": f"Token {api_key}"},
             timeout=15,
+            circuit_breaker=get_circuit_breaker("sketchfab"),
         )
         if response.status_code == 200:
             data = response.json()

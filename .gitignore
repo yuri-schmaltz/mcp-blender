@@ -12,6 +12,13 @@ wheels/
 releases/
 *.zip
 
+# .deb build staging + output (built via scripts/build_deb.sh)
+build-deb-staging/
+dist/*.deb
+dist/mcp-blender_*.deb
+dist/blender_mcp-*.whl
+dist/blender_mcp-*.tar.gz
+
 # Virtual environments
 .venv/
 venv/
@@ -23,6 +30,14 @@ venv/
 # Cache
 .blender_mcp_cache/
 *cache*/
+
+# Coverage
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.mypy_cache/
+.ruff_cache/
 
 # Audit logs
 audit.jsonl

@@ -1,0 +1,50 @@
+# Dependabot configuration for BlenderMCP.
+# Tracks Python deps (pyproject.toml/uv.lock) and GitHub Actions versions.
+# Bumps are grouped monthly so we don't get 20 PRs in a week; the v2.12.1
+# security patch showed that manual triage of 29 individual alerts is
+# unsustainable — this is the durable fix.
+version: 2
+
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+      day: "monday"
+    labels:
+      - "dependencies"
+      - "security"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    groups:
+      # Roll all patch+minor updates into a single PR. Major bumps go solo
+      # so the API-impacting ones get a release note + CHANGELOG entry.
+      python-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    # Auto-merge patch updates for deps already pinned in pyproject.toml.
+    # Skips major and minor — those need a human review.
+    # Disabled by default (open: false) because there's no CI auto-merge
+    # workflow yet; flip to true once dependabot-auto-merge.yml is added.
+    open-pull-requests-limit: 5
+    # Allow up to 5 in-flight dependabot PRs; older ones get auto-closed.
+    rebase-strategy: "auto"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "ci"
+    groups:
+      actions:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 3

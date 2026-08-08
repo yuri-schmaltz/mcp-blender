@@ -8,10 +8,19 @@ from collections.abc import Generator
 
 import pytest
 
+# `import PySide6` succeeds even on systems where Qt's native libs
+# (libEGL, libGL, platform plugins) aren't available. We have to touch
+# the actual Qt modules to surface the missing-library ImportError, and
+# we have to do it under a try/except so the test module self-skips
+# cleanly (collection-error would fail the whole pytest run instead of
+# just skipping the GUI suite).
 pytest.importorskip("PySide6")
-from PySide6.QtCore import Qt
-from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication
+try:
+    from PySide6.QtCore import Qt  # noqa: F401
+    from PySide6.QtTest import QTest  # noqa: F401
+    from PySide6.QtWidgets import QApplication
+except ImportError as exc:  # libEGL.so.1, libGL.so.1, missing platform plugin, etc.
+    pytest.skip(f"PySide6 Qt runtime unavailable: {exc}", allow_module_level=True)
 
 
 @pytest.fixture(scope="module")

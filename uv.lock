@@ -247,7 +247,7 @@ wheels = [
 
 [[package]]
 name = "blender-mcp"
-version = "2.12.1"
+version = "2.12.2"
 source = { editable = "." }
 dependencies = [
     { name = "fake-bpy-module" },
@@ -280,7 +280,7 @@ requires-dist = [
     { name = "black", marker = "extra == 'dev'", specifier = ">=26.3.1" },
     { name = "blender-mcp", extras = ["gui", "test"], marker = "extra == 'dev'" },
     { name = "fake-bpy-module", specifier = ">=20230101" },
-    { name = "litellm", specifier = ">=1.0.0" },
+    { name = "litellm", specifier = ">=1.84.0,<2.0.0" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.23.0,<2.0.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
     { name = "pyside6", marker = "extra == 'gui'", specifier = ">=6.6.0" },

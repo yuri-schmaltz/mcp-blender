@@ -10,8 +10,15 @@ import bpy
 
 from ..core.router import mcp_command
 from ..utils.cache import get_asset_cache
+from ..utils.circuit_breaker import (
+    CircuitBreakerError,
+    get_circuit_breaker,
+)
 from ..utils.constants import REQ_HEADERS
 from ..utils.network import log_asset_download, robust_get
+
+# One breaker for all Poly Haven calls — shared across search/download/resolve.
+_POLYHAVEN_BREAKER = get_circuit_breaker("polyhaven")
 
 # Try to get progress tracker
 PROGRESS_AVAILABLE = False
@@ -78,7 +85,9 @@ def search_polyhaven_assets(query, asset_type="hdris"):
     try:
         url = "https://api.polyhaven.com/assets"
         params = {"t": asset_type}
-        response = robust_get(url, params=params, headers=REQ_HEADERS)
+        response = robust_get(
+            url, params=params, headers=REQ_HEADERS, circuit_breaker=_POLYHAVEN_BREAKER
+        )
         if response.status_code == 200:
             all_assets = response.json()
             results = {}
@@ -92,6 +101,8 @@ def search_polyhaven_assets(query, asset_type="hdris"):
                     break
             return results
         return {"error": f"API returned status {response.status_code}"}
+    except CircuitBreakerError as e:
+        return {"error": f"Poly Haven temporarily unavailable: {e}"}
     except Exception as e:
         return {"error": str(e)}
 
@@ -100,7 +111,7 @@ def resolve_polyhaven_resolution(asset_id, asset_type, requested_res="4k"):
     """Verify if a resolution is available for an asset, fallback if not."""
     try:
         res_url = f"https://api.polyhaven.com/files/{asset_id}"
-        response = robust_get(res_url, headers=REQ_HEADERS)
+        response = robust_get(res_url, headers=REQ_HEADERS, circuit_breaker=_POLYHAVEN_BREAKER)
         if response.status_code != 200:
             return requested_res
 
@@ -168,7 +179,12 @@ def download_polyhaven_asset(scene, asset_id, asset_type="hdris", resolution="4k
             else:
                 return {"error": f"Unsupported asset type: {asset_type}"}
 
-            response = robust_get(download_url, headers=REQ_HEADERS, stream=True)
+            response = robust_get(
+                download_url,
+                headers=REQ_HEADERS,
+                stream=True,
+                circuit_breaker=_POLYHAVEN_BREAKER,
+            )
             if response.status_code != 200:
                 # Try fallback for format (sometimes it's .hdr instead of .exr)
                 if asset_type == "hdris":

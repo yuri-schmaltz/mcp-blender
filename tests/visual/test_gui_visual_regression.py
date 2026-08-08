@@ -7,7 +7,10 @@ from pathlib import Path
 import pytest
 
 pytest.importorskip("PySide6")
-from PySide6.QtWidgets import QApplication  # noqa: E402
+try:
+    from PySide6.QtWidgets import QApplication  # noqa: E402
+except ImportError as exc:  # libEGL.so.1, libGL.so.1, missing platform plugin, etc.
+    pytest.skip(f"PySide6 Qt runtime unavailable: {exc}", allow_module_level=True)
 
 BASELINE_IMAGE = (
     Path(__file__).resolve().parents[2] / "assets" / "baseline" / "gui_config_window.png"
